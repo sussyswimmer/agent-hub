@@ -1,0 +1,44 @@
+{
+  "name": "quintet",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["mcp"],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p mcp/tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "bun test src mcp",
+    "test:ui": "bun test src",
+    "test:e2e": "playwright test",
+    "bindings": "TS_RS_EXPORT_DIR=../../src/lib/generated cargo test -p quintet-core export_bindings",
+    "bindings:check": "bun run bindings && git diff --exit-code -- src/lib/generated",
+    "tauri": "tauri",
+    "mcp": "bun run mcp/src/index.ts",
+    "spike": "bun run scripts/spike.ts"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-notification": "^2.4.0",
+    "@tauri-apps/plugin-opener": "^2.5.5",
+    "lucide-react": "^0.544.0",
+    "radix-ui": "^1.6.7",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "zod": "^4.6.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/bun": "^1.4.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.0"
+  }
+}

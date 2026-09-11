@@ -1,0 +1,21 @@
+# Rust
+target/
+# Node / Bun
+node_modules/
+dist/
+*.tsbuildinfo
+# Tauri
+src-tauri/gen/
+src-tauri/binaries/
+src-tauri/target/
+# Phase 0 scratch captures (raw, unsanitized)
+scripts/out/
+# Playwright
+test-results/
+playwright-report/
+# Local
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example

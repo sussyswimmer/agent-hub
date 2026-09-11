@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/* macOS-native tokens. Light values on :root, dark via prefers-color-scheme. */
+@theme {
+  --font-sans: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --text-base: 13px;
+  --color-label: #1d1d1f;
+  --color-secondary: #6e6e73;
+  --color-separator: rgba(0, 0, 0, 0.1);
+  --color-accent: #0a84ff;
+  --color-surface: #f5f5f7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-label: #f5f5f7;
+    --color-secondary: #98989d;
+    --color-separator: rgba(255, 255, 255, 0.12);
+    --color-surface: #1e1e1e;
+  }
+}
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--color-label);
+  background: transparent;
+  -webkit-font-smoothing: antialiased;
+}
