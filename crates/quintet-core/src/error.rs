@@ -13,6 +13,21 @@ pub enum CoreError {
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("database error: {0}")]
+    Db(String),
+
+    #[error("agent `{0}` is not valid: {1}")]
+    AgentInvalid(String, String),
+
+    #[error("agent `{0}` not found")]
+    AgentNotFound(String),
+
+    #[error("run `{0}` not found")]
+    RunNotFound(String),
+
+    #[error("invalid state: {0}")]
+    InvalidState(String),
+
     #[error("{0}")]
     Other(String),
 }

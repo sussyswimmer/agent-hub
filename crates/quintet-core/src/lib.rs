@@ -5,9 +5,14 @@
 //! prompt assembly, and the SQLite state. See `CLAUDE.md` §2 and
 //! `docs/decisions/0003-core-crate-split.md`.
 
+pub mod db;
 pub mod error;
+pub mod paths;
+pub mod seed;
+pub mod types;
 
-pub use error::CoreError;
+pub use error::{CoreError, Result};
+pub use paths::QuintetPaths;
 
 /// Crate version, surfaced in Settings and `quintet-mcp doctor`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
