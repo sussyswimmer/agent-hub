@@ -8,9 +8,11 @@
 pub mod db;
 pub mod error;
 pub mod paths;
+pub mod prompt;
 pub mod registry;
 pub mod seed;
 pub mod skip_if;
+pub mod snapshot;
 pub mod stream;
 pub mod types;
 
