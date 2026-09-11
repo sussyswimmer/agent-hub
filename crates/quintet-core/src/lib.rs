@@ -8,7 +8,9 @@
 pub mod db;
 pub mod error;
 pub mod paths;
+pub mod registry;
 pub mod seed;
+pub mod skip_if;
 pub mod types;
 
 pub use error::{CoreError, Result};
