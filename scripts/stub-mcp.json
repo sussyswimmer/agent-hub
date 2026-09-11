@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "quintet": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["/home/user/agent-hub/scripts/stub-mcp.ts"]
+    }
+  }
+}
