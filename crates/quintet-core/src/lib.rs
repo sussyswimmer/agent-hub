@@ -11,6 +11,7 @@ pub mod paths;
 pub mod registry;
 pub mod seed;
 pub mod skip_if;
+pub mod stream;
 pub mod types;
 
 pub use error::{CoreError, Result};
