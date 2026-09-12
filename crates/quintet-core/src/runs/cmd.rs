@@ -48,6 +48,9 @@ pub struct RunSpec {
     pub session: SessionMode,
     /// Adds `--restricted --add-dir <dir>` for each dir (ADR-0001 add-on).
     pub restricted_to: Vec<PathBuf>,
+    /// Extra allowed working directories (`--add-dir`), always: the run's output folder, so the
+    /// CLI can list, read and write deliverables outside the workspace cwd.
+    pub add_dirs: Vec<PathBuf>,
 }
 
 fn is_file_write_tool(rule: &str) -> bool {
@@ -112,6 +115,7 @@ pub fn build_args(spec: &RunSpec) -> Vec<OsString> {
         a.push(os("--restricted"));
         for d in &spec.restricted_to { a.push(os("--add-dir")); a.push(d.as_os_str().to_owned()); }
     }
+    for d in &spec.add_dirs { a.push(os("--add-dir")); a.push(d.as_os_str().to_owned()); }
     a.push(os("--tools")); a.push(os(BUILTIN_TOOLS));
     a.push(os("--permission-mode")); a.push(os(permission_mode(spec)));
     a.push(os("--permission-prompts")); a.push(os("none"));

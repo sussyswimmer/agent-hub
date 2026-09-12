@@ -114,6 +114,8 @@ async fn happy_path_streams_persists_and_finishes_done() {
     assert!(a.contains(&"--session-id".to_string()));
     assert!(a.iter().any(|x| x == &run.session_id.clone().expect("sid")));
     assert!(!a.contains(&"--mcp-config".to_string()), "no MCP configured in Phase 1 tests");
+    let i = a.iter().position(|x| x == "--add-dir").expect("--add-dir");
+    assert_eq!(a[i + 1], out.display().to_string(), "output dir passed as an allowed working directory");
     let env = std::fs::read_to_string(t.scratch.join("env.txt")).expect("env");
     assert!(!env.lines().any(|l| l.starts_with("CLAUDE_") || l.starts_with("CLAUDECODE=")), "leaked: {}", env.lines().filter(|l| l.starts_with("CLAUDE")).collect::<Vec<_>>().join(","));
     assert!(env.contains(&format!("QUINTET_HOME={}", t.paths.home.display())));

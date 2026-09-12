@@ -310,6 +310,7 @@ async fn launch(inner: Arc<Inner>, run_id: String, turn: Turn) -> Result<()> {
         memory_abs: memory_abs.clone(),
         session,
         restricted_to: if inner.cfg.restricted { vec![paths.home.clone()] } else { vec![] },
+        add_dirs: vec![output_dir.clone()],
     };
     let args = cmd::build_args(&spec);
     let mut env = process::scrubbed_env(&inner.cfg.extra_env);

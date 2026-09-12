@@ -9,6 +9,8 @@ const MAP: Record<string, string> = process.argv[2] ? JSON.parse(readFileSync(pr
 const scrub = (s: string) =>
   s
     .replaceAll(/\/tmp\/claude-0\/[^"\\\s]*?\/scratchpad\/[a-z0-9]+/g, "/HOME/Quintet/agents/test/workspace")
+    .replaceAll(/\/tmp\/\.tmp[A-Za-z0-9]+\/Quintet/g, "/HOME/Quintet")
+    .replaceAll(/\/tmp\/cc-socks\/[0-9]+\.sock/g, "/HOME/.claude/quintet.sock")
     .replaceAll(/\/home\/user\/agent-hub/g, "/REPO")
     .replaceAll(/\/root\b/g, "/HOME")
     .replaceAll(/\/Users\/[A-Za-z0-9._-]+/g, "/HOME");

@@ -147,3 +147,20 @@ fn tool_labels() {
     // A parse error is an Err, not a panic.
     assert!(parse_line("not json").is_err());
 }
+
+#[test]
+fn live_research_fixture_has_web_tool_rows_and_a_summary() {
+    let ev = flat("websearch_webfetch.jsonl");
+    let rows: Vec<_> = ev.iter().enumerate().flat_map(|(i, e)| to_ui_rows(e, i as i64, "t")).collect();
+    assert!(rows.iter().any(|r| r.kind == UiRowKind::Tool && r.label.starts_with("Searching the web: FSRS")), "{rows:?}");
+    assert!(rows.iter().any(|r| r.kind == UiRowKind::Tool && r.label.starts_with("Reading ") && r.detail.as_deref().unwrap_or("").starts_with("https://")), "WebFetch row");
+    assert!(rows.iter().any(|r| r.kind == UiRowKind::Tool && r.label.starts_with("Writing brief.md")), "Write row");
+    assert!(rows.iter().any(|r| r.kind == UiRowKind::Error && r.label == "Blocked: Bash"), "the denied ls shows as Blocked");
+    let r = result(&ev).expect("result");
+    assert_eq!(r.subtype, "success");
+    assert!(r.num_turns >= 10);
+    assert!(r.total_cost_usd > 0.05);
+    assert!(r.text.as_deref().unwrap_or("").contains("FSRS"));
+    let init = ev.iter().find_map(|e| if let StreamEvent::Init(i) = e { Some(i) } else { None }).expect("init");
+    assert!(init.skills.is_empty() && init.mcp_servers.iter().any(|m| m.name == "quintet" && m.status == "connected"));
+}

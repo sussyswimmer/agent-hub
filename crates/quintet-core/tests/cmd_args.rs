@@ -17,6 +17,7 @@ fn spec() -> RunSpec {
         memory_abs: PathBuf::from("/HOME/Quintet/agents/research/memory.md"),
         session: SessionMode::New("11111111-2222-3333-4444-555555555555".into()),
         restricted_to: vec![],
+        add_dirs: vec![PathBuf::from("/HOME/Quintet/outputs/research/2026-09-12-x")],
     }
 }
 
@@ -54,6 +55,7 @@ fn default_level_accept_edits_and_full_allowlist() {
     // Nothing positional after the last variadic flag: the task text goes on stdin.
     assert!(a.last().map(|l| GLOBAL_DENYLIST.contains(&l.as_str())).unwrap_or(false));
     assert!(!a.contains(&"--restricted".to_string()));
+    assert_eq!(value_after(&a, "--add-dir"), "/HOME/Quintet/outputs/research/2026-09-12-x", "output dir is an allowed working directory");
 }
 
 #[test]
@@ -94,7 +96,8 @@ fn resume_restricted_and_no_mcp() {
     assert!(!a.contains(&"--mcp-config".to_string()));
     assert!(a.contains(&"--strict-mcp-config".to_string()));
     assert!(a.contains(&"--restricted".to_string()));
-    assert_eq!(value_after(&a, "--add-dir"), "/HOME/Quintet");
+    let dirs: Vec<&String> = a.iter().enumerate().filter(|(i, x)| *x == "--add-dir" && i + 1 < a.len()).map(|(i, _)| &a[i + 1]).collect();
+    assert_eq!(dirs, vec!["/HOME/Quintet", "/HOME/Quintet/outputs/research/2026-09-12-x"]);
     let r = render(&PathBuf::from("claude"), &build_args(&s));
     assert!(r.starts_with("claude -p --output-format stream-json --verbose --resume sess-1"));
     assert!(r.contains("--setting-sources \"\""));

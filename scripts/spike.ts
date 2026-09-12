@@ -38,7 +38,7 @@ const digest = (e: any): string => {
 };
 
 let n = 0;
-for await (const chunk of proc.stdout.pipeThrough(new TextDecoderStream()).pipeThrough(new (class extends TransformStream<string, string> { constructor() { let buf = ""; super({ transform(c, ctl) { buf += c; const ls = buf.split("\n"); buf = ls.pop()!; for (const l of ls) if (l.trim()) ctl.enqueue(l); }, flush(ctl) { if (buf.trim()) ctl.enqueue(buf); } }); } })())) {
+for await (const chunk of (proc.stdout.pipeThrough(new TextDecoderStream()).pipeThrough(new (class extends TransformStream<string, string> { constructor() { let buf = ""; super({ transform(c, ctl) { buf += c; const ls = buf.split("\n"); buf = ls.pop()!; for (const l of ls) if (l.trim()) ctl.enqueue(l); }, flush(ctl) { if (buf.trim()) ctl.enqueue(buf); } }); } })()) as unknown as AsyncIterable<string>)) {
   out.write(chunk + "\n"); n++;
   try { console.log(`[${((performance.now() - t0) / 1000).toFixed(1)}s] ${digest(JSON.parse(chunk))}`); } catch { console.log(`[raw] ${chunk.slice(0, 200)}`); }
 }
