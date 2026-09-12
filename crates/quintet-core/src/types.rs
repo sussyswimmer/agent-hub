@@ -259,11 +259,15 @@ pub struct RunRow {
     pub started_at: Option<String>,
     pub ended_at: Option<String>,
     pub cost_usd: Option<f64>,
+    #[ts(type = "number | null")]
     pub tokens_in: Option<i64>,
+    #[ts(type = "number | null")]
     pub tokens_out: Option<i64>,
+    #[ts(type = "number | null")]
     pub turns: Option<i64>,
     pub error: Option<String>,
     pub summary: Option<String>,
+    #[ts(type = "number | null")]
     pub pid: Option<i64>,
     pub log_path: Option<String>,
     pub output_dir: Option<String>,
@@ -298,6 +302,7 @@ pub enum UiRowState {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct UiRow {
+    #[ts(type = "number")]
     pub seq: i64,
     pub kind: UiRowKind,
     pub label: String,

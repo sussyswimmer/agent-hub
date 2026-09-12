@@ -1,7 +1,10 @@
+import { Shell } from "./Shell";
+import { StoreProvider } from "./store";
+
 export function App() {
   return (
-    <main className="flex h-screen items-center justify-center text-secondary">
-      Quintet — shell arrives in Phase 1.
-    </main>
+    <StoreProvider>
+      <Shell />
+    </StoreProvider>
   );
 }
