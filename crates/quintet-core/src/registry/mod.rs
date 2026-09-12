@@ -150,12 +150,12 @@ impl Registry {
         let mut guard = self.agents.write().map_err(|_| CoreError::other("registry lock poisoned"))?;
         if !md.is_file() {
             let removed = guard.remove(id).is_some();
-            if removed { if let Some(db) = &self.db { let ids: Vec<String> = guard.keys().cloned().collect(); db::agents::remove_missing(db, &ids)?; } }
+            if removed && let Some(db) = &self.db { let ids: Vec<String> = guard.keys().cloned().collect(); db::agents::remove_missing(db, &ids)?; }
             return Ok(removed);
         }
         let loaded = self.load_one(id, &md);
         let changed = guard.get(id).map(|old| old.hash != loaded.hash || old.error != loaded.error).unwrap_or(true);
-        if changed { if let Some(db) = &self.db { self.cache(db, &loaded)?; } }
+        if changed && let Some(db) = &self.db { self.cache(db, &loaded)?; }
         guard.insert(id.to_string(), loaded);
         Ok(changed)
     }
@@ -219,7 +219,7 @@ impl Registry {
                             let ids: Vec<String> = std::mem::take(&mut pending).into_iter().collect();
                             let mut any = false;
                             for id in ids { match reg.reload(&id) { Ok(c) => any |= c, Err(e) => tracing::warn!(agent = %id, "reload failed: {e}") } }
-                            if any { if let Ok(s) = reg.summaries() { on_change(s); } }
+                            if any && let Ok(s) = reg.summaries() { on_change(s); }
                         }
                     }
                     Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,

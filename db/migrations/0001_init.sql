@@ -37,6 +37,7 @@ CREATE TABLE runs (
   summary         TEXT,                  -- final assistant text
   pid             INTEGER,
   log_path        TEXT,
+  output_dir      TEXT,
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
 );

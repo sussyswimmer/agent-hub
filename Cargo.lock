@@ -786,6 +786,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "jsonschema",
+ "libc",
  "notify",
  "rusqlite",
  "serde",

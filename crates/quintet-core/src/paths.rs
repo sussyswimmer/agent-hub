@@ -14,11 +14,10 @@ pub struct QuintetPaths {
 impl QuintetPaths {
     /// `$QUINTET_HOME` if set (and non-empty), else `~/Quintet`.
     pub fn resolve() -> Result<Self> {
-        if let Some(v) = std::env::var_os("QUINTET_HOME") {
-            if !v.is_empty() {
+        if let Some(v) = std::env::var_os("QUINTET_HOME")
+            && !v.is_empty() {
                 return Ok(Self { home: PathBuf::from(v) });
             }
-        }
         let home_dir = std::env::home_dir()
             .ok_or_else(|| CoreError::other("cannot determine the home directory"))?;
         Ok(Self { home: home_dir.join("Quintet") })

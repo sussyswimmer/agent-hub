@@ -280,7 +280,8 @@ mod tests {
         assert!(should_skip("task.graded == 'no' || memory.list", &c));
         assert!(!should_skip("task.graded == 'no' && memory.list", &c));
         assert!(should_skip("!(task.graded == 'no')", &c));
-        assert!(should_skip("memory.missing == null || true == true || profile.class_of", &c) || true);
+        assert!(!should_skip("memory.missing == 'x'", &c));
+        assert!(should_skip("memory.missing != 'x'", &c));
     }
 
     #[test]

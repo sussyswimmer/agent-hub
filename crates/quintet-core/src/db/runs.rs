@@ -25,12 +25,13 @@ fn row_to_run(r: &Row<'_>) -> rusqlite::Result<RunRow> {
         summary: r.get("summary")?,
         pid: r.get("pid")?,
         log_path: r.get("log_path")?,
+        output_dir: r.get("output_dir")?,
         created_at: r.get("created_at")?,
         updated_at: r.get("updated_at")?,
     })
 }
 
-const COLS: &str = "id, agent_id, trigger, status, session_id, integrity_level, intake_json, task_title, started_at, ended_at, cost_usd, tokens_in, tokens_out, turns, error, summary, pid, log_path, created_at, updated_at";
+const COLS: &str = "id, agent_id, trigger, status, session_id, integrity_level, intake_json, task_title, started_at, ended_at, cost_usd, tokens_in, tokens_out, turns, error, summary, pid, log_path, output_dir, created_at, updated_at";
 
 pub struct NewRun<'a> {
     pub agent_id: &'a str,
@@ -52,7 +53,7 @@ pub fn insert(db: &Db, new: &NewRun<'_>) -> Result<RunRow> {
             params![id, new.agent_id, new.trigger, new.session_id, new.integrity_level.map(i64::from), new.intake_json, new.task_title, now],
         )?;
     }
-    get(db, &id)?.ok_or_else(|| CoreError::RunNotFound(id))
+    get(db, &id)?.ok_or(CoreError::RunNotFound(id))
 }
 
 pub fn get(db: &Db, id: &str) -> Result<Option<RunRow>> {
@@ -105,12 +106,12 @@ pub fn set_status(db: &Db, id: &str, status: RunStatus, error: Option<&str>) -> 
     Ok(())
 }
 
-pub fn mark_running(db: &Db, id: &str, pid: Option<u32>, log_path: &str) -> Result<()> {
+pub fn mark_running(db: &Db, id: &str, pid: Option<u32>, log_path: &str, output_dir: &str) -> Result<()> {
     let guard = db.conn()?;
     let now = now_iso();
     guard.execute(
-        "UPDATE runs SET status = 'running', pid = ?2, log_path = ?3, started_at = COALESCE(started_at, ?4), ended_at = NULL, error = NULL, updated_at = ?4 WHERE id = ?1",
-        params![id, pid.map(i64::from), log_path, now],
+        "UPDATE runs SET status = 'running', pid = ?2, log_path = ?3, output_dir = COALESCE(output_dir, ?5), started_at = COALESCE(started_at, ?4), ended_at = NULL, error = NULL, updated_at = ?4 WHERE id = ?1",
+        params![id, pid.map(i64::from), log_path, now, output_dir],
     )?;
     Ok(())
 }

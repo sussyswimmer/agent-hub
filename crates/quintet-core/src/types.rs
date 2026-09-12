@@ -266,6 +266,7 @@ pub struct RunRow {
     pub summary: Option<String>,
     pub pid: Option<i64>,
     pub log_path: Option<String>,
+    pub output_dir: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

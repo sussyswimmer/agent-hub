@@ -70,19 +70,17 @@ pub fn semantic_errors(def: &AgentDef, folder_id: &str) -> Vec<String> {
                 }
             }
             IntakeType::Integrity => {
-                if let Some(m) = f.max {
-                    if m > 3 {
+                if let Some(m) = f.max
+                    && m > 3 {
                         errs.push(format!("intake.{}: max must be ≤ 3", f.id));
                     }
-                }
                 if let Some(d) = &f.default {
                     match d.as_u64() {
                         Some(n) if n <= 3 => {
-                            if let Some(m) = f.max {
-                                if n > u64::from(m) {
+                            if let Some(m) = f.max
+                                && n > u64::from(m) {
                                     errs.push(format!("intake.{}: default {n} exceeds max {m}", f.id));
                                 }
-                            }
                         }
                         _ => errs.push(format!("intake.{}: default must be an integer 0..=3", f.id)),
                     }
@@ -97,17 +95,15 @@ pub fn semantic_errors(def: &AgentDef, folder_id: &str) -> Vec<String> {
         if f.from_chat && f.kind != IntakeType::Text {
             errs.push(format!("intake.{}: from_chat only applies to text fields", f.id));
         }
-        if let Some(expr) = &f.skip_if {
-            if let Err(e) = crate::skip_if::validate(expr) {
+        if let Some(expr) = &f.skip_if
+            && let Err(e) = crate::skip_if::validate(expr) {
                 errs.push(format!("intake.{}: skip_if: {e}", f.id));
             }
-        }
     }
-    if let Some(s) = &def.state_snapshot {
-        if !KNOWN_SNAPSHOTS.contains(&s.as_str()) {
+    if let Some(s) = &def.state_snapshot
+        && !KNOWN_SNAPSHOTS.contains(&s.as_str()) {
             errs.push(format!("state_snapshot `{s}` is not one of {}", KNOWN_SNAPSHOTS.join(", ")));
         }
-    }
     let mut sched_names = std::collections::HashSet::new();
     for s in &def.schedules {
         if !sched_names.insert(s.name.as_str()) {
