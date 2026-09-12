@@ -10,7 +10,7 @@ use crate::registry::Registry;
 use crate::runs::recovery::{recover_on_launch, Recovered};
 use crate::runs::{RunConfig, RunManager, RunSink};
 use crate::seed::{seed, SeedReport, SeedSource};
-use crate::types::{AgentRunState, AgentSummary, PathsInfo, RunStatus};
+use crate::types::{AgentRunState, AgentSummary, IntakeForm, PathsInfo, ResolvedIntake, RunRow, RunStatus, StartRunArgs, TaskArgs};
 
 pub struct Core {
     pub paths: QuintetPaths,
@@ -43,6 +43,31 @@ impl Core {
             outputs: self.paths.outputs().display().to_string(),
             logs_runs: self.paths.logs_runs().display().to_string(),
         }
+    }
+
+    fn frontmatters(&self, agent_id: &str) -> (serde_json::Value, serde_json::Value) {
+        let memory = std::fs::read_to_string(self.paths.memory_md(agent_id)).unwrap_or_default();
+        let profile = std::fs::read_to_string(self.paths.profile_md()).unwrap_or_default();
+        (crate::intake::frontmatter_json(&memory), crate::intake::frontmatter_json(&profile))
+    }
+
+    /// The intake form for a task typed into Chat (or the New task sheet).
+    pub fn evaluate_intake(&self, agent_id: &str, task_text: &str, partial: &serde_json::Map<String, serde_json::Value>) -> Result<IntakeForm> {
+        let (def, _) = self.registry.require(agent_id)?;
+        let (m, p) = self.frontmatters(agent_id);
+        Ok(crate::intake::evaluate(&def, task_text, partial, m, p))
+    }
+
+    pub fn resolve_intake(&self, agent_id: &str, task_text: &str, answers: &serde_json::Map<String, serde_json::Value>) -> Result<ResolvedIntake> {
+        let (def, _) = self.registry.require(agent_id)?;
+        let (m, p) = self.frontmatters(agent_id);
+        Ok(crate::intake::resolve(&def, task_text, answers, m, p))
+    }
+
+    /// Resolve intake (defaults, from_chat, integrity cap) then start the run.
+    pub fn start_task(&self, args: TaskArgs) -> Result<RunRow> {
+        let resolved = self.resolve_intake(&args.agent_id, &args.task_text, &args.answers)?;
+        self.runs.start(StartRunArgs { agent_id: args.agent_id, task_text: args.task_text, intake: resolved.intake, integrity_level: resolved.integrity_level, trigger: args.trigger })
     }
 
     /// Sidebar summaries with live run state and pending-item badges merged in.

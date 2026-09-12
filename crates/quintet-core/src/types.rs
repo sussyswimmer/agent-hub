@@ -398,3 +398,46 @@ pub struct PathsInfo {
     pub outputs: String,
     pub logs_runs: String,
 }
+
+/// One intake field as the form should show it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct IntakeFieldView {
+    pub field: IntakeField,
+    /// `skip_if` evaluated true: hide it, do not require it.
+    pub skipped: bool,
+    /// Current value: the partial answer, else the composer text (from_chat), else the default.
+    #[ts(type = "unknown | null")]
+    pub prefill: Option<serde_json::Value>,
+    /// Required fields are satisfied when skipped or when `prefill` is non-empty.
+    pub satisfied: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct IntakeForm {
+    pub agent_id: String,
+    pub fields: Vec<IntakeFieldView>,
+    pub can_start: bool,
+    pub missing: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ResolvedIntake {
+    #[ts(type = "Record<string, unknown>")]
+    pub intake: serde_json::Map<String, serde_json::Value>,
+    pub integrity_level: Option<IntegrityLevel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TaskArgs {
+    pub agent_id: String,
+    pub task_text: String,
+    #[serde(default)]
+    #[ts(type = "Record<string, unknown>")]
+    pub answers: serde_json::Map<String, serde_json::Value>,
+    #[serde(default)]
+    pub trigger: Option<String>,
+}

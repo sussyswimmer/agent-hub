@@ -8,6 +8,7 @@
 pub mod core;
 pub mod db;
 pub mod error;
+pub mod intake;
 pub mod paths;
 pub mod preflight;
 pub mod prompt;
