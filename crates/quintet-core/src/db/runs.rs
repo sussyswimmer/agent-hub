@@ -153,10 +153,19 @@ pub fn insert_event(db: &Db, run_id: &str, seq: i64, kind: &str, json: &str) -> 
     Ok(())
 }
 
-pub fn events(db: &Db, run_id: &str, after_seq: i64) -> Result<Vec<(i64, String, String)>> {
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct EventRow {
+    pub seq: i64,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub json: String,
+    pub created_at: String,
+}
+
+pub fn events(db: &Db, run_id: &str, after_seq: i64) -> Result<Vec<EventRow>> {
     let guard = db.conn()?;
-    let mut stmt = guard.prepare("SELECT seq, type, json FROM run_events WHERE run_id = ?1 AND seq > ?2 ORDER BY seq")?;
-    let rows = stmt.query_map(params![run_id, after_seq], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+    let mut stmt = guard.prepare("SELECT seq, type, json, created_at FROM run_events WHERE run_id = ?1 AND seq > ?2 ORDER BY seq")?;
+    let rows = stmt.query_map(params![run_id, after_seq], |r| Ok(EventRow { seq: r.get(0)?, kind: r.get(1)?, json: r.get(2)?, created_at: r.get(3)? }))?;
     Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
 }
 

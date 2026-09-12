@@ -279,3 +279,13 @@ pub fn to_ui_rows(ev: &StreamEvent, seq: i64, ts: &str) -> Vec<UiRow> {
         }
     }
 }
+
+/// Rebuild the Chat rows of a finished or running run from its persisted events.
+pub fn replay_rows(events: &[crate::db::runs::EventRow]) -> Vec<UiRow> {
+    let mut out = Vec::new();
+    for e in events {
+        let parsed = match serde_json::from_str::<Value>(&e.json) { Ok(v) => parse_value(&v), Err(_) => vec![StreamEvent::Unknown { kind: "<unparseable>".into() }] };
+        for ev in &parsed { out.extend(to_ui_rows(ev, e.seq, &e.created_at)); }
+    }
+    out
+}

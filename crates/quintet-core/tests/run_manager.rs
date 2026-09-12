@@ -91,8 +91,8 @@ async fn happy_path_streams_persists_and_finishes_done() {
     // Events persisted + log + system prompt.
     let events = db::runs::events(&t.db, &run.id, 0).expect("events");
     assert_eq!(events.len(), 8);
-    assert_eq!(events[0].1, "system/init");
-    assert!(events.iter().any(|(_, ty, _)| ty == "result/success"));
+    assert_eq!(events[0].kind, "system/init");
+    assert!(events.iter().any(|e| e.kind == "result/success"));
     let log = PathBuf::from(r.log_path.expect("log"));
     assert_eq!(std::fs::read_to_string(&log).expect("log").lines().count(), 8);
     let sys = t.paths.logs_runs().join(format!("{}.system.md", run.id));

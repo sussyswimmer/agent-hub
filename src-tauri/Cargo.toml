@@ -1,0 +1,32 @@
+[package]
+name = "quintet-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Quintet desktop shell (Tauri 2)"
+
+[lib]
+name = "quintet_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "quintet"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+quintet-core = { path = "../crates/quintet-core" }
+tauri = { version = "2.11", features = [] }
+tauri-plugin-notification = "2.4"
+tauri-plugin-opener = "2.5"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+window-vibrancy = "0.8"
