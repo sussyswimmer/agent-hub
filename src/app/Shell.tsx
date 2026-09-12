@@ -23,7 +23,7 @@ function PreflightBanner() {
 export function Shell() {
   const { state, dispatch } = useStore();
   const setView = useCallback((v: View) => dispatch({ type: "view", value: v }), [dispatch]);
-  const focusComposer = useCallback(() => { dispatch({ type: "focusComposer" }); }, [dispatch]);
+  const focusComposer = useCallback(() => { dispatch({ type: "newTask" }); }, [dispatch]);
   useGlobalShortcuts(state.agents, setView, focusComposer);
 
   let main: React.ReactNode;

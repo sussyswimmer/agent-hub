@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Field({ label, hint, children }: { label: string; hint?: string | undefined; children: ReactNode }) {
   return (
     <label className="mb-3 block">
       <div className="mb-1 text-sm font-medium">{label}</div>

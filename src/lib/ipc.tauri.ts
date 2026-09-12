@@ -40,6 +40,8 @@ export function createTauriBackend(): Backend {
     listAgents: () => call("list_agents", z.array(S.agentSummary)),
     getAgent: (id) => call("get_agent", S.agentDetail.nullable(), { id }),
     startRun: (args) => call("start_run", S.runRow, { args }),
+    evaluateIntake: (agentId, taskText, partial) => call("evaluate_intake", S.intakeForm, { agentId, taskText, partial }),
+    startTask: (args) => call("start_task", S.runRow, { args }),
     cancelRun: (id) => call("cancel_run", z.null().or(z.undefined()).transform(() => undefined), { id }),
     listRuns: (q = {}) => call("list_runs", z.array(S.runRow), { agentId: q.agentId ?? null, status: q.status ?? null, limit: q.limit ?? null }),
     getRun: (id) => call("get_run", S.runRow.nullable(), { id }),

@@ -2,7 +2,8 @@
 // for the UI: five valid agents plus one broken one, runs that stream fixture rows, and status events.
 import type { Backend, Unsubscribe } from "./ipc";
 import replay from "./fixtures/run-research.json";
-import type { AgentDef, AgentDetail, AgentSummary, Preflight, RunEventRow, RunRow, RunStatus, UiRow } from "./types";
+import { shouldSkip } from "./skipIf";
+import type { AgentDef, AgentDetail, AgentSummary, IntakeFieldView, IntakeForm, Preflight, RunEventRow, RunRow, RunStatus, StartRunArgs, UiRow } from "./types";
 
 type Listener<T> = (v: T) => void;
 
@@ -44,6 +45,33 @@ const DEFS: Record<string, AgentDef> = {
   school: { ...BASE_DEF, id: "school", name: "School", icon: "calendar", color: "blue", mission: AGENTS[3]!.mission, integrity: true, outputs_dir: "school", board: "school_planner" },
   tutor: { ...BASE_DEF, id: "tutor", name: "Tutor", icon: "brain", color: "green", mission: AGENTS[4]!.mission, integrity: true, outputs_dir: "tutor", board: "tutor_review" },
 };
+
+const MOCK_MEMORY: Record<string, Record<string, unknown>> = { research: {}, college: {}, scout: {}, school: {}, tutor: {} };
+const MOCK_PROFILE = { class_of: 2028, timezone: "Asia/Saigon" };
+
+const isEmpty = (v: unknown) => v === undefined || v === null || (typeof v === "string" && v.trim() === "") || (Array.isArray(v) && v.length === 0);
+
+/** Same rules as crates/quintet-core/src/intake.rs. */
+function evaluateIntake(def: AgentDef, taskText: string, partial: Record<string, unknown>): IntakeForm {
+  const prefill = (f: AgentDef["intake"][number]): unknown => {
+    if (!isEmpty(partial[f.id])) return partial[f.id];
+    if (f.type === "text" && f.from_chat && taskText.trim()) return taskText.trim();
+    return isEmpty(f.default) ? null : f.default;
+  };
+  const task: Record<string, unknown> = { text: taskText };
+  for (const f of def.intake) { const v = prefill(f); if (v !== null) task[f.id] = v; }
+  Object.assign(task, partial);
+  const ctx = { memory: MOCK_MEMORY[def.id] ?? {}, profile: MOCK_PROFILE, task };
+  const fields: IntakeFieldView[] = def.intake.map((f) => {
+    const skipped = f.skip_if ? shouldSkip(f.skip_if, ctx) : false;
+    let p = prefill(f);
+    if (f.type === "integrity" && p !== null) p = Math.min(Number(p), f.max ?? 3);
+    const satisfied = skipped || !f.required || !isEmpty(p);
+    return { field: f, skipped, prefill: p, satisfied };
+  });
+  const missing = fields.filter((v) => !v.satisfied).map((v) => v.field.id);
+  return { agent_id: def.id, fields, can_start: missing.length === 0, missing };
+}
 
 let ulidCounter = 0;
 const ulid = () => `01MOCK${String(++ulidCounter).padStart(6, "0")}`;
@@ -99,7 +127,7 @@ export function createMockBackend(): Backend {
     setTimeout(tick, 200);
   };
 
-  return {
+  const api: Backend = {
     kind: "mock",
     preflight: async () => pf,
     listAgents: async () => structuredClone(agents),
@@ -108,6 +136,21 @@ export function createMockBackend(): Backend {
       if (!summary) return null;
       const detail: AgentDetail = { summary, def: DEFS[id] ?? null, body: `# Role\n\nYou are ${summary.name}.`, memory: "---\n---\n# Memory\n", path: `/HOME/Quintet/agents/${id}/agent.md` };
       return detail;
+    },
+    evaluateIntake: async (agentId, taskText, partial) => {
+      const def = DEFS[agentId];
+      if (!def) throw new Error(`agent \`${agentId}\` not found`);
+      return evaluateIntake(def, taskText, partial);
+    },
+    startTask: async (args) => {
+      const def = DEFS[args.agent_id];
+      if (!def) throw new Error(`agent \`${args.agent_id}\` not found`);
+      const form = evaluateIntake(def, args.task_text, args.answers);
+      const intake: Record<string, unknown> = {};
+      let integrity: number | null = null;
+      for (const v of form.fields) { if (v.skipped || v.prefill === null) continue; intake[v.field.id] = v.prefill; if (v.field.type === "integrity") integrity = Number(v.prefill); }
+      const startArgs: StartRunArgs = { agent_id: args.agent_id, task_text: args.task_text, intake, integrity_level: integrity, trigger: args.trigger ?? null };
+      return api.startRun(startArgs);
     },
     startRun: async (args) => {
       const a = agents.find((x) => x.id === args.agent_id);
@@ -139,4 +182,5 @@ export function createMockBackend(): Backend {
     onRegistryChanged: (cb) => registryEvents.on(cb),
     onPreflight: (cb) => { setTimeout(() => cb(pf), 50); return preflightEvents.on(cb); },
   };
+  return api;
 }

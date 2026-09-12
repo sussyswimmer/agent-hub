@@ -105,3 +105,6 @@ export const pathsInfo = z.object({ home: z.string(), db_file: z.string(), agent
 export const runEventRow = z.object({ seq: z.number(), type: z.string(), json: z.string(), created_at: z.string() });
 
 export const settingsList = z.array(z.tuple([z.string(), z.string()]));
+
+export const intakeFieldView = z.object({ field: intakeField, skipped: z.boolean(), prefill: z.unknown().nullable(), satisfied: z.boolean() });
+export const intakeForm = z.object({ agent_id: z.string(), fields: z.array(intakeFieldView), can_start: z.boolean(), missing: z.array(z.string()) });

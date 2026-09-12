@@ -13,6 +13,7 @@ export interface State {
   runs: Record<string, RunRow>;
   rows: Record<string, UiRow[]>;
   composerFocusTick: number;
+  newTaskTick: number;
   error: string | null;
 }
 
@@ -26,9 +27,10 @@ type Action =
   | { type: "rows"; runId: string; value: UiRow[] }
   | { type: "row"; runId: string; value: UiRow }
   | { type: "focusComposer" }
+  | { type: "newTask" }
   | { type: "error"; value: string | null };
 
-const initial: State = { ready: false, backendKind: null, preflight: null, agents: [], view: { kind: "agent", id: "research" }, runs: {}, rows: {}, composerFocusTick: 0, error: null };
+const initial: State = { ready: false, backendKind: null, preflight: null, agents: [], view: { kind: "agent", id: "research" }, runs: {}, rows: {}, composerFocusTick: 0, newTaskTick: 0, error: null };
 
 /** A tool_result row (empty label, same tool_use_id) updates the state of its tool_use row. */
 export function mergeRow(rows: UiRow[], row: UiRow): UiRow[] {
@@ -61,6 +63,7 @@ function reducer(s: State, a: Action): State {
     case "rows": return { ...s, rows: { ...s.rows, [a.runId]: a.value } };
     case "row": return { ...s, rows: { ...s.rows, [a.runId]: mergeRow(s.rows[a.runId] ?? [], a.value) } };
     case "focusComposer": return { ...s, composerFocusTick: s.composerFocusTick + 1 };
+    case "newTask": return { ...s, newTaskTick: s.newTaskTick + 1 };
     case "error": return { ...s, error: a.value };
   }
 }

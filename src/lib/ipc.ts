@@ -1,6 +1,6 @@
 // The one boundary between the UI and the backend. Real Tauri when running inside the app,
 // an in-memory mock in a plain browser (Playwright, `vite dev` without Tauri).
-import type { AgentDetail, AgentSummary, PathsInfo, Preflight, RunEventRow, RunRow, RunStatus, StartRunArgs, UiRow } from "./types";
+import type { AgentDetail, AgentSummary, IntakeForm, PathsInfo, Preflight, RunEventRow, RunRow, RunStatus, StartRunArgs, TaskArgs, UiRow } from "./types";
 
 export type Unsubscribe = () => void;
 
@@ -9,6 +9,10 @@ export interface Backend {
   listAgents(): Promise<AgentSummary[]>;
   getAgent(id: string): Promise<AgentDetail | null>;
   startRun(args: StartRunArgs): Promise<RunRow>;
+  /** Intake form for a task: which fields to show, prefills, whether it can start now. */
+  evaluateIntake(agentId: string, taskText: string, partial: Record<string, unknown>): Promise<IntakeForm>;
+  /** Resolve intake (defaults, from_chat, integrity cap) and start. */
+  startTask(args: TaskArgs): Promise<RunRow>;
   cancelRun(id: string): Promise<void>;
   listRuns(q?: { agentId?: string; status?: RunStatus; limit?: number }): Promise<RunRow[]>;
   getRun(id: string): Promise<RunRow | null>;

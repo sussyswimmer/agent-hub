@@ -80,3 +80,37 @@ test("dark and light appearance both apply the token set", async ({ page }) => {
   expect(light).toBe("#1d1d1f");
   await expect(page.locator('[data-testid="sidebar"]')).toBeVisible();
 });
+
+test("New task opens the intake sheet; skip_if hides integrity until graded = yes; the run carries the level", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator('[data-testid="agent-list"] [data-agent]')).toHaveCount(6);
+  await page.getByRole("button", { name: "New task" }).click();
+  const sheet = page.locator('[data-testid="intake-sheet"]');
+  await expect(sheet).toBeVisible();
+  await expect(sheet.locator('[data-intake="question"]')).toBeVisible();
+  await expect(sheet.locator('[data-intake="depth"] [aria-checked="true"]')).toHaveText("standard");
+  await expect(sheet.locator('[data-intake="integrity"]')).toHaveCount(0);
+  await expect(sheet.locator('[data-testid="intake-missing"]')).toContainText("question");
+  await expect(sheet.locator('[data-testid="intake-run"]')).toBeDisabled();
+  await sheet.locator('[data-intake="question"]').fill("Explain the Malaysia capital controls of 1998");
+  await expect(sheet.locator('[data-testid="intake-run"]')).toBeEnabled();
+  await sheet.locator('[data-intake="graded"] button', { hasText: "yes" }).click();
+  await expect(sheet.locator('[data-intake="integrity"]')).toBeVisible();
+  await sheet.locator('[data-intake="integrity"] button', { hasText: "2 · Examples" }).click();
+  await sheet.locator('[data-testid="intake-run"]').click();
+  await expect(sheet).toHaveCount(0);
+  const card = page.locator('[data-testid="run-card"]').first();
+  await expect(card).toContainText("Malaysia capital controls");
+  await expect(card.locator('[data-integrity="2"]')).toBeVisible();
+});
+
+test("a quick task in Chat skips the sheet when every required field is inferred", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-agent="college"]').click();
+  await page.getByLabel("Task").fill("Check Yale's REA deadline");
+  await page.locator('[data-testid="run-button"]').click();
+  await expect(page.locator('[data-testid="intake-sheet"]')).toHaveCount(0);
+  const card = page.locator('[data-testid="run-card"]').first();
+  await expect(card).toContainText("Yale");
+  await expect(card.locator('[data-integrity="1"]')).toBeVisible(); // essay_coach default → level 1 (cap 2)
+});

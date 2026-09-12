@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -12,7 +15,15 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["bun"]
+    "types": [
+      "bun"
+    ]
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "scripts", "tests"]
+  "include": [
+    "vite.config.ts",
+    "playwright.config.ts",
+    "scripts",
+    "tests",
+    "src/**/__tests__"
+  ]
 }
