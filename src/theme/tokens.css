@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+/* Grimoire tokens (§7.2, §7.3). Values are asserted by tests/contrast.test.ts — change a
+   colour there and the test tells you whether it still reads. */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces and ink */
+  --ink-void: #14131a;
+  --ink-panel: #1e1c27;
+  --ink-rule: #332f40;
+  --bone: #c9bfa4;
+  --bone-dim: #8c8474;
+
+  /* State and order colours. Saturated: rules, fills, sigils. */
+  --brass: #b08d3f;
+  --verdigris: #4e7a6b;
+  --oxblood: #7a1f2b;
+  --slate: #5a6b8c;
+
+  /* Text-safe variants: every one clears 4.5:1 on both --ink-void and --ink-panel.
+     Brass already does, so it is its own text colour. */
+  --brass-text: #b08d3f;
+  --verdigris-text: #678d80;
+  --oxblood-text: #ae767e;
+  --slate-text: #7886a1;
+
+  /* Order sigil colours (§3). Ledger's is bone. */
+  --order-quill: var(--brass);
+  --order-lantern: var(--verdigris);
+  --order-crucible: var(--oxblood);
+  --order-compass: var(--slate);
+  --order-ledger: var(--bone);
+
+  /* Type (§7.3). Junicode falls back to EB Garamond when it could not be vendored. */
+  --font-display: "Junicode", "EB Garamond", Georgia, serif;
+  --font-body: "EB Garamond", Georgia, serif;
+  --font-mono: "Iosevka", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* A classic fourth: 12 / 16 / 21 / 28 / 37 / 50. */
+  --step--1: 12px;
+  --step-0: 16px;
+  --step-1: 21px;
+  --step-2: 28px;
+  --step-3: 37px;
+  --step-4: 50px;
+
+  /* Radius 2px on interactive controls, 0 everywhere else (§7.5). */
+  --radius: 2px;
+  --rail: 240px;
+  --measure: 72ch;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@theme inline {
+  --color-void: var(--ink-void);
+  --color-panel: var(--ink-panel);
+  --color-rule: var(--ink-rule);
+  --color-bone: var(--bone);
+  --color-bone-dim: var(--bone-dim);
+  --color-brass: var(--brass);
+  --color-verdigris: var(--verdigris);
+  --color-oxblood: var(--oxblood);
+  --color-slate: var(--slate);
+  --color-brass-text: var(--brass-text);
+  --color-verdigris-text: var(--verdigris-text);
+  --color-oxblood-text: var(--oxblood-text);
+  --color-slate-text: var(--slate-text);
+
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  --text-xs: var(--step--1);
+  --text-base: var(--step-0);
+  --text-md: var(--step-1);
+  --text-lg: var(--step-2);
+  --text-xl: var(--step-3);
+  --text-2xl: var(--step-4);
+
+  --radius-mark: var(--radius);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ink-void);
+  color: var(--bone);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  border-radius: var(--radius);
+}
+
+/* Prose keeps to a readable measure (§7.3). */
+.measure {
+  max-width: var(--measure);
+}
+
+.selectable {
+  user-select: text;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brass) 30%, transparent);
+}
+
+.rule-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-rule) transparent;
+}
+
+/* Motion: the sigil is the only thing that moves without a click (§7.4). */
+@keyframes ring-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes seal-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* The static brass tick stands in for ring rotation when motion is reduced (§7.4). */
+.sigil-tick {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sigil-tick {
+    display: block;
+  }
+}
