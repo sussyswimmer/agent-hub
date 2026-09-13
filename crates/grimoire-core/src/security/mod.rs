@@ -3,3 +3,7 @@
 //! The seal is enforced through the engine's own pre-execution hook, not by intercepting the
 //! PTY — a CLI in a pseudo-terminal performs its own writes and there is no byte on the wire to
 //! catch. See DECISIONS.md 0004 for the mechanism and its two failure modes.
+
+pub mod redact;
+
+pub use redact::redact;
