@@ -19,7 +19,7 @@ request for type. Each licence text sits beside its files.
 | EB Garamond | OFL-1.1 | `src/theme/fonts/eb-garamond.LICENSE.txt` |
 | Iosevka | OFL-1.1 | `src/theme/fonts/iosevka.LICENSE.txt` |
 
-## Rust crates (518)
+## Rust crates (520)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -56,6 +56,7 @@ request for type. Each licence text sits beside its files.
 | `brotli` | 8.0.4 | BSD-3-Clause AND MIT |
 | `brotli-decompressor` | 5.0.3 | BSD-3-Clause/MIT |
 | `bs58` | 0.5.1 | MIT/Apache-2.0 |
+| `bstr` | 1.13.1 | MIT OR Apache-2.0 |
 | `bumpalo` | 3.20.3 | MIT OR Apache-2.0 |
 | `bytemuck` | 1.25.2 | Zlib OR Apache-2.0 OR MIT |
 | `byteorder` | 1.5.0 | Unlicense OR MIT |
@@ -165,6 +166,7 @@ request for type. Each licence text sits beside its files.
 | `glib-macros` | 0.18.5 | MIT |
 | `glib-sys` | 0.18.1 | MIT |
 | `glob` | 0.3.4 | MIT OR Apache-2.0 |
+| `globset` | 0.4.20 | Unlicense OR MIT |
 | `gobject-sys` | 0.18.0 | MIT |
 | `gtk` | 0.18.2 | MIT |
 | `gtk-sys` | 0.18.2 | MIT |

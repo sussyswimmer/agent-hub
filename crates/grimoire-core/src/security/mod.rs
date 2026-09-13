@@ -4,6 +4,12 @@
 //! PTY — a CLI in a pseudo-terminal performs its own writes and there is no byte on the wire to
 //! catch. See DECISIONS.md 0004 for the mechanism and its two failure modes.
 
+pub mod action;
+pub mod decide;
+pub mod never;
+pub mod path;
 pub mod redact;
 
+pub use action::{Action, from_tool};
+pub use decide::{Context, Verdict, decide};
 pub use redact::redact;

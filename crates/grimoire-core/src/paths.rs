@@ -43,10 +43,19 @@ impl Paths {
     pub fn db_file(&self) -> PathBuf {
         self.home.join("grimoire.db")
     }
+    /// Where the seal listens, and where each summoning's hook connects (§6.4).
+    pub fn seal_socket(&self) -> PathBuf {
+        self.home.join("seal.sock")
+    }
+    /// Per-summoning settings files, which is how the hook is installed without touching the
+    /// owner's own engine configuration.
+    pub fn summon_dir(&self) -> PathBuf {
+        self.home.join("summonings")
+    }
 
     /// Create every directory Grimoire writes to. Idempotent.
     pub fn ensure(&self) -> Result<()> {
-        for d in [self.bindings(), self.codex_dir(), self.worktrees(), self.transcripts()] {
+        for d in [self.bindings(), self.codex_dir(), self.worktrees(), self.transcripts(), self.summon_dir()] {
             std::fs::create_dir_all(&d).map_err(|e| Error::io(&d, e))?;
         }
         Ok(())
