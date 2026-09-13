@@ -228,3 +228,48 @@ fn stopping_a_real_engine_leaves_nothing_behind() {
         "the engine's process group outlived the stop ladder"
     );
 }
+
+#[test]
+#[ignore = "needs a signed-in claude binary; spends a little"]
+fn a_real_run_reports_real_tokens_through_its_transcript() {
+    // §10 Phase 3: "the ledger shows a non-zero token count for a real run." This is the whole
+    // usage path against a live engine — name the session, run it, find its transcript by that
+    // name, total the usage, price it — with nothing stubbed and nothing scraped from a screen.
+    //
+    // Print mode rather than the pty, for one reason only: this container's CLI has never been
+    // onboarded, so an interactive session stops at its first-run questions before it can take a
+    // turn (TASKS.md, Phase 1). The code under test is identical either way; `summon::usage`
+    // neither knows nor cares how the engine was started.
+    use grimoire_core::ledger::cost;
+    use grimoire_core::summon::usage;
+
+    let session = "3f1b7c2e-9a45-4d18-bf60-0c9e2a7d5511";
+    let tmp = tempfile::tempdir().expect("tmp");
+    let resolved = grimoire_core::summon::resolve(Engine::Claude, None, std::env::var("PATH").ok().as_deref())
+        .expect("claude is not on PATH");
+
+    let out = std::process::Command::new(resolved.path())
+        .args(["-p", "Reply with the single word: recorded.", "--session-id", session, "--restricted", "--tools", "Read"])
+        .current_dir(tmp.path())
+        .env_clear()
+        .envs(grimoire_core::summon::scrubbed_env(std::env::vars(), []))
+        .output()
+        .expect("run");
+    assert!(out.status.success(), "the engine did not run: {}", String::from_utf8_lossy(&out.stderr));
+
+    let path = usage::transcript_for(session).expect("no transcript was written for our session id");
+    println!("transcript: {}", path.display());
+
+    let u = usage::for_session(session).expect("usage");
+    println!("turns: {}, tokens: {:?}, total: {}", u.turns, u.tokens, u.tokens.total());
+
+    assert!(u.turns >= 1, "a completed run reported no turns");
+    assert!(u.tokens.output > 0, "a completed run reported no output tokens");
+    assert!(u.tokens.total() > 0, "the ledger would show zero for a real run");
+
+    // And it prices to something, labelled as an estimate all the way through (§6.9).
+    let estimate = cost::estimate(u.tokens, "claude-sonnet-4-6");
+    println!("estimated cost: ${:.6}", estimate.usd);
+    assert!(estimate.estimated);
+    assert!(estimate.usd > 0.0);
+}

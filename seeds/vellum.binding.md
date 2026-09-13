@@ -11,7 +11,6 @@ aether:
   turns: 40
   minutes: 30
   on_exceed: bind
-codex: ~/.grimoire/codex/vellum.md
 reliquary: read
 intake:
   - id: piece

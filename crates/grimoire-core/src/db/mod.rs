@@ -2,7 +2,9 @@
 //!
 //! §5 specifies `tauri-plugin-sql` (sqlx). This uses rusqlite instead — see DECISIONS.md 0002.
 
+pub mod familiars;
 pub mod migrations;
+pub mod summonings;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};

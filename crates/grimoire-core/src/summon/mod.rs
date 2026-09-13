@@ -9,11 +9,13 @@
 pub mod binary;
 pub mod lifecycle;
 pub mod pty;
+pub mod usage;
 
 pub use binary::{Resolved, Unavailable, resolve};
 pub use lifecycle::{Stopped, group_alive, stop, stop_with};
 pub use portable_pty::PtySize;
 pub use pty::{PtySession, Sink, Spawn, scrubbed_env};
+pub use usage::Usage;
 
 /// Where Phase 4 writes the per-summoning settings file that installs the seal's `PreToolUse`
 /// hook, passed to the engine with `--settings`. Named here so the shape of the spawn does not

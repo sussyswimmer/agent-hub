@@ -11,7 +11,6 @@ aether:
   turns: 50
   minutes: 40
   on_exceed: bind
-codex: ~/.grimoire/codex/tally.md
 reliquary: read
 intake:
   - id: question

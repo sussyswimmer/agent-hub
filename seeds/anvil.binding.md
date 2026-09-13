@@ -16,7 +16,6 @@ aether:
   turns: 80
   minutes: 60
   on_exceed: bind
-codex: ~/.grimoire/codex/anvil.md
 reliquary: read
 intake:
   - id: change

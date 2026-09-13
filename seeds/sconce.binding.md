@@ -11,7 +11,6 @@ aether:
   turns: 60
   minutes: 45
   on_exceed: bind
-codex: ~/.grimoire/codex/sconce.md
 reliquary: read
 intake:
   - id: question

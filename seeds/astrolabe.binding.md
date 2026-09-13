@@ -11,7 +11,6 @@ aether:
   turns: 25
   minutes: 20
   on_exceed: bind
-codex: ~/.grimoire/codex/astrolabe.md
 reliquary: read
 intake:
   - id: horizon

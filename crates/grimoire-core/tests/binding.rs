@@ -427,3 +427,23 @@ fn the_builder_seed_is_bounded_and_cannot_reach_the_things_that_matter() {
         );
     }
 }
+
+#[test]
+fn no_seed_hard_codes_the_study_folder() {
+    // A seed that writes `~/.grimoire/...` resolves against the user's home, not `GRIMOIRE_HOME`,
+    // so it points at the wrong study under a test home or a second install. Caught by the codex
+    // tab in the running application reading from `/root/.grimoire` while the app was using a
+    // temporary home. Paths Grimoire owns are Grimoire's to choose.
+    let seeds = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../seeds");
+    for (id, b) in load_folder(&seeds) {
+        let front = b.front.as_ref().expect("frontmatter");
+        assert!(
+            front.codex.is_none(),
+            "seed `{id}` names a codex path; leave it unset so it lands in whichever study is running"
+        );
+        assert!(
+            !front.workspace.contains(".grimoire"),
+            "seed `{id}` points its workspace inside the study's own folder"
+        );
+    }
+}

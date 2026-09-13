@@ -8,6 +8,7 @@
 pub mod binding;
 pub mod breaker;
 pub mod codex;
+pub mod commission;
 pub mod db;
 pub mod error;
 pub mod ledger;
