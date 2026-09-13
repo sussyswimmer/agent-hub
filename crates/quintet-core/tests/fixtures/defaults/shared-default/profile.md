@@ -1,3 +1,0 @@
-# Profile template
-
-## School & grades

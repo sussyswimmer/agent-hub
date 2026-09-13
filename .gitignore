@@ -1,15 +1,12 @@
 # Rust
 target/
-# Node / Bun
+# Node
 node_modules/
 dist/
 *.tsbuildinfo
 # Tauri
 src-tauri/gen/
-src-tauri/binaries/
 src-tauri/target/
-# Phase 0 scratch captures (raw, unsanitized)
-scripts/out/
 # Playwright
 test-results/
 playwright-report/
@@ -19,3 +16,6 @@ playwright-report/
 .env
 .env.*
 !.env.example
+
+# Icons are drawn in code (scripts/icons.ts), never committed (CLAUDE.md §1)
+src-tauri/icons/

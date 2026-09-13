@@ -1,601 +1,907 @@
-# CLAUDE.md — Quintet
+# GRIMOIRE — CLAUDE.md
 
-> Quintet is a personal macOS desktop app. It runs a bench of specialist AI agents, and each one is very good at a single job.
-> v1 ships **5 agents**. The framework is built so the other 10 drop in later as files.
-> Owner and only user: Maxwell (SSIS Class of 2028, Ho Chi Minh City, timezone `Asia/Saigon`).
+A local, single-user multi-agent harness. It wraps CLI coding agents you already pay for
+(`claude`, `codex`, `gemini`, `qwen`, …), gives each one an identity, a workspace, a memory
+and an autonomy setting, and lets you watch and steer them from one desk.
 
-Read this whole file before writing any code. Build in the phases in §12, in order. **Build and run the app at the end of every phase and meet its acceptance criteria before you start the next one.**
+Themed as a working wizard's study: the agents are familiars, their instructions are
+writs, their memory is a codex, and nothing acts on the world without your seal.
+
+Everything runs on the local machine. There is no server, no account, no billing, no
+telemetry, no cloud sync. One user: the person who built it.
 
 ---
 
-## 0. Decisions already made (do not re-litigate)
+## 0. How to use this file
 
-| # | Decision | Value |
+You (Claude Code) are the sole implementer. Read this file in full before writing code.
+
+Rules of engagement:
+
+- Build in the phase order given in §10. Do not start a phase until the previous phase's
+  acceptance criteria all pass.
+- At the end of every phase: **build it and run it**. `npm run tauri dev` must launch, the
+  feature must work by hand, and you must report which acceptance criteria passed and which
+  failed. Never report a phase complete on the strength of the code compiling.
+- Write the test before you claim the behaviour. Any claim like "the breaker stops a
+  runaway" needs a test that actually drives it.
+- If a spec decision here turns out to be wrong once you're in the code, stop and say so
+  rather than silently substituting something else. Propose the change, wait for a yes.
+- Keep `DECISIONS.md` in the repo root. One entry per architectural change: date, what
+  changed, why, what it replaced.
+- Keep `TASKS.md` in the repo root. Append a short session log at the end of every working
+  session: what got built, what broke, what's next.
+
+---
+
+## 1. Licensing and originality — read first, this is not optional
+
+This project is inspired by existing open-source agent harnesses. The rules:
+
+- **Do not copy source code** from any other project into this repo. Not files, not classes,
+  not "the same function with different variable names." Read other projects for ideas about
+  architecture; write this one from scratch.
+- **Do not vendor art assets** from anywhere. No purchased or licensed tilesets, no sprite
+  packs, no ripped UI. Every visual in this app is either generated (SVG/canvas drawn in code),
+  a free open-licence typeface, or made by the owner. If a phase seems to need art we don't
+  have, use the code-drawn fallback described in §7 and move on.
+- **Every name, character, house, spell, creature and place in this app is original to this
+  project.** The naming system in §3 is the canon. Do not substitute names from published
+  fiction, films, or games — not in the UI, not in comments, not in seed data, not in agent
+  personalities, not as "placeholders we'll change later." If a new noun is needed, invent one
+  in the register established in §3 and add it to the glossary.
+- Third-party libraries keep their licences. Maintain `THIRD-PARTY.md` listing every runtime
+  dependency and its licence. `npm run licences` regenerates it.
+- This repo is private and personal. If it is ever made public, §1 gets re-read and a
+  proper LICENSE and attribution pass happens first.
+
+---
+
+## 2. What this is, and what it is not
+
+### It is
+
+A desktop app where you can:
+
+- Define a familiar in a markdown file, and have it appear in the app.
+- Summon it: spawn a real pseudo-terminal running an agent CLI, with a working directory,
+  a model, a writ (system briefing) and a memory file.
+- Watch its terminal live, type into it, and steer it mid-run.
+- Give it a commission (a task), let it work, and get notified when it needs you.
+- Hold it to an autonomy level, from "propose everything" to "act freely inside this folder."
+- Cap what it can spend — in tokens, in wall-clock, in turns — and have it stopped
+  automatically when it exceeds the cap.
+- Schedule recurring commissions that run with the window closed.
+- Keep a durable record of everything it did, what it cost, and what it remembered.
+
+### It is not
+
+- Not a hosted service. No auth, no multi-tenant, no sync.
+- Not a model provider. It drives CLIs you already have installed and already pay for.
+- Not an agent-builder GUI. Familiars are files, edited in your editor. (§4)
+- Not an orchestrator in v1. You pick which familiar does what. Routing comes in Phase 6,
+  and even then it proposes rather than decides.
+- Not a code editor, not a chat app, not a note-taking app.
+
+### Non-goals, explicitly
+
+Team features. Sharing. A marketplace. Mobile. Windows/Linux parity in v1 (macOS first;
+keep the code portable but do not spend time on cross-platform polish).
+
+---
+
+## 3. The world — naming, tone, glossary
+
+The theme is a scholar-magician's study: astronomy instruments, marginalia, sealed letters,
+ledgers of ink, wards drawn on the floor. Late-medieval manuscript, not high fantasy. No
+wands, no chosen ones, no boarding schools. The register is dry, precise and slightly archaic —
+a librarian's magic, not a wizard duel.
+
+Every term below is the canonical UI string. The code uses the same words, so there is no
+translation layer between what the user reads and what the developer greps for.
+
+| Concept | Name in Grimoire | Code identifier |
 |---|---|---|
-| 1 | Relationship to JARVIS | **Separate standalone app.** It shares nothing with JARVIS. |
-| 2 | Audience | **Just Maxwell.** No accounts, no onboarding funnel, no telemetry, no payments. |
-| 3 | v1 agents | **Research, College, Scout, School, Tutor** |
-| 4 | Backlog agents (post-v1) | Email & outreach, Calendar & planner, Builder/coder, Finance/markets, Content & social, Debate & MUN, Language coach, Network CRM, Files & life admin, Writing editor |
-| 5 | Agent definition | **Files, not UI.** One folder per agent: `agent.md` (YAML frontmatter + prose) and `memory.md`. Edited by hand or with Claude Code. No in-app agent builder. |
-| 6 | Routing | **Manual only.** Maxwell picks the agent. No router or orchestrator agent, and agents never call each other. |
-| 7 | Asking questions | **Set per agent.** Each `agent.md` declares its intake questions and when to skip them. Agents can also ask mid-run through the question protocol (§6.3). |
-| 8 | Autonomy | **Draft, then approve.** Anything that leaves the machine or can't be undone is a *proposal* until Maxwell approves it. |
-| 9 | Triggers | **Manual** (in-app) and **scheduled**. No event triggers or phone control in v1. |
-| 10 | Stack | **Tauri 2 + React 19 + TypeScript + Vite + Tailwind v4.** Rust backend. |
-| 11 | AI engine | **Claude Code headless** (`claude -p`) under Maxwell's existing subscription. No Anthropic API key. |
-| 12 | Storage | **Local SQLite** for structured data, plus **markdown files** for agent definitions, memory, and outputs. |
-| 13 | Integrations (v1) | Google Calendar, Gmail, Google Drive/Docs, web search and browser, and the Schoology **iCal feed** |
-| 14 | Academic integrity | **Set per assignment** (levels in §7). College essays have a hard cap (§7). |
-| 15 | Layout | **Agent sidebar + per-agent workspace** (Chat · Queue · Board · Outputs), plus a global Approvals inbox |
-| 16 | Visual style | **Clean macOS-native.** Translucent sidebar, system font, system accent color, follows light/dark mode. |
-| 17 | Background | **Menu-bar resident.** Closing the window hides it and schedules keep running. macOS notifications for approvals and questions. |
+| The app | Grimoire | — |
+| An agent | familiar | `Familiar` |
+| An agent's definition file | binding | `*.binding.md` |
+| The system prompt / briefing | writ | `writ` |
+| A task given to a familiar | commission | `Commission` |
+| A running agent process | summoning | `Summoning` |
+| The agent's persistent memory | codex | `codex` |
+| Shared cross-familiar memory | the reliquary | `reliquary` |
+| The approval gate (HITL) | the seal | `Seal` |
+| Token/turn/time budget | aether | `aether` |
+| Spend record | ledger of ink | `Ledger` |
+| Recurring schedule | standing ward | `StandingWard` |
+| Circuit breaker states | steer → bind → banish | `Breaker` |
+| The main floor view | the scriptorium | `Scriptorium` |
+| Optional coordinating familiar | the archivist | `Archivist` |
+| An error / failed run | a misfire | `Misfire` |
+| Settings | the workbench | `Workbench` |
+
+### Orders
+
+Each familiar belongs to one order, which sets its sigil colour and its default writ
+preamble. Orders are a labelling and defaults system — they grant no special powers.
+
+| Order | Domain | Sigil colour |
+|---|---|---|
+| Quill | writing, drafting, editing | brass `#B08D3F` |
+| Lantern | search, scouting, research, reading | verdigris `#4E7A6B` |
+| Crucible | building, code, refactors, tests | oxblood `#7A1F2B` |
+| Compass | planning, scheduling, triage | slate-blue `#5A6B8C` |
+| Ledger | data, numbers, analysis | bone `#C9BFA4` |
+
+### Voice rules for all UI copy
+
+- Sentence case. No ALL-CAPS labels.
+- Active voice, and the verb on the button is the verb in the result. "Summon" → "Summoned."
+  "Seal" → "Sealed." "Banish" → "Banished."
+- Errors state what happened and what to do. They do not apologise and they are never vague.
+  Bad: "Something went wrong." Good: "The `claude` binary isn't on your PATH. Set its location
+  in the workbench."
+- Empty states are invitations: "No familiars bound yet. Drop a `.binding.md` in `~/.grimoire/bindings`."
+- The theme lives in the nouns, not in the sentence structure. Don't write faux-archaic
+  English. "Summon Vellum" is right; "Wouldst thou summon Vellum?" is not.
 
 ---
 
-## 1. Product principles
+## 4. Familiars are files
 
-1. **Specialists, not a generalist.** Every agent has one mission, a fixed process, and a quality bar. If a request is outside an agent's mission, the agent says which agent owns it and stops.
-2. **Nothing external without a tap.** Agents read freely and write freely *to Quintet's own data*. Sending, creating, or deleting anything in Google, or anything irreversible, goes through the Approvals inbox.
-3. **Coach, don't cheat.** Integrity levels are enforced by the system prompt *and* by tool access, not just by asking nicely.
-4. **Verifiable output.** Every factual claim a Research or Scout agent makes links to a source it actually opened in this run.
-5. **Files are the source of truth for behavior.** Change an agent by editing its `agent.md`. The app hot-reloads it.
-6. **Quiet by default.** Notify only when Maxwell has to act: a question, an approval, a deadline inside 72 hours, or a failed scheduled run.
+A familiar is a markdown file with YAML frontmatter in `~/.grimoire/bindings/`. The app watches
+that folder and hot-reloads. There is no in-app editor for bindings; there is a "Reveal in
+Finder" button and a "Reload bindings" button.
+
+`~/.grimoire/bindings/vellum.binding.md`
+
+```markdown
+---
+name: Vellum
+order: quill
+sigil: quill-01              # which generated sigil to draw (§7.4)
+engine: claude               # claude | codex | gemini | qwen | custom
+model: claude-sonnet-4-6     # passed through to the CLI; app never validates model names
+workspace: ~/work/essays     # cwd for the spawned process
+isolation: worktree          # none | worktree | copy   (§6.3)
+resume: session              # none | session  — reattach to the prior CLI session on summon
+
+autonomy: propose            # propose | bounded | free  (§6.4)
+bounds:                      # only read when autonomy: bounded
+  write: ["~/work/essays/**"]
+  deny:  ["**/.env", "**/.git/config", "~/.ssh/**"]
+  network: false
+  shell: ["git status", "git diff", "npm test"]
+
+aether:
+  tokens: 250000             # per commission
+  turns: 40
+  minutes: 30
+  on_exceed: bind            # steer | bind | banish
+
+codex: ~/.grimoire/codex/vellum.md
+reliquary: read              # none | read | write
+
+intake:                      # questions asked before every commission (§6.2)
+  - id: piece
+    ask: "Which piece are we working on?"
+    type: text
+    required: true
+  - id: mode
+    ask: "What kind of pass?"
+    type: select
+    options: [line edit, structural, fact check, cut for length]
+    required: true
+  - id: audience
+    ask: "Who reads it?"
+    type: text
+    required: false
+---
+
+# Writ
+
+You are Vellum, an editor. You work on one piece at a time and you do not rewrite
+wholesale — you propose changes and explain the reason for each.
+
+## Process
+1. Read the piece in full before commenting on any part of it.
+2. Identify the argument. If you can't state it in one sentence, say so and stop.
+3. Make the pass the user asked for, and only that pass.
+4. Return a diff plus a numbered list of changes with one-line justifications.
+
+## Goal
+The piece says what the author meant, in the author's voice, in fewer words.
+
+## Refusals
+If asked to write the piece from scratch, decline and say that's a different familiar.
+```
+
+### Parsing rules
+
+- Frontmatter is parsed with a real YAML parser, validated with Zod. A binding that fails
+  validation is shown in the sidebar in oxblood with the validation error inline — never
+  silently dropped, never partially loaded.
+- Everything after the frontmatter is the writ, passed verbatim to the CLI as its system
+  prompt/append-system-prompt. Do not template it, do not inject anything into it except the
+  documented `{{intake.*}}` substitutions.
+- Unknown frontmatter keys are a validation warning, not an error.
+- `~` expands. Relative paths resolve against the bindings folder.
+
+### Seeded familiars
+
+Ship five bindings in `seeds/` that the workbench can copy in on first run. Write them for the
+owner's actual life, not generic demos:
+
+- **Vellum** (quill) — editor. Above.
+- **Sconce** (lantern) — research deep-dives. Output is a brief with real citations, or a full
+  literature review, or data plus charts. Never an annotated bibliography.
+- **Astrolabe** (compass) — calendar and deadline triage. Reads an iCal feed and a calendar,
+  proposes a week.
+- **Anvil** (crucible) — builder. Runs in a git worktree, always opens a branch, always runs
+  the test suite before it claims done.
+- **Tally** (ledger) — numbers. Markets, spreadsheets, anything that needs arithmetic shown.
 
 ---
 
-## 2. Architecture
+## 5. Stack and repo layout
+
+### Stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Shell | Tauri v2 | Small binary, Rust backend, you already know it |
+| UI | React 19 + TypeScript + Vite | Existing stack |
+| Styling | Tailwind v4 with the token layer in §7 | Existing stack |
+| Terminals | `portable-pty` (Rust) + xterm.js (front) | Real PTYs, no Electron |
+| State | Zustand | Small, no ceremony |
+| Storage | SQLite via `tauri-plugin-sql` (sqlx) | Durable, local, queryable |
+| Scheduling | `tokio-cron-scheduler` in the Rust process | Runs with window closed |
+| Validation | Zod (TS) + serde (Rust) | Both sides validate |
+| The floor | PixiJS v8 (WebGL) | Draws the tower plan and the familiars on it — §8 |
+
+**On Tauri vs Electron.** Electron + `node-pty` is the better-trodden path for this exact
+problem and there is more prior art to read. Tauri + `portable-pty` is leaner, matches the
+existing stack, and keeps the binary under ~15 MB. Go Tauri. If PTY handling in Rust costs
+more than one full working session of thrash in Phase 1, stop and say so — switching to
+Electron at the end of Phase 1 is cheap, and at the end of Phase 4 it is not.
+
+### Layout
 
 ```
-┌──────────────────────────── Quintet.app (Tauri 2) ────────────────────────────┐
-│  React UI (src/)                                                               │
-│   Sidebar · Agent workspace · Approvals · Activity · Settings                  │
-│        ▲  Tauri events (run stream)        │ Tauri commands (invoke)           │
-│        │                                   ▼                                   │
-│  Rust core (src-tauri/)                                                        │
-│   ├─ AgentRegistry   loads + watches ~/Quintet/agents/*/agent.md               │
-│   ├─ RunManager      spawns `claude -p`, parses stream-json, queue (max 2)     │
-│   ├─ Scheduler       cron from agent.md, catch-up on launch                    │
-│   ├─ Db              SQLite (WAL), migrations in db/migrations                 │
-│   ├─ Tray/Notify     menu-bar icon, macOS notifications, autostart            │
-│   └─ ActionRunner    runs approved actions via `quintet-mcp exec`              │
-└───────────────┬───────────────────────────────────────────────────────────────┘
-                │ spawns per run                         │ spawns on approve
-                ▼                                        ▼
-        claude -p (headless)  ──stdio MCP──▶  quintet-mcp (TS, Bun, sidecar)
-          built-in: WebSearch, WebFetch,        serve  → MCP tools (§6)
-          Read/Write (cwd only), Bash(python)   auth   → Google OAuth loopback
-          optional: Playwright MCP              exec   → execute approved action
-                                                sync   → Schoology iCal, Calendar
-                                                  │
-                                                  ▼
-                                   Google APIs · SQLite · macOS Keychain
-```
-
-### 2.1 Why this shape
-- **Rust stays thin.** It handles processes, scheduling, the tray, and the DB. All integration code (Google, iCal, action execution) lives in **one TypeScript package, `quintet-mcp`**. The agents (through MCP) and the app (through the CLI subcommands) share the same code path.
-- **Agents cannot act on the outside world directly.** `quintet-mcp` exposes *read* tools plus `propose_action`. Only `quintet-mcp exec <action_id>` performs writes, and only the Rust `ActionRunner` calls it, after Maxwell approves.
-- **Headless runs are stateless processes.** When a run needs Maxwell's input, it ends. The app resumes it later with `claude -p --resume <session_id>`. No process sits blocked waiting on a human.
-
-### 2.2 Repo layout
-```
-quintet/
-  CLAUDE.md                     ← this file
-  docs/
-    claude-cli-notes.md         ← Phase 0 findings (verified flags + event shapes)
-    decisions/                  ← ADRs, one per non-obvious choice
+grimoire/
   src-tauri/
     src/
-      main.rs  registry.rs  runs.rs  stream.rs  scheduler.rs
-      db.rs  tray.rs  notify.rs  actions.rs  prompt.rs  commands.rs
-    tauri.conf.json
-  src/                          ← React UI
-    app/  components/  features/{sidebar,workspace,approvals,activity,settings}
-    features/boards/{school,tutor,research,college,scout}
-    lib/{ipc.ts, types.ts, fsrs.ts}
-  mcp/                          ← quintet-mcp (Bun + @modelcontextprotocol/sdk)
-    src/{index.ts, tools/, google/, ical/, exec/, db.ts, auth.ts}
-  db/migrations/                ← numbered .sql files, run by Rust at startup
-  agents-default/               ← shipped agent folders, copied to ~/Quintet/agents on first run
-    research/ college/ scout/ school/ tutor/
-  shared-default/profile.md
+      main.rs
+      summon/          # PTY spawn, lifecycle, resume
+      breaker/         # aether accounting, steer/bind/banish
+      ward/            # scheduler
+      ledger/          # cost + event persistence
+      codex/           # memory file read/condense/write
+      db/              # migrations + queries
+      security/        # path allow-lists, bounds enforcement
+    migrations/
+  src/
+    scriptorium/       # the floor (§8) and the per-familiar pane
+    familiar/          # per-familiar workspace: terminal, commissions, outputs
+    seal/              # approval queue UI
+    workbench/         # settings
+    ledger/            # spend + history views
+    ui/                # primitives: Sigil, Panel, Pill, Meter, Rule
+    theme/             # tokens.css, fonts
+  seeds/               # example bindings
+  DECISIONS.md
+  TASKS.md
+  THIRD-PARTY.md
 ```
 
-### 2.3 User data layout (created on first launch)
-```
-~/Quintet/
-  agents/<id>/agent.md          ← behavior (user-editable, hot-reloaded)
-  agents/<id>/memory.md         ← agent-maintained long-term notes (≤ 200 lines)
-  agents/<id>/workspace/        ← cwd for that agent's runs (scratch)
-  outputs/<id>/YYYY-MM-DD-<slug>/ ← deliverables (md, csv, png, docx)
-  shared/profile.md             ← Maxwell's context; read by every agent
-  data/quintet.db               ← SQLite
-  logs/runs/<run_id>.jsonl      ← raw stream-json per run
-```
-Secrets (the Google refresh token, the Schoology iCal URL) go in the **macOS Keychain**, never in files or the DB.
-
 ---
 
-## 3. The Claude Code headless runner
-
-### 3.1 Phase 0 spike (mandatory, before any UI)
-The CLI changes often. Before writing `runs.rs`, run `claude --help` and small experiments. Record in `docs/claude-cli-notes.md`:
-- the exact flags for: print mode, `--output-format stream-json` (and whether `--verbose` is required), `--append-system-prompt` (and any `-file` variant), `--model`, `--max-turns`, `--allowedTools` / `--disallowedTools`, `--permission-mode`, `--mcp-config` (plus any strict-MCP flag), `--resume <session_id>`, and the flag that **isolates the run from user-level settings/skills/CLAUDE.md** (e.g. `--setting-sources`). Maxwell's global `~/.claude` has 50+ skills, and they must not leak into agent runs.
-- the JSON shape of each stream event: `system/init` (session_id, tools, mcp_servers), `assistant` (text and tool_use blocks), `user` (tool_result), and `result` (subtype, `session_id`, `total_cost_usd`, `usage`, `num_turns`, `is_error`).
-- how to detect "not logged in" and "usage limit reached", so the app can show a clear banner.
-
-Write down what you **observed**, not what you expect. If a flag doesn't exist, pick the closest real mechanism and record it as an ADR.
-
-### 3.2 Command template (adjust to Phase 0 findings)
-```bash
-claude -p "<user turn>" \
-  --output-format stream-json --verbose \
-  --model <agent.model> \
-  --max-turns <agent.max_turns> \
-  --append-system-prompt "<assembled prompt, §3.3>" \
-  --mcp-config <generated json: quintet-mcp [+ playwright]> \
-  --allowedTools "<from agent.md>" \
-  --disallowedTools "<global denylist>" \
-  --permission-mode acceptEdits \
-  [--resume <session_id>]
-# cwd = ~/Quintet/agents/<id>/workspace
-```
-- **Global denylist**, always applied: any Bash except the patterns an agent explicitly allows; network CLIs (`curl`, `wget`); `git push`; `rm -rf`; any MCP tool whose name starts with `send_`/`delete_`/`create_` from third-party servers.
-- **Concurrency:** max 2 runs at once, FIFO queue. Scheduled runs yield to manual runs.
-- **Timeouts:** a soft limit from `agent.max_turns`, and a hard wall-clock kill at 20 min (configurable). A killed run → status `failed` with reason.
-- **Usage:** store `total_cost_usd`, tokens, and turns from `result` on the run row. Show a weekly usage meter in Settings (it's informational, since he's on a subscription).
-- **Preflight at app launch:** `claude --version` and an auth check. If either fails, show a blocking banner with the fix.
-
-### 3.3 Prompt assembly (`prompt.rs`)
-The system prompt is appended in this order. Each part is separated by a header so the model can tell them apart:
-1. `# Quintet protocol`: the fixed rules from §6.3–6.5: how to ask, how to propose, where to save outputs, and never to claim an external action happened.
-2. `# Run context`: current date and time in `Asia/Saigon`, trigger (`manual`/`scheduled:<name>`), integrity level (if applicable), intake answers as YAML, and the task text.
-3. `# Maxwell`: contents of `~/Quintet/shared/profile.md`.
-4. `# Your role`: the body of `agents/<id>/agent.md` (frontmatter stripped).
-5. `# Your memory`: contents of `agents/<id>/memory.md`.
-6. `# Relevant state`: a compact snapshot the app queries from SQLite per agent (e.g. School gets the next 14 days of items; Tutor gets its top-10 weak spots). Each agent's frontmatter declares the query (`state_snapshot`).
-
-The first user turn is the task text. On `--resume`, the user turn is Maxwell's answer to the pending question.
-
-### 3.4 Stream parsing (`stream.rs`)
-- Read stdout line by line → parse JSON → persist to `run_events` and append to `logs/runs/<id>.jsonl` → emit a Tauri event `run://<run_id>` to the UI.
-- Map tool calls to friendly UI rows ("Searching the web: *…*", "Reading Calendar", "Proposed: add 3 study blocks").
-- On `result`: update the run status. If the run called `ask_user` → status `waiting_user`. If it called `propose_action` → `awaiting_approval` (it can be both). Otherwise → `done`.
-- stderr goes into the run log. A non-zero exit without a `result` event → `failed`.
-
----
-
-## 4. Agent definition format
-
-Each agent is a folder: `~/Quintet/agents/<id>/agent.md` + `memory.md`. The Registry validates frontmatter with a schema (Rust `serde` + a JSON Schema at `agents-default/agent.schema.json`) and shows errors in the sidebar. A broken agent never crashes the app.
-
-```yaml
----
-id: research                    # folder name, kebab-case, unique
-name: Research
-icon: magnifyingglass           # SF Symbol name (rendered via bundled SVG set)
-color: indigo                   # system color token
-version: 1
-mission: >                      # one sentence — the agent's goal
-  Turn a research question into a verified, cited deliverable Maxwell can build on.
-owns: [research briefs, literature reviews, datasets and charts]
-does_not_own: [writing Maxwell's graded prose, college essays, opportunity hunting]
-model: opus                     # opus | sonnet | haiku (alias passed to --model)
-max_turns: 60
-integrity: when_graded          # false | true | when_graded → level chosen at intake (§7)
-allowed_tools:                  # passed to --allowedTools
-  - WebSearch
-  - WebFetch
-  - Read
-  - Write
-  - "Bash(python3:*)"
-  - "Bash(uv run:*)"
-  - "mcp__quintet__*"
-mcp_extra: [playwright]         # optional extra MCP servers
-state_snapshot: research_recent # named query in Rust (§3.3 step 6)
-intake:                         # rendered as a native form before the run
-  - id: question
-    type: text
-    prompt: What's the research question?
-    required: true
-  - id: output
-    type: multi
-    prompt: What do you want back?
-    options: [brief, lit_review, data_charts]
-    default: [brief]
-  - id: depth
-    type: single
-    prompt: How deep?
-    options: [quick_15min, standard, exhaustive]
-    default: standard
-  - id: citation_style
-    type: single
-    options: [APA, Chicago, MLA]
-    default: Chicago
-    skip_if: "memory.default_citation_style"   # skip when memory already knows it
-schedules: []                   # cron entries, see School for an example
-outputs_dir: research           # → ~/Quintet/outputs/research/
-board: research_library         # which Board tab component to render
----
-(Prose body: Role · Process · Quality bar · Output templates · Guardrails)
-```
-
-**Intake rules.** Field types: `text`, `single`, `multi`, `date`, `file` (a local path or a Drive picker), `integrity`. `skip_if` is a tiny expression over `memory.*`, `profile.*`, or `task.*`. When every required field is satisfied, the form is skipped and the run starts immediately. Quick tasks typed into Chat skip intake unless a required field can't be inferred. In that case the app shows only the missing fields.
-
-**Memory rules** (in the protocol prompt): the agent may edit only its own `memory.md`, which is in its cwd's parent. The app symlinks it into the workspace as `./memory.md`. The file must stay ≤ 200 lines. The agent stores durable preferences and learnings, not run logs. It condenses instead of appending forever.
-
----
-
-## 5. The five v1 agents
-
-Each spec below becomes that agent's `agent.md` in `agents-default/`. Write the prose body from these specs in second person ("You are…"). Keep each body under ~250 lines.
-
-### 5.1 Research — "The Analyst"
-
-**Mission:** Turn a research question into a verified, cited deliverable Maxwell can build on.
-**Owns:** research briefs, full literature reviews, datasets and charts. Built for his papers (AI credit-scoring transparency, the AFC/Malaysia–IMF paper, the LLM vs FinBERT paper), competitions (IFC, Wharton), and MUN.
-**Does not own:** writing his graded prose (it hands over findings, not his paper), college essays, or finding opportunities.
-**Model:** `opus` · **max_turns:** 60 · **integrity:** `when_graded` (asked only when the output feeds a graded assignment)
-
-**Triggers:** manual only.
-
-**Intake:** question · output (`brief` | `lit_review` | `data_charts`, multi) · depth (`quick` ≈ 5 sources, `standard` ≈ 10–15, `exhaustive` ≈ 25+) · citation style (skipped once memory has a default) · due date (optional) · seed sources (optional files or links) · integrity level (only if "for a graded assignment" is ticked).
-
-**Process:**
-1. **Scope.** Restate the question as one sentence plus 3–6 sub-questions. Define what's in and out of scope. If the question is too broad for the chosen depth, `ask_user` with 2–3 narrower framings.
-2. **Plan the search.** List search queries per sub-question, including non-English queries when the topic is local (e.g. Vietnamese terms for Vietnamese lenders). Name the target source types: peer-reviewed, IMF/World Bank/BIS, central bank, regulator, reputable press, primary documents.
-3. **Search and triage.** Open every candidate with WebFetch. Grade each source **A** (peer-reviewed, official statistics, primary documents), **B** (think tanks, reputable press), or **C** (blogs, vendors — used only for leads, never cited for facts). Record each in `sources` through `save_source` (url, title, author, date, grade, one-line relevance).
-4. **Extract.** For each A/B source, pull exact quotes and figures with page or section anchors.
-5. **Synthesize.** Build the output around the sub-questions. Surface disagreements between sources explicitly.
-6. **Verify.** Build a claim table (`claim → source_id → quote`). Any claim without a row is deleted or rewritten as an open question. Numbers must match the source exactly, including units and year.
-7. **Data + charts** (if requested). Use public APIs first: World Bank, IMF (SDMX/DataMapper), FRED if a key is configured, and Yahoo Finance via `yfinance` for markets. Write `analysis.py` in the workspace, run it with `uv run`, and save `data.csv` + `chart-*.png` (a clean matplotlib style with a labeled source line under each chart). The script stays in the output folder so the chart can be reproduced.
-8. **Deliver.** Call `save_output` for each file. Offer a `propose_action: drive.create_doc` to put the brief or review into Google Drive.
-
-**Outputs:**
-- `brief.md`: 1–2 pages. TL;DR (3 bullets) · Findings by sub-question · What's contested · Open questions · Sources.
-- `lit-review.md`: organized by theme, with a methods comparison table, the state of the debate, **gaps**, and where Maxwell's paper could contribute.
-- `data/`: `data.csv`, `chart-*.png`, `analysis.py`, `README.md` (series IDs, retrieval date).
-- Every file ends with a bibliography in the chosen style. Every URL was opened in this run.
-
-**Quality bar:** 0 unsourced factual claims · ≥ 60% of citations graded A for `standard`/`exhaustive` · every chart has a title, units, a source, and a date · no quote longer than 40 words.
-**Memory keeps:** default citation style, his active papers and their theses, sources he rejected and why, preferred chart look.
-**Board tab — "Library":** a searchable table of all saved sources (grade, project tag, date), grouped by project.
-
----
-
-### 5.2 College — "The Counselor"
-
-**Mission:** Get Maxwell to submission day with a smart school list, every requirement tracked, and essays and activities that sound like him at his best.
-**Owns:** essay coaching, the deadline and requirements tracker, activities and honors optimization, school list and fit research.
-**Does not own:** writing essays for him, general research papers, or finding summer programs (Scout does that).
-**Model:** `opus` · **max_turns:** 40 · **integrity:** true. **Essays are capped at level 2 (§7).**
-
-**Context it must respect:** Class of 2028. It's junior year now, and applications go out in fall 2027. He's an international applicant in Vietnam (it must cover things like financial-aid policies for international students, testing, and recommender logistics). The agent adjusts its advice to the season: planning and list-building now, drafting in summer 2027, submitting in fall 2027.
-
-**Modes (picked at intake):**
-1. **Essay coach**
-   - Intake: which prompt (school + prompt text, or Common App prompt #), stage (`brainstorm` | `outline` | `feedback on draft` | `line polish`), draft file (if any), integrity level (default 1).
-   - Process: *Brainstorm*: runs an interview of 8–12 probing questions through `ask_user` (one batch at a time), then offers 3 story angles, each with the "so what" and which values it shows. *Outline*: helps him build a beat outline from his own notes. *Feedback*: gives a structured critique (hook, arc, specificity, voice, reflection, prompt fit, word count) as margin-comment-style notes with quoted line references, and rewrites nothing. *Polish*: flags wordy or cliché lines and explains why. At level 2 it may show one **labeled example** sentence per issue.
-   - Output: `essay-feedback-<school>-<date>.md`, and it stores the version in `essays` (status, word count, feedback summary).
-2. **Tracker**
-   - Maintains `colleges` and `requirements`: deadlines (ED/EA/REA/RD/UK UCAS), supplements with word limits, testing policy, recommenders, portfolio or interview needs, financial-aid forms for international students (CSS Profile, etc.). Every row stores `source_url` and `verified_at`.
-   - Scheduled weekly re-verification of deadlines against the official admissions pages. Flags anything that changed.
-3. **Activities optimizer**
-   - Checks Common App limits exactly: **position 50 chars, organization 100 chars, description 150 chars; honors 100 chars.** It counts characters in code, not by eye. The UCAS personal statement format is supported as a separate profile.
-   - Process: pulls from `profile.md` activities → proposes 2–3 tighter versions per entry (strong verb first, numbers, impact) → he picks or edits → the result is saved in `activities`. Ranks activities by strength and explains the ordering.
-4. **School list & fit**
-   - Builds a reach/target/likely list from stated preferences (asked through intake: majors like econ/CS, size, location US/UK/other, aid needs, vibe). Researches each school's specific programs, professors, courses, and clubs, and stores **"why us" hooks** with sources. Every stat is cited and dated.
-
-**Quality bar:** character and word counts always computed by tool · every deadline has a source link verified within 30 days · essay feedback quotes his lines, never paraphrases them · never invents experiences or embellishes his activities.
-**Memory keeps:** his voice notes (phrases he likes and hates), story bank (anecdotes he has told it), school list rationale, recommender plan.
-**Board tab — "Tracker":** a schools table (round, deadline countdown, requirement checklist, status), an essays kanban (Brainstorm → Outline → Draft → Feedback → Final), and an activities list with live character counters.
-
----
-
-### 5.3 Scout — "The Scout"
-
-**Mission:** Make sure Maxwell never misses an opportunity he's eligible for and would want: competitions, summer programs, internships and research, and grants and scholarships.
-**Owns:** discovering, verifying, fit-scoring, and tracking deadlines for opportunities.
-**Does not own:** writing the applications (college-related → College agent; the rest are backlog agents), or general research.
-**Model:** `sonnet` for scheduled sweeps, `opus` for deep dives · **max_turns:** 50 · **integrity:** false
-
-**Triggers:**
-- Scheduled **every Monday 07:00 Asia/Saigon**: a sweep across all four categories.
-- Scheduled **daily 07:30**: a deadline watch with no web calls. It reads the DB and notifies if a tracked item's deadline is ≤ 14 days away and its status isn't `applied`/`skipped`.
-- Manual: "Find me X" deep dives.
-
-**Eligibility filters (hard):** high school student, Class of 2028, international applicant based in Vietnam, can do remote or travel. Must be free or state the cost clearly, and must be open to non-US citizens (or flagged if unclear).
-
-**Process (weekly sweep):**
-1. Read `profile.md` interests (econ/finance, AI/tech, debate/MUN, conservation/nonprofits in HCMC, entrepreneurship) and `memory.md` (what he liked and skipped).
-2. Search per category with query templates and a list of known-good sources in memory (e.g. official competition sites, university pre-college pages, foundation grant pages). Include Vietnam- and Asia-specific sources.
-3. For each candidate, **open the official page** and extract: name, org, category, deadline(s) (with timezone), eligibility, cost/stipend, format (remote/in-person + location), what's required, and the URL.
-4. **Dedupe** against the `opportunities` table (by URL and normalized name). Update changed deadlines instead of inserting duplicates.
-5. **Fit score 0–100** with a one-line reason: interest match (40), eligibility certainty (25), prestige/impact (20), effort vs. timeline (15). Anything < 40 is dropped silently. Unclear eligibility → a flag, not a drop.
-6. Write a digest: `outputs/scout/YYYY-MM-DD-weekly.md` with **New (top 10 by fit)**, **Deadlines in the next 30 days**, and **Changed**.
-7. Offer `propose_action: calendar.create_event` for deadline reminders on items he stars.
-
-**Quality bar:** 0 opportunities without an official-source URL opened this run · deadlines always include the year and timezone · never lists an expired deadline as open · clearly marks "rolling" and "unconfirmed for 2027".
-**Memory keeps:** categories and orgs he likes, items he skipped and why (to learn from), known-good sources, application outcomes.
-**Board tab — "Opportunities":** a table and a kanban (`New → Interested → Preparing → Applied → Result`), filters by category, fit, and deadline, and a star to track.
-
----
-
-### 5.4 School — "The Planner"
-
-**Mission:** Keep every assignment on time without cramming. It knows what's due, breaks big work into steps, and puts realistic study blocks on the calendar.
-**Owns:** assignment intake, triage, project breakdown, weekly and daily plans, study-block proposals, and integrity-aware homework help.
-**Does not own:** flashcards and review (Tutor), research deep dives (Research), college work (College).
-**Model:** `sonnet` for plans, `opus` for homework help · **max_turns:** 40 · **integrity:** true (for homework-help tasks)
-
-**Data sources:**
-- **Schoology iCal feed** (URL kept in the Keychain, entered in Settings). `quintet-mcp sync schoology` runs every 3 hours and at app launch. It parses VEVENTs into `school_items` (title, course, due_at, description, url, uid). Upsert by `UID` and keep the history of changed due dates.
-- **Google Calendar** (read). Class schedule, fixed commitments (swim, Aikido, DevSwarm, MUN), existing events → used to find free time.
-- Manual items: pasted text, rubric PDFs, or screenshots attached in Chat.
-
-**Triggers:**
-- Scheduled **Sunday 19:00**: weekly plan.
-- Scheduled **weekdays 06:45**: daily plan (≤ 10 lines, shown as a notification preview).
-- Manual: "break down this project", "help me with this assignment", "replan my week".
-
-**Process (weekly plan):**
-1. Load the next 14 days of `school_items` + calendar events.
-2. **Triage** each item: estimate effort (it asks once per new item *type* and remembers his real durations in memory), weight (test > project > homework), and risk (due soon + big + not started).
-3. **Break down** anything > 2 hours into subtasks with internal milestones (`school_subtasks`) that end ≥ 1 day before the real deadline.
-4. **Schedule.** Fill free slots with study blocks (default 45–90 min, no blocks after 23:00, respect sleep and training). Never double-book an existing event.
-5. Write `outputs/school/YYYY-Www-plan.md` (day-by-day list plus a "risks this week" section) and **one** `propose_action: calendar.create_events` batch holding all blocks (colored, prefixed `[Q]`), so he approves it all with one tap.
-6. On replans, propose moving or deleting only `[Q]`-prefixed events it created earlier.
-
-**Homework-help mode:** requires an integrity level (§7). At levels 0–1 it explains concepts, asks guiding questions, and checks his work. At level 2 it can show worked *examples on a different but similar problem*. It never fills in the actual graded answer below level 3.
-
-**Quality bar:** 0 conflicts with existing calendar events · every due item within 14 days appears in the plan · plans fit real free time (no 30-hour days) · estimates improve over time (it compares planned vs. actual when he marks items done).
-**Memory keeps:** real task durations by type and course, his productive hours, teachers' AI policies per course (to pre-fill the integrity level), recurring commitments.
-**Board tab — "Planner":** a week view (items + `[Q]` blocks), an "Up next" list, per-item subtasks with checkboxes, and a done/late record.
-
----
-
-### 5.5 Tutor — "The Tutor"
-
-**Mission:** Make Maxwell actually remember and understand his material. It uses spaced repetition for memory, Socratic questioning for understanding, and a weak-spot tracker so practice goes where it's needed.
-**Owns:** flashcard generation, the review schedule, Socratic sessions, and the weak-spot model.
-**Does not own:** assignment planning (School) or graded work output.
-**Model:** `sonnet` for card generation, `opus` for Socratic sessions · **max_turns:** 40 · **integrity:** true (Socratic sessions on graded material)
-
-**Components:**
-1. **Card factory.** Input is a Google Doc, a Drive file, a pasted note, or an uploaded PDF, plus course and topic tags. It produces atomic cards (one fact or idea per card): basic Q/A, cloze, and "explain why" cards. It avoids trivia, lists longer than 3 items, and ambiguous prompts. Each card links back to its source. Cards are saved through `create_cards` as **drafts**, and Maxwell accepts, edits, or deletes them in a review-the-deck screen before they enter the queue.
-2. **Scheduler.** Uses **FSRS** via the `ts-fsrs` library, running in the app, not the model. The review UI is native (no chat): show → reveal → rate `Again / Hard / Good / Easy` with keyboard `1–4`, plus a daily new-card limit (default 20).
-3. **Socratic session.** Intake: course, topic, goal (`understand`, `prep for test on <date>`), integrity level. Rules: never state the answer first. Ask one question at a time, grow the scaffolding with each wrong attempt (hint → narrower hint → a worked parallel example at level ≥ 2), and end with him explaining the idea back in his own words. The agent grades that explanation against a checklist.
-4. **Weak-spot tracker.** Every lapse (`Again`), low self-rating, or Socratic miss writes to `weak_spots` (topic, concept, error type: `recall` | `misconception` | `application`, count, last_seen). The mastery score per topic is derived from FSRS stability + recent misses. Top weak spots feed the next session's `state_snapshot` and trigger targeted new cards.
-
-**Triggers:**
-- Scheduled **daily 20:30**: a notification with "N cards due · top weak spot: X" (no model call needed).
-- Scheduled **when School has a test within 5 days**: detected in the daily DB check, proposes a focused Socratic session plus a targeted card set. This is a *shared-state read*, not agent-to-agent routing.
-- Manual: "make cards from this", "quiz me on X".
-
-**Quality bar:** cards pass an atomicity lint (≤ 1 blank per cloze, answer ≤ 15 words for basic cards) · the review UI responds in < 50 ms · Socratic sessions never give the target answer before his second attempt · weak spots decay when mastered.
-**Memory keeps:** courses and their unit order, the explanation styles that worked for him, recurring misconceptions.
-**Board tab — "Review":** today's due count, a review session button, a deck browser by course and topic, and a weak-spot heatmap (topic × week).
-
----
-
-## 6. `quintet-mcp`: tools and protocols
-
-A TypeScript package running on **Bun** and using `@modelcontextprotocol/sdk`. It's compiled with `bun build --compile` into a single binary and shipped as a **Tauri sidecar**. It uses `bun:sqlite` against the same DB (WAL mode, `busy_timeout=5000`). Subcommands: `serve --agent <id> --run <run_id>`, `auth google`, `exec <action_id>`, `sync schoology|calendar`, `doctor`.
-
-The Rust side generates a per-run MCP config that passes `--agent` and `--run`, so every tool call is scoped to its agent and run. **Tools check that the calling agent is allowed to use them** (the allowlist in §6.2).
-
-### 6.1 Tool catalog
-| Tool | Kind | Notes |
-|---|---|---|
-| `ask_user(questions[])` | protocol | Each question: `{id, prompt, type: single|multi|text, options?}`. Writes to `questions`. Returns "Queued. End your turn now with a one-line status." |
-| `propose_action(type, payload, preview_md, reason)` | protocol | Writes to `actions` with status `pending`. Returns an action_id. **The agent must never say the action happened.** |
-| `save_output(path, kind, title)` | protocol | Registers a file in the run's output folder (`md`, `csv`, `png`, `docx`). |
-| `save_source(...)` / `list_sources(project?)` | research | Research only |
-| `calendar_list_events(from, to, calendars?)` | read | Google Calendar |
-| `calendar_free_slots(from, to, min_minutes)` | read | Computed by code, not the model |
-| `gmail_search(query, max)` / `gmail_read(id)` | read | Scout and College (admissions/program mail). Snippets by default, full body on request. |
-| `drive_search(query)` / `drive_read(file_id)` | read | Docs exported as markdown, PDFs as text |
-| `school_items(from, to)` / `school_subtasks_upsert` | read / internal | School |
-| `cards_create(cards[])` / `weak_spots(top_n)` / `weak_spot_log` | internal | Tutor |
-| `colleges_upsert` / `requirements_upsert` / `essays_upsert` / `activities_upsert` / `char_count(text, limit)` | internal | College |
-| `opportunities_upsert` / `opportunities_query` | internal | Scout |
-| `now()` | util | The current time in Asia/Saigon, so the model never guesses dates |
-
-"Internal" = writes to Quintet's own DB. These are allowed without approval because they're undoable inside the app.
-
-### 6.2 Action types (executed only by `quintet-mcp exec` after approval)
-| Type | Payload | Proposed by |
-|---|---|---|
-| `calendar.create_events` | `[{title, start, end, color, description}]` (titles auto-prefixed `[Q]`) | School, Scout, Tutor |
-| `calendar.update_events` / `calendar.delete_events` | event ids. **Only for `[Q]` events Quintet created** (tracked in `quintet_events`) | School |
-| `gmail.create_draft` | `{to, subject, body_md, thread_id?}`. Creates a **draft**. Quintet never sends email in v1. | College, Scout |
-| `drive.create_doc` | `{title, folder, content_md}` → Google Doc in `Quintet/<agent>/` | Research, College |
-
-Approval UI: the preview is rendered in markdown. Buttons are **Approve** (⌘↩), **Edit** (edits the payload JSON through a form), and **Reject** (with an optional reason that goes to the agent's memory as feedback). Batches can be approved partially, checkbox per item. Every executed action logs its result, and delete-type actions store an undo record for 24 hours.
-
-### 6.3 Question protocol
-1. The agent calls `ask_user` and ends its turn. Run status → `waiting_user`. A macOS notification appears: "*Research* has 2 questions".
-2. Maxwell answers in a native form (chips for options) in the agent's Chat tab or from the Approvals inbox.
-3. The app resumes: `claude -p --resume <session_id> "<answers as YAML>"`.
-4. Scheduled runs that hit a question wait until he answers. After 48 hours the run is marked `stale` and skipped.
-
-### 6.4 Output protocol
-Outputs go to `~/Quintet/outputs/<agent>/<YYYY-MM-DD>-<slug>/`, and each file is registered with `save_output`. The agent's final message must be a **≤ 5-line summary** listing what was produced, which proposals are waiting, and any open questions. The UI shows this as the run's result card.
-
-### 6.5 Protocol prompt (fixed text, injected first)
-Keep it short and firm, with rules like these:
-- You are one specialist in Quintet. Stay inside your mission. If a request belongs to another agent, name that agent and stop.
-- You cannot send, create, or delete anything outside Quintet. Use `propose_action` and say "proposed", never "done".
-- Use `now()` for dates. All times are Asia/Saigon unless a source says otherwise. Always state the timezone for deadlines.
-- Cite only pages you opened in this run.
-- Obey the integrity level in Run context exactly (§7).
-- Update `./memory.md` only with durable learnings. Keep it ≤ 200 lines.
-- Finish with the ≤ 5-line summary.
-
----
-
-## 7. Academic integrity levels
-
-Picked **per assignment** at intake by School, Tutor, Research (when graded), and College. It's pre-filled from the course's saved policy in School's memory. A colored pill in the run header shows the current level.
-
-| Level | Name | Agent may | Agent may not |
-|---|---|---|---|
-| 0 | **No AI** | Plan, schedule, remind | Touch content at all |
-| 1 | **Coach only** *(default)* | Explain concepts, ask guiding questions, give feedback on *his* work, check answers he wrote | Write any text or solution he could submit |
-| 2 | **Labeled examples** | Everything in L1, plus short examples on a *parallel* problem or sentence, each boxed as `EXAMPLE — rewrite in your own words` | Produce the actual answer or submission text |
-| 3 | **AI-assisted (teacher allows)** | Draft sections he'll revise, with a disclosure note added to the output | Pretend the work is unassisted |
-
-**Hard caps (not overridable in the UI):**
-- **College essays and application text: max level 2.** Admissions essays have to be the applicant's own work, and Common App treats substantive AI-written content as a policy violation.
-- Tests and quizzes in progress: level 0. If a School task looks like a live test, the agent refuses and says why.
-
-Enforcement: at level ≤ 1 the run's tool permissions narrow `Write`/`Edit` to `./memory.md` only (use the path-scoped permission rule syntax verified in Phase 0, e.g. `Write(./memory.md)`), so the agent physically can't produce a prose deliverable file. It can only write feedback through `save_output(kind: "feedback")`.
-
----
-
-## 8. Data model (SQLite)
-
-Put migrations in `db/migrations/0001_init.sql`, and so on. Every table has `id TEXT PRIMARY KEY` (ULID), `created_at`, and `updated_at`.
-
-- **Core:** `agents` (cache of the parsed frontmatter + hash), `runs` (agent_id, trigger, status, session_id, integrity_level, intake_json, started_at, ended_at, cost_usd, tokens_in, tokens_out, turns, error), `run_events` (run_id, seq, type, json), `tasks` (agent_id, title, body, status, due_at, run_id), `questions` (run_id, json, answered_json, status), `actions` (run_id, agent_id, type, payload_json, preview_md, status, result_json, executed_at), `outputs` (run_id, agent_id, path, kind, title), `schedules` (agent_id, name, cron, last_run_at, next_run_at, enabled), `quintet_events` (google_event_id, action_id), `settings` (key, value).
-- **Research:** `sources` (url, title, author, published_at, grade, project, relevance, quotes_json).
-- **College:** `colleges` (name, round, deadline_at, status, fit, notes, source_url, verified_at), `requirements` (college_id, kind, detail, word_limit, due_at, done, source_url, verified_at), `essays` (college_id?, prompt, stage, word_count, file_path, feedback_md), `activities` (position, org, description, hours, weeks, grades, rank, char_counts_json), `honors`.
-- **Scout:** `opportunities` (name, org, category, url, deadline_at, deadline_tz, rolling, eligibility, eligibility_flag, cost, format, location, fit, fit_reason, status, starred, last_verified_at).
-- **School:** `school_items` (uid, course, title, description, due_at, url, source: ical|manual, est_minutes, actual_minutes, status, due_history_json), `school_subtasks` (item_id, title, due_at, done), `course_policies` (course, integrity_level, note).
-- **Tutor:** `cards` (deck, course, topic, type, front, back, source_ref, status: draft|active|suspended), `card_state` (card_id, FSRS fields: due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, last_review), `reviews` (card_id, rating, reviewed_at, duration_ms), `weak_spots` (course, topic, concept, error_type, count, last_seen, mastery).
-
----
-
-## 9. UI spec
-
-### 9.1 Window
-- Tauri window with `titleBarStyle: "Overlay"`, hidden title, and native traffic lights. **Sidebar vibrancy** via the `window-vibrancy` crate (`NSVisualEffectMaterial::Sidebar`).
-- Font: `-apple-system, "SF Pro Text"`. Mono: `"SF Mono", ui-monospace`. Colors come from CSS variables mapped to macOS system colors (label, secondaryLabel, separator, controlAccentColor). Light and dark follow the system.
-- Density and spacing like Mail and Notes: 13px base text, 28px sidebar rows, 8px grid, subtle separators, no heavy shadows. Motion is limited to 150–200 ms ease-out fades and slides. Respect `prefers-reduced-motion`.
-- Build components on **Radix primitives + Tailwind v4** with custom tokens. Don't use a web-looking UI kit. Every control should look like it belongs on macOS (segmented controls, popovers, sheets).
-
-### 9.2 Structure
-```
-┌ Sidebar ─────────┬ Agent workspace ─────────────────────────────────────┐
-│ ● Approvals  (3) │  [icon] Research   · idle · next: —      [New task ⌘N]│
-│ ◷ Activity       │  ┌ Chat │ Queue │ Library │ Outputs ┐                  │
-│ ── Agents ────── │  │                                  │                  │
-│ ◉ Research       │  │   streamed run / result cards    │                  │
-│ ◉ College    •   │  │                                  │                  │
-│ ◉ Scout      2   │  │                                  │                  │
-│ ◉ School         │  └──────────────────────────────────┘                  │
-│ ◉ Tutor     18↻  │  [ composer — ⌘↩ to run ]                              │
-│ ── ───────────── │                                                        │
-│ ⚙ Settings       │                                                        │
-└──────────────────┴────────────────────────────────────────────────────────┘
-```
-- Sidebar rows show the agent icon and name, plus a status dot (idle / running / waiting / error) and a badge (pending approvals or questions, or cards due for Tutor).
-- **Chat** shows the conversation with this agent. Runs render as collapsible tool-step rows with the final summary card on top. Intake forms appear inline as sheets.
-- **Queue** lists tasks and runs (queued, running, waiting, done, failed), with the upcoming schedules for this agent and a "Run now" button for each.
-- **Board** is agent-specific (§5): Library / Tracker / Opportunities / Planner / Review.
-- **Outputs** is a file list with Quick Look previews (render md, png, and csv tables inline), plus "Reveal in Finder" and "Open in…".
-- **Approvals** is a global inbox of pending actions and questions from all agents, grouped by agent, with keyboard triage (J/K to move, ⌘↩ to approve, ⌫ to reject).
-- **Activity** is a global timeline of runs with cost, duration, and status, and a link to the raw log.
-- **Settings** holds Google connection, Schoology iCal URL, Claude CLI status, schedules on/off per agent, notification preferences, launch at login, default models, the data folder, and the weekly usage meter.
-
-### 9.3 Keyboard
-`⌘1–5` switch agents · `⌘0` Approvals · `⌘N` new task for the current agent · `⌘↩` run / approve · `⌘K` quick switcher (navigation only, no routing) · `⌘,` Settings · `Esc` close sheet · Tutor review: `Space` reveal, `1–4` rate.
-
----
-
-## 10. Scheduler, tray, notifications
-
-- **Scheduler:** `tokio-cron-scheduler` in Rust. Crons come from `agent.md` `schedules[]` entries, each `{name, cron, tz: Asia/Saigon, task, model?, enabled}`. Store `last_run_at` and `next_run_at`. **Catch-up:** at launch and on wake from sleep (listen for `NSWorkspaceDidWakeNotification`), each schedule that missed its slot runs *once*, and only if it's less than 24 hours late. "DB-only" schedules (Scout's deadline watch, Tutor's due count) run in Rust with no model call.
-- **Tray:** a menu-bar icon (a monochrome template image). Its menu shows: pending approvals count → open Approvals · running runs · "Pause all schedules for 1h / until tomorrow" · Open Quintet · Quit. Closing the window only hides it (`prevent_close` → hide). **Launch at login** is on by default via `tauri-plugin-autostart`.
-- **Notifications** (`tauri-plugin-notification`): questions waiting · approvals waiting · a scheduled run failed · a deadline ≤ 72h (Scout or School) · Tutor daily cards due · School daily plan. Each type can be toggled in Settings. Clicking a notification opens the right screen. There's a quiet-hours window (default 23:00–06:30).
-
----
-
-## 11. Security and privacy
-
-- Everything stays local except Google API calls and the Claude CLI's own traffic. No analytics.
-- The Google OAuth desktop flow (loopback redirect) uses scopes limited to: `calendar.events`, `calendar.readonly`, `gmail.readonly`, `gmail.compose` (drafts only), `drive.readonly`, `drive.file` (only files Quintet creates). Tokens are stored in the Keychain via `keytar` or Bun FFI. Maxwell creates the OAuth client in his own Google Cloud project, and Settings shows step-by-step instructions.
-- The Schoology iCal URL is a secret. It goes in the Keychain and is never logged.
-- Run logs strip Gmail bodies after 30 days (they keep the metadata only).
-- Agents run with `cwd` = their own workspace. Deny file access outside `~/Quintet/` (via the permission settings from Phase 0 notes).
-- Backups: a nightly `VACUUM INTO ~/Quintet/backups/quintet-YYYYMMDD.db`, keeping 14.
-
----
-
-## 12. Build phases (each ends with build + run + acceptance check)
-
-**Phase 0: CLI spike** (no UI)
-- Write `docs/claude-cli-notes.md` per §3.1, and a 30-line Rust or TS script that runs `claude -p` with stream-json and prints parsed events.
-- ✅ The notes list verified flags. A sample run with a stub MCP server shows `system/init` listing the MCP tool. `--resume` continues a session. Isolation from user-level skills is confirmed (the init event shows no user skills).
-
-**Phase 1: Shell + registry + first run**
-- Tauri app with the sidebar, vibrancy, light and dark modes. First-launch creation of `~/Quintet/` from `agents-default/`. The Registry parses and watches `agent.md` files. SQLite with migrations. Chat tab runs a manual task for any agent and streams events live. Result card. Activity tab.
-- ✅ Editing `agents/research/agent.md` updates the sidebar within 1 second. A broken YAML file shows an error badge and doesn't crash the app. A Research run on "What is FSRS?" streams tool steps and finishes with a summary. Cost and turns are saved.
-
-**Phase 2: Protocols (intake, questions, approvals, outputs)**
-- `quintet-mcp serve` with `ask_user`, `propose_action`, `save_output`, and `now`. Intake forms from frontmatter, including `skip_if`. The Approvals inbox (no executors yet; the "approve" button marks the action approved). Resume flow. Outputs tab with previews. Integrity pill and tool-stripping.
-- ✅ A test agent that asks 2 questions → notification → answer → resume → finishes. A proposed action appears in Approvals with its preview. At integrity level 1 the run can't write a non-memory file (verified). Kill-the-app-mid-run → on relaunch the run shows `failed` with its reason.
-
-**Phase 3: Integrations**
-- `quintet-mcp auth google`, the Calendar, Gmail, and Drive read tools, `calendar_free_slots`, the executors for all §6.2 actions with `[Q]` tracking, and the Schoology iCal sync.
-- ✅ Connects Google from Settings. `school_items` fills from his real iCal URL. Approving a `calendar.create_events` batch of 3 creates exactly 3 `[Q]` events. `gmail.create_draft` creates a draft (nothing is sent). Revoking the Google connection shows a clean re-auth banner.
-
-**Phase 4: Scheduler + tray + notifications**
-- Crons, catch-up on launch and wake, tray menu, launch at login, notification types, quiet hours, pause-all.
-- ✅ A schedule set 2 minutes out fires with the window closed. Sleeping the Mac through a slot → it runs once on wake. Quiet hours hold notifications until morning.
-
-**Phase 5: School agent (full)**: weekly and daily plans, triage, breakdown, study-block proposals, Planner board, homework-help mode, course policies.
-- ✅ Using his real week, the Sunday plan has 0 conflicts and every item within 14 days appears. One-tap approval adds the blocks. A replan only moves `[Q]` events.
-
-**Phase 6: Tutor agent (full)**: card factory with draft review, native FSRS review UI (`ts-fsrs`), Socratic sessions, weak-spot tracker and heatmap, test-in-5-days trigger.
-- ✅ 20 cards generated from a Google Doc pass the atomicity lint. A review session works fully from the keyboard. An `Again` rating creates or increments a weak spot. An upcoming test in `school_items` triggers the proposal.
-
-**Phase 7: Research agent (full)**: all three outputs, source grading, claim table verification, `uv`-based charts, Library board, `drive.create_doc`.
-- ✅ A `standard` brief on one of his real paper topics has 0 unsourced claims (checked against the claim table). A data run produces a CSV, a PNG, and `analysis.py` that re-runs on its own.
-
-**Phase 8: College agent (full)**: four modes, Tracker board, exact character counters, weekly deadline re-verification, level-2 essay cap.
-- ✅ Activities over 150 characters are flagged with the exact count. Every deadline row has `source_url` and `verified_at`. Asking for a "full essay draft" is refused and pointed to the brainstorm or outline modes.
-
-**Phase 9: Scout agent (full)**: weekly sweep, daily deadline watch, dedupe, fit scoring, Opportunities board, digest.
-- ✅ Two consecutive sweeps create no duplicates. Every item has an official URL. The digest lists deadlines with the year and timezone. Starring an item → it proposes a calendar reminder.
-
-**Phase 10: Polish**: empty states, error copy, a usage meter, backups, `quintet-mcp doctor`, an app icon, and a signed local build (`tauri build`, ad-hoc signing is fine for personal use).
-- ✅ A cold start in under 1.5 seconds. No console errors. Every screen works in both light and dark mode. The WCAG AA contrast ratio is computed (not eyeballed) for text tokens.
-
----
-
-## 13. Backlog agents (post-v1, same framework)
-
-Each gets its own `agent.md` later. No framework changes should be needed. If one is, write an ADR.
-
-| Agent | One-line mission |
+## 6. Core systems
+
+### 6.1 Summoning
+
+A summoning spawns the engine binary in a PTY with the familiar's cwd, env, model flag and
+writ. Requirements:
+
+- Resolve the binary via the workbench's configured path, then `PATH`. If it is not found, the
+  familiar's summon button is disabled with the reason shown on hover — not a runtime crash.
+- Stream PTY output to the frontend over a Tauri channel, chunked, backpressured. The terminal
+  must stay responsive under a `cat` of a 50k-line file.
+- Handle resize (`SIGWINCH`) on panel resize.
+- On app quit: graceful stop (SIGINT, wait 5s, SIGTERM, wait 3s, SIGKILL) for every summoning,
+  and persist the intent to restore.
+- On app start: if summonings were live at last quit, show a "Restore the floor" banner. One
+  click restores them all. Never auto-restore without asking.
+- Never log the writ, prompts, file contents or agent output to any file except the local
+  session transcript the user can see and delete.
+
+### 6.2 Commissions and intake
+
+- User picks a familiar and clicks "New commission."
+- The intake questions from the binding are rendered as a form. Required fields block submit.
+- Answers are substituted into the commission prompt as `{{intake.piece}}` etc.
+- The commission is written to SQLite as `queued`, then dispatched.
+- Status: `queued → running → awaiting seal → running → done | banished | misfired`.
+- A familiar runs one commission at a time. New commissions queue behind it, visibly.
+
+### 6.3 Isolation
+
+- `none` — runs directly in `workspace`.
+- `worktree` — on summon, create `git worktree add` in `~/.grimoire/worktrees/<familiar>-<id>`.
+  Branch name `grimoire/<familiar>/<id>`. Refuse to summon if `workspace` is not a git repo.
+  On commission end, leave the worktree; offer "Merge" / "Discard" in the outputs panel.
+- `copy` — rsync the workspace into a scratch dir, honouring `.gitignore`.
+
+### 6.4 Autonomy and the seal
+
+| Level | Meaning |
 |---|---|
-| Email & outreach | Triage the inbox, draft replies and cold outreach in his voice, track follow-ups (drafts only, then approval) |
-| Calendar & planner | Own the whole calendar beyond school: protect focus time, balance training, work, and projects |
-| Builder / coder | Turn a spec into a phased Claude Code build in a chosen repo folder, with build/test gates |
-| Finance / markets | Stock and macro research for Wharton and the IFC: theses, comps, valuation sanity checks, cited |
-| Content & social | Posts, scripts, and launch copy for Debate Buddy and his personal brand, with a content calendar |
-| Debate & MUN | Cut cards, write cases, run mock cross-ex, write position papers and bloc strategy |
-| Language coach | Daily Mandarin (HSK 5 track) and Vietnamese drills, corrections, and conversation practice |
-| Network CRM | Contacts, relationship notes, follow-up reminders, and pre-call briefs |
-| Files & life admin | Organize Downloads and Drive, rename files, handle forms and receipts (moves proposed, never deleted without approval) |
-| Writing editor | Edit his drafts in his voice and remove AI-sounding patterns (integrity-aware) |
+| `propose` | The familiar may read and think. Any write, shell command, or network call produces a seal request and the summoning pauses. |
+| `bounded` | Writes inside `bounds.write` proceed. Anything outside, anything in `bounds.deny`, network if `network: false`, and any shell command not matching `bounds.shell` produce a seal request. |
+| `free` | Writes and shell proceed inside `workspace`. Network proceeds. Deletes, force-pushes, and anything outside `workspace` still produce a seal request. |
+
+**Nothing is ever exempt from the seal**: sending a message, sending an email, deleting a file
+outside the workspace, `git push --force`, anything that spends money, and any write to a path
+containing `.env`, `.ssh`, `credentials`, or `.git/config`. This list is in code, not in config,
+and `free` does not override it.
+
+The seal UI: a queue in the left rail with a count badge, plus a macOS notification. Each
+request shows the familiar, the exact action, the exact target path or command, and a diff
+where one applies. Three buttons: **Seal**, **Seal and don't ask again for this commission**,
+**Refuse**. Refuse sends the refusal back into the PTY as a message so the familiar can adapt.
+
+Seal requests time out after 30 minutes into `bind`.
+
+### 6.5 Aether and the breaker
+
+Meter three things per commission: tokens (parsed from the CLI's own reporting where it emits
+it, wall-clock otherwise), turns, and minutes. Show all three as thin meters on the familiar's
+card.
+
+At 80% of any budget: the card's rule turns brass, and a steer message goes into the PTY
+("You are at 80% of your budget for this commission. Prioritise finishing over exploring.").
+
+At 100%, act on `on_exceed`:
+
+- `steer` — inject a hard message, keep running, re-warn every 10%.
+- `bind` — stop accepting new tool calls, let the current turn finish, then pause and raise a
+  seal request asking whether to extend.
+- `banish` — graceful stop, mark the commission `banished`, notify.
+
+A heartbeat in the Rust process ticks every 5s. If a summoning has produced no PTY output
+and no token movement for 10 minutes, it is a **stall**: raise it in the seal queue with
+"Stalled — steer, or banish?" Never kill a stalled summoning silently.
+
+Runaway guard, separate from budgets: more than 200 tool calls in a commission, or more
+than $X of estimated spend (set in the workbench), triggers `banish` regardless of `on_exceed`.
+
+### 6.6 Codex and the reliquary
+
+Each familiar has one markdown codex file. It is passed to the CLI on summon and the familiar
+is told, in the engine preamble, that it may append to it.
+
+When a codex passes 8,000 words, run a **condense**: spawn a one-shot agent whose only job is
+to rewrite the codex shorter, keeping facts and decisions, dropping narration. Write the
+result to `<codex>.md` and the previous version to `<codex>.<timestamp>.bak`. Never condense
+without keeping the backup.
+
+The reliquary is one shared `~/.grimoire/reliquary.md`. `read` familiars get it in context.
+`write` familiars may append — every append is a seal request. This is deliberate: shared
+memory is exactly where one bad familiar poisons the rest.
+
+### 6.7 Standing wards
+
+A ward is `{familiar, cron, commission prompt, intake answers, enabled}`. Stored in SQLite,
+scheduled in Rust, so it fires with the window closed.
+
+- The prompt is sent verbatim every run. No drift, no "improve the prompt" logic.
+- A ward whose familiar is already busy skips that run and records `skipped: busy`. It does not
+  queue up — a daily ward that has skipped 30 times must not stampede.
+- Every ward run posts a macOS notification on completion or seal request.
+
+The app lives in the menu bar. Closing the window does not quit. Quit is explicit, from the
+menu-bar item, and it warns if summonings are live.
+
+### 6.8 The archivist (Phase 6, optional)
+
+One designated familiar may be marked `archivist: true`. It gets read access to the roster, the
+commission queue and the ledger, and it may **propose** — never dispatch — commissions to other
+familiars. Every proposal lands in the seal queue as "Astrolabe proposes: send Sconce to …".
+
+The archivist never spawns familiars, never edits bindings, never has `free` autonomy. If this
+feels restrictive, it is; a coordinating agent with dispatch rights is the single most expensive
+failure mode in this class of app.
+
+### 6.9 The ledger
+
+Append-only table of events: summon, commission start/end, tokens, estimated cost, seal
+requests and their resolutions, breaker trips, misfires. The ledger view shows spend by
+familiar, by day, by engine, and a per-commission waterfall of how long each phase took.
+
+Estimated cost is **labelled as estimated** everywhere it appears. Never display it as a
+settled number, and never sum it into anything that looks like a bill.
 
 ---
 
-## 14. Engineering conventions
+## 7. Design
 
-- **TypeScript strict** everywhere, with `zod` validation at every IPC and MCP boundary. Rust: `thiserror` for errors, `tracing` for logs, no `unwrap()` outside tests.
-- IPC types are defined once (`src/lib/types.ts`) and mirrored in Rust with `ts-rs` generation, so they don't drift.
-- Tests: Rust unit tests for the stream parser (use fixture `.jsonl` files captured in Phase 0), the scheduler catch-up logic, and prompt assembly. Bun tests for iCal parsing, `char_count`, FSRS wrappers, dedupe, and the action executors (with Google mocked). One Playwright smoke test per phase against `tauri dev`.
-- Small commits, one feature each. Conventional commit messages. Write an ADR in `docs/decisions/` for any deviation from this file.
-- Never hardcode Maxwell's personal data in code. It lives in `~/Quintet/shared/profile.md`, which is seeded from `shared-default/profile.md` (a template with headings: School & grades · Courses this year · Activities · Interests · College goals · Constraints & schedule · Voice notes).
+The client has seen a hundred agent dashboards. This one must not look like one.
 
-## 15. Do not
+### 7.1 Reference and intent
 
-- Add a router, orchestrator, or agent-to-agent calls.
-- Let any agent send email, delete non-`[Q]` calendar events, or write to Drive without an approved action.
-- Use the Anthropic API directly or ask for an API key. v1 is Claude Code headless only.
-- Load Maxwell's global Claude skills or CLAUDE.md into agent runs.
-- Guess CLI flags. Verify them in Phase 0 and in `docs/claude-cli-notes.md`.
-- Generate college essay text, or answer live tests.
-- Start a phase before the previous phase's ✅ checks pass.
+A working study at night: lamplight, instruments, sealed letters, a ledger. The interface is
+the room. Familiars are objects in it, not cards in a grid — you look down on the tower
+floor and see where each one is standing and what it is doing. The single loudest thing on
+screen is the sigil — a small drawn mark per familiar that changes state as it works.
+Everything else is quiet.
+
+Explicitly avoid: the SaaS card kit (identical rounded cards, one radius, grey shadows),
+gradient washes, the cream-and-terracotta palette, tracked-out caps eyebrows, `→` glued to
+button text, and the "big number with small label" hero.
+
+### 7.2 Tokens — `src/theme/tokens.css`
+
+```css
+--ink-void:      #14131A;  /* base */
+--ink-panel:     #1E1C27;  /* raised surfaces */
+--ink-rule:      #332F40;  /* hairlines, dividers */
+--bone:          #C9BFA4;  /* primary text */
+--bone-dim:      #8C8474;  /* secondary text */
+--brass:         #B08D3F;  /* accent, seals, 80% warnings */
+--verdigris:     #4E7A6B;  /* running, healthy */
+--oxblood:       #7A1F2B;  /* banished, misfired, destructive */
+--slate:         #5A6B8C;  /* compass order, info */
+```
+
+Contrast is non-negotiable: `--bone` on `--ink-void` must measure ≥ 7:1, `--bone-dim` ≥ 4.5:1.
+Measure it with a real contrast calculation in a test, don't eyeball it. Any state colour
+used as text gets a lightened variant that passes 4.5:1; the saturated version is for rules,
+fills and sigils only.
+
+### 7.3 Type
+
+- **Junicode** — display: familiar names, panel headings. A genuine manuscript-lineage face.
+- **EB Garamond** — body, writs, commission text. Body 16px/1.6, measure ≤ 72ch.
+- **Iosevka** — terminals, paths, commands, numbers in the ledger. Nowhere else.
+
+Self-host all three as woff2 in `src/theme/fonts/`. No Google Fonts CDN. Scale is a classic
+fourth: 12 / 16 / 21 / 28 / 37 / 50.
+
+### 7.4 Sigils
+
+Each familiar gets a generated mark: a deterministic SVG drawn from a hash of its name —
+a ring, 3–7 radial strokes, one interior glyph, in the order's colour. Written in code in
+`ui/Sigil.tsx`. No asset files, no licensing question, and every familiar looks distinct on
+first sight.
+
+Sigil states, and this is the app's one piece of non-user-triggered motion:
+
+| State | Treatment |
+|---|---|
+| dormant | 40% opacity, static |
+| summoned, idle | full opacity, static |
+| working | the ring rotates, one revolution per 8s |
+| awaiting seal | ring static, brass dot pulsing at 1s |
+| bound | ring static, a brass chord drawn across it |
+| banished / misfired | oxblood, ring broken at one point |
+
+Everything else in the UI moves only in response to a click. `prefers-reduced-motion` replaces
+rotation with a static brass tick.
+
+### 7.5 Layout
+
+```
+┌──────────────┬────────────────────────────────────────────────┐
+│  roster      │  the scriptorium                               │
+│              │                                                │
+│  ◉ Vellum    │   Vellum · quill · ~/work/essays                │
+│  ◎ Sconce    │   ─────────────────────────────────────────    │
+│  ○ Astrolabe │   commission  ·  terminal  ·  outputs  ·  codex │
+│  ○ Anvil     │                                                │
+│  ◉ Tally     │   [ the selected tab fills this area ]         │
+│              │                                                │
+│  ── seals ── │                                                │
+│  3 waiting   │   ── aether ──────────────────────────────     │
+│              │   tokens ▓▓▓▓▓▓░░░░  turns ▓▓░░░  28 min       │
+└──────────────┴────────────────────────────────────────────────┘
+```
+
+Left rail is fixed 240px, sigil + name + one-line status. Seals live at the bottom of the rail
+with a count. The right pane is one familiar at a time, four tabs. Aether meters pinned to the
+bottom of the right pane, always visible while a commission runs.
+
+Panels are separated by 1px `--ink-rule` hairlines and space, not by borders-plus-radius-
+plus-shadow. Radius is 2px on interactive controls and 0 everywhere else.
+
+The right pane has a second mode: **the floor**, a top-down plan of the tower with every
+familiar visible at once. It is the centrepiece of the app and it has its own section — §8.
+
+---
+
+## 8. The floor
+
+The thing you open the app to look at. A top-down plan of the tower room, with every
+familiar drawn on it at once, standing wherever its current state puts it. You see the whole
+roster working without clicking anything.
+
+This is not a decorative extra and it is not the last thing built. It is how the app is used.
+The roster rail is the fallback for when you want a list; the floor is the default.
+
+### 8.1 The idea, and why it isn't an isometric pixel office
+
+The obvious version of this is an isometric office with little sprite people at desks. Don't
+build that. It needs an art pipeline, it needs licensed tilesets, it reads as someone else's
+app, and sprite characters fight the manuscript theme.
+
+Build instead what this world would actually produce: **an architect's plan of the tower,
+inked on vellum**. Straight orthographic top-down, no perspective. Walls are double hairlines
+with hatching between them. Furniture is drawn in plan symbols the way a floor plan draws a
+desk or a door swing. Familiars are their sigils (§7.4), moving between stations.
+
+Every mark is a `Graphics` call. No sprite sheets, no tilesets, no image files, no licensing
+question. It is also, as a side effect, resolution-independent and about 40 KB of code.
+
+### 8.2 The plan
+
+One circular room, 1000 × 1000 world units, drawn in a viewport that letterboxes to fit.
+
+```
+                       the door
+                          ╭┈╮
+        ┌─────────────────┤ ├─────────────────┐
+      ╱   ▭ Quill                    Lantern ▭  ╲
+    ╱      desk                          desk     ╲
+   │                                               │
+   │   ▤                   ╭───╮                ▥  │
+   │ ledger               │ ward │           reliquary
+   │ lectern               │circle│             cabinet
+   │   (W)                  ╰───╯                (E) │
+   │                                               │
+    ╲     ▭ Crucible                 Compass ▭   ╱
+      ╲    desk            ▭           desk    ╱
+        └──────────────  Ledger  ─────────────┘
+                          desk
+                       the hearth
+```
+
+**Stations** — every position a familiar can occupy. Each is a node in a waypoint graph
+(`paths.ts`) so movement is deterministic and never crosses a wall.
+
+| Station | Where | Meaning |
+|---|---|---|
+| the hearth | south arc | Dormant familiars rest here, dimmed |
+| order desks ×5 | perimeter, 72° apart | Working familiars sit at their own order's desk |
+| the ward circle | centre | A familiar waiting on your seal stands in it |
+| the reliquary cabinet | east | A familiar writing to shared memory walks here first |
+| the ledger lectern | west | Click it to open the ledger view |
+| the door | north | Entry on summon, exit on banish |
+
+Two familiars of the same order share a desk by standing on either side of it; three or more
+queue behind it in a short line. Never overlap two sigils.
+
+### 8.3 What a familiar looks like on the floor
+
+The sigil from §7.4, at 44 world units, plus:
+
+- A **name plate** below it in Junicode 12, `--bone-dim`, drawn only at zoom ≥ 0.9×.
+- A **thread of ink** — a 1px `--brass` line from the sigil to its desk lamp while it works.
+  The thread's opacity breathes between 0.3 and 0.7 over 4s. This is the one ambient animation
+  on the floor.
+- An **aether arc** — a thin arc around the sigil, filling clockwise as the commission's token
+  budget is spent. Verdigris to 80%, brass past it, oxblood at 100%.
+
+State, and where the familiar is:
+
+| State | Position | Sigil | Extra |
+|---|---|---|---|
+| dormant | hearth | 40% opacity, static | — |
+| summoning | walking door → desk | fading in | — |
+| idle, summoned | its desk | full opacity, static | — |
+| working | its desk | ring rotating, 8s/rev | ink thread to lamp, aether arc |
+| awaiting seal | walks to the ward circle | brass dot pulsing, 1s | ward circle's ring lights brass |
+| bound | its desk | brass chord across the ring | aether arc oxblood |
+| stalled | its desk | ring rotation slows to 30s/rev | — |
+| banished | walking desk → door, then gone | ring broken, oxblood | — |
+| misfired | its desk | ring broken, oxblood | desk lamp goes dark |
+
+The walk is a 1.1s ease-in-out tween along the waypoint path. Sigils don't rotate to face
+travel — they're marks on a plan, not characters.
+
+### 8.4 Reading the floor at a glance
+
+The whole point is answering four questions without a click:
+
+1. **Is anything waiting on me?** → anyone standing in the ward circle.
+2. **Is anything running away with my money?** → any aether arc past brass.
+3. **Is anything stuck?** → a slow ring, or a familiar at a desk with no ink thread.
+4. **What's idle?** → everyone at the hearth.
+
+If a design change makes any of those four harder to see, it's the wrong change.
+
+### 8.5 Interaction
+
+- Hover a sigil → a **marginalia card** (DOM, not Pixi) pinned beside it: name, order, current
+  commission title, the three aether meters, elapsed time. 120ms delay in, instant out.
+- Click a sigil → right pane switches to that familiar's workspace, floor stays visible in
+  a 40% height strip above it.
+- Click the ward circle → opens the seal queue.
+- Click the ledger lectern → opens the ledger view.
+- Click the door → the "summon a familiar" picker.
+- Scroll → zoom 0.6×–2.0× toward the cursor. Drag → pan. Double-click empty floor
+  → reset to fit.
+- Keyboard: `Tab` cycles sigils in clockwise order with a visible brass focus ring, `Enter`
+  selects, `Esc` returns focus to the roster rail.
+
+### 8.6 Performance
+
+One `Pixi.Application`, WebGL, `antialias: true`, `resolution: devicePixelRatio` capped at 2.
+
+Three layers. `static` (walls, hatching, furniture, labels) is drawn once into a
+`RenderTexture` and blitted every frame — it re-bakes only on resize or zoom crossing 0.9×.
+`threads` redraws per frame. `actors` holds one container per familiar.
+
+The ticker runs at 60fps focused, throttles to 20fps when the window is unfocused, and
+stops entirely when the floor isn't the visible tab. A background floor must cost 0% CPU.
+
+Tweens are plain `requestAnimationFrame` interpolation on the actor containers. No physics,
+no pathfinding at runtime — routes between stations are precomputed on load.
+
+Budget: 60fps with 12 familiars, 5 of them working, on integrated graphics. If it misses,
+the first thing to cut is the ink threads, then the aether arcs. Never the state colours.
+
+### 8.7 Accessibility
+
+The floor is never the only route to anything. Every click target above has a twin in the
+roster rail or a menu item.
+
+- A `Floor` / `Roster` toggle in the pane header, remembered across restarts.
+- An offscreen `aria-live="polite"` list mirrors the floor in text: "Vellum, working at the
+  quill desk, 62% of budget. Sconce, waiting for your seal." Updates on state change only,
+  never on position.
+- `prefers-reduced-motion`: no walking (familiars cut to their new station), no ring rotation
+  (a static brass tick at the top of the ring instead), no thread breathing (fixed 0.5 opacity).
+- Zoom and pan work from the keyboard: `+` `-` `0`, arrow keys.
+
+### 8.8 Files
+
+```
+src/scriptorium/floor/
+  Floor.tsx          # React wrapper: mounts Pixi, owns resize, tab visibility
+  stage.ts           # Application, layers, ticker policy
+  plan.ts            # tower geometry — walls, desks, ward circle, door, in world units
+  bake.ts            # static layer → RenderTexture
+  hatching.ts        # procedural hatch texture, generated once
+  paths.ts           # waypoint graph + precomputed station-to-station routes
+  actors.ts          # per-familiar container, state machine, tweens
+  interaction.ts     # hover, click, zoom, pan, keyboard focus ring
+  marginalia.tsx     # hover card, DOM
+  a11y.tsx           # the live-region mirror
+```
+
+`plan.ts` exports the station table as data. Adding a sixth order later should mean editing one
+array, not redrawing the room.
+
+---
+
+## 9. Data model
+
+```sql
+CREATE TABLE familiars (
+  id TEXT PRIMARY KEY,            -- slug of name
+  name TEXT NOT NULL,
+  order_name TEXT NOT NULL,
+  binding_path TEXT NOT NULL,
+  binding_hash TEXT NOT NULL,     -- detect edits
+  first_seen INTEGER NOT NULL,
+  last_summoned INTEGER
+);
+
+CREATE TABLE summonings (
+  id TEXT PRIMARY KEY,
+  familiar_id TEXT NOT NULL REFERENCES familiars(id),
+  engine TEXT NOT NULL,
+  model TEXT NOT NULL,
+  cwd TEXT NOT NULL,
+  isolation TEXT NOT NULL,
+  worktree_path TEXT,
+  pid INTEGER,
+  started INTEGER NOT NULL,
+  ended INTEGER,
+  exit_reason TEXT               -- quit | banished | crashed | restored
+);
+
+CREATE TABLE commissions (
+  id TEXT PRIMARY KEY,
+  familiar_id TEXT NOT NULL REFERENCES familiars(id),
+  summoning_id TEXT REFERENCES summonings(id),
+  prompt TEXT NOT NULL,
+  intake_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  ward_id TEXT REFERENCES wards(id),
+  created INTEGER NOT NULL,
+  ended INTEGER,
+  tokens_in INTEGER DEFAULT 0,
+  tokens_out INTEGER DEFAULT 0,
+  turns INTEGER DEFAULT 0,
+  est_cost_usd REAL DEFAULT 0
+);
+
+CREATE TABLE seals (
+  id TEXT PRIMARY KEY,
+  commission_id TEXT NOT NULL REFERENCES commissions(id),
+  kind TEXT NOT NULL,            -- write | shell | network | destructive | send | reliquary
+  detail_json TEXT NOT NULL,     -- path, command, diff, proposal
+  raised INTEGER NOT NULL,
+  resolved INTEGER,
+  resolution TEXT                -- sealed | sealed_always | refused | timed_out
+);
+
+CREATE TABLE wards (
+  id TEXT PRIMARY KEY,
+  familiar_id TEXT NOT NULL REFERENCES familiars(id),
+  cron TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  intake_json TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  last_run INTEGER,
+  last_result TEXT
+);
+
+CREATE TABLE ledger_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at INTEGER NOT NULL,
+  commission_id TEXT,
+  familiar_id TEXT,
+  kind TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+);
+```
+
+Migrations are numbered and forward-only. Every migration has a matching test that runs it
+against a seeded db.
+
+---
+
+## 10. Phases
+
+Each phase: build, run, verify by hand, report. Do not proceed on a failing criterion.
+
+### Phase 0 — Scaffold
+
+Tauri v2 + React + TS + Tailwind v4. Token file, three self-hosted fonts, `ui/` primitives
+(`Sigil`, `Panel`, `Rule`, `Meter`, `Pill`). SQLite plugin wired with migration 001. Empty
+scriptorium shell with the §7.5 layout and hardcoded roster data.
+
+**Passes when:** app launches; layout matches the wireframe at 1280×800 and at 1024×640; a
+contrast test asserts `--bone` on `--ink-void` ≥ 7:1 and `--bone-dim` ≥ 4.5:1 and passes; four
+distinct sigils render from four different names; `DECISIONS.md` and `TASKS.md` exist.
+
+### Phase 1 — One real familiar
+
+Parse one hardcoded binding. Spawn `claude` in a PTY in its workspace. Stream to xterm.js.
+Accept typed input. Resize correctly. Stop gracefully on quit.
+
+**Passes when:** you can summon, hold a real conversation in the terminal, resize the window
+mid-run without corrupting the buffer, `cat` a 50k-line file without the UI freezing, and quit
+the app leaving no orphaned `claude` process (verify with `ps`). Report honestly how much
+friction `portable-pty` caused — this is the Electron decision point (§5).
+
+### Phase 2 — Bindings as files
+
+Bindings folder, file watcher, YAML + Zod validation, roster from disk, invalid bindings shown
+with their errors. Five seed bindings. Per-familiar workspace with the four tabs. Intake form
+generated from the binding.
+
+**Passes when:** adding a `.binding.md` makes a familiar appear within 2s with no restart;
+deleting one removes it; a binding with a bad `order` shows the Zod error in the rail in
+oxblood and does not crash; all five seeds load; the intake form blocks submit on a missing
+required field.
+
+### Phase 3 — Commissions, persistence, ledger
+
+Commission lifecycle and queue. All tables from §9. Codex file read/append. Ledger events.
+Ledger view with spend by familiar and by day.
+
+**Passes when:** a commission survives an app restart with correct status; a familiar with a
+running commission queues the next one visibly rather than running both; the codex file
+contains what the familiar wrote; the ledger shows a non-zero token count for a real run and
+labels cost as estimated in every place it appears.
+
+### Phase 4 — The seal
+
+Autonomy levels. Bounds enforcement in Rust, not in the prompt. Seal queue UI and macOS
+notifications. Refusals fed back into the PTY. The never-exempt list from §6.4.
+
+**Passes when:** a `propose` familiar asked to write a file raises a seal instead of writing;
+a `bounded` familiar writes inside its bounds without asking and raises a seal for a path
+outside them; a `free` familiar still raises a seal for `rm` outside its workspace and for any
+path matching `.env`; refusing sends a message the familiar visibly reacts to; a seal left
+30 minutes transitions to `bind`. Write an adversarial test: a writ that instructs the
+familiar to ignore the seal system must not be able to bypass it, because enforcement is in
+the Rust layer and the prompt has no say.
+
+### Phase 5 — The floor
+
+All of §8. Tower plan baked to a RenderTexture, waypoint graph, sigil actors wired to real
+familiar state, walking, hover marginalia, click-through, zoom and pan, the live-region mirror,
+the `Floor` / `Roster` toggle.
+
+The aether arc goes in here as a shape driven by whatever budget data exists; it becomes
+meaningful in Phase 6. The stalled and bound states render as specified even though nothing
+produces them yet — drive them from a dev-only state override panel.
+
+**Passes when:** five real familiars appear at the correct stations for their real states;
+summoning one walks it from the door to its desk; a familiar raising a seal walks to the ward
+circle and the circle lights; banishing walks it out the door; the floor holds 60fps with 12
+familiars, 5 working, measured with the Pixi ticker's own FPS readout, not by feel; the ticker
+reports 0 draw calls when the floor tab is hidden; `prefers-reduced-motion` removes all walking
+and rotation; `Tab` reaches every sigil with a visible focus ring; the live region reads the
+floor correctly with VoiceOver on.
+
+No image files were added to the repo in this phase. Verify with `git status`.
+
+### Phase 6 — Aether and the breaker
+
+Three meters. 80% steer. `on_exceed` behaviours. Heartbeat and stall detection. Runaway guard.
+The floor's aether arcs and stalled state now run on real data.
+
+**Passes when:** a commission with `tokens: 2000` trips at 100% and does what `on_exceed` says;
+`banish` leaves no orphaned process; a deliberately stalled agent is surfaced within 10 minutes
+and is not killed silently; the runaway guard fires at 200 tool calls even with `on_exceed: steer`;
+the aether arc on the floor matches the meters in the right pane to within one frame.
+
+### Phase 7 — Standing wards and the menu bar
+
+Scheduler in Rust. Menu-bar residency, window close ≠ quit. Notifications. Skip-if-busy.
+
+**Passes when:** a ward set for two minutes out fires with the window closed; the prompt sent
+is byte-identical to the stored prompt; a ward whose familiar is busy records `skipped: busy`
+and does not queue; quitting with live summonings warns first; reopening the window shows the
+floor already in the right state, with no summon animation replayed for work that started while
+it was closed.
+
+### Phase 8 — The archivist
+
+Roster/queue/ledger read access. Proposals into the seal queue. Hard-coded inability to dispatch.
+
+**Passes when:** the archivist can describe the state of the floor accurately; its proposal
+appears as a seal; sealing it dispatches the commission and refusing it does not; no code path
+exists by which the archivist dispatches directly — prove it with a test that tries.
+
+### Phase 9 — Ship
+
+App icon, drawn in code from the same sigil system, original. `npm run dist`. Install the `.dmg`
+on the real machine and use it for a week without the dev server.
+
+**Passes when:** the packaged app runs from `/Applications` with no dev dependencies;
+`THIRD-PARTY.md` is complete; the floor performs the same in the packaged build as in dev; a
+week of real use is logged in `TASKS.md`, including which parts of the floor you actually looked
+at and which you never once used.
+
+---
+
+## 11. Security
+
+- Bounds and the never-exempt list are enforced in Rust, before the action happens. The
+  prompt is advisory; the Rust layer is the law. Any design where a familiar can talk its way
+  past a bound is a bug, not a config choice.
+- Path checks canonicalise first (resolve `..`, symlinks, `~`) and compare against the allow-list
+  after. Test the symlink escape case explicitly.
+- API keys live in the macOS keychain via `tauri-plugin-stronghold` or the keychain API — never
+  in SQLite, never in a dotfile the app writes, never in a log line, never in an error message.
+  Redact anything matching a key pattern from PTY output before it reaches the transcript.
+- No network calls from the app itself except what the spawned CLIs make. No telemetry, no
+  update check, no crash reporting.
+- Transcripts are local, listed in the workbench, and deletable in one click.
+
+---
+
+## 12. Definition of done, for any feature
+
+- It works when you run it by hand, not just when it compiles.
+- It has a test for the behaviour that would be embarrassing to get wrong.
+- Its failure state says what happened and what to do about it.
+- Its copy follows §3's voice rules and uses the canonical nouns.
+- Its colours pass contrast and its motion respects `prefers-reduced-motion`.
+- It leaves no orphaned process, no unclosed file handle, no unmigrated table.
+- `DECISIONS.md` records anything that diverged from this file, and why.
