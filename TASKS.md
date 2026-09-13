@@ -216,17 +216,87 @@ Legend: `[x]` done and verified · `[~]` done but not verifiable in this environ
 
 ---
 
+## Phase 5 — The floor
+
+- [x] `plan.ts`: the room as data — wall, ward circle, five order desks 72° apart, hearth,
+      reliquary cabinet, ledger lectern, door. `slot()` places the nth familiar at a station.
+- [x] `paths.ts`: waypoint graph, all ninety routes solved once at load
+- [x] `hatching.ts` / `bake.ts`: procedural hatch tile, the room baked into a `RenderTexture`
+- [x] `stage.ts`: one Pixi application, three layers, 60 focused / 20 unfocused / stopped hidden
+- [x] `actors.ts`: the §8.3 state table, walking, ring rotation, ink threads, aether arcs
+- [x] `interaction.ts`: hover, click-through, zoom toward the cursor, pan, `Tab`/`Enter`/`Esc`,
+      `+ - 0`, arrows, the brass focus ring
+- [x] `marginalia.tsx`, `a11y.tsx`, `Floor.tsx`, the Floor/Roster toggle, the dev state override
+
+**Acceptance** — driven by hand in the real binary under `Xvfb`, on WebKitGTK
+
+- [x] **Five real familiars at the stations their real states put them at.** All five dormant at
+      the hearth on a fresh study, each in its order's colour, name plates legible.
+- [x] **Summoning walks one from the door to its desk.** Sconce, summoned from the rail, left
+      the hearth and arrived at the lantern desk.
+- [x] **A familiar raising a seal walks to the ward circle, and the circle lights.** Both — the
+      familiar stands in the middle of the circle and the ring itself goes brass.
+- [x] **`working` draws the thread of ink** from the sigil to its own desk lamp.
+- [x] **`bound` draws the brass chord across the ring**; **`misfired` breaks the ring in oxblood
+      and puts the desk lamp out**; **`stalled` renders**. Driven from the dev-only override
+      panel, which is what §10 asks for while the breaker is still Phase 6.
+- [x] **`Tab` reaches every sigil with a visible brass focus ring**, clockwise from the door.
+- [x] **The marginalia card appears beside the sigil** with the familiar, its order and what it
+      is doing.
+- [x] **A hidden floor renders nothing.** The ticker's own frame counter is on the element, and
+      it stops moving the moment the tab is hidden — measured, not felt.
+- [x] **No image files were added.** `git status` is clean of them; every mark is a `Graphics`
+      call or generated text (§1).
+
+**Three bugs the running binary found that neither test suite could**
+
+- **A 26-unit band drawn clean across the room.** Pixi's `arc()`, like the canvas call it is
+  named after, does not lift the pen — it draws a line from wherever the path is to where the
+  arc starts. Every arc now goes through `arcAt()`. DECISIONS.md 0012. The Playwright suite does
+  not look at pixels and the unit tests check geometry, so nothing but running it would have
+  found this.
+- **Every familiar reported `dormant` for ever.** The roster came straight from the binding, so
+  §7.4's states and the whole of §8.3 were decorative — the floor drew a state table nothing
+  could move. `list_familiars` now overlays the live summoning, the commission and any pending
+  seal. DECISIONS.md 0013.
+- **Summoning a familiar that had never been given a commission failed** with `database: FOREIGN
+  KEY constraint failed`. The roster is read from disk, so a familiar with no commission had no
+  row for `summonings` to reference. Fixed with one `ensure_familiar` used by both paths, and
+  pinned by a test. It is the first thing anyone would do with a fresh study, and §12 asks that
+  a failure say what happened and what to do — this one said neither.
+
+**Caveats, stated rather than ticked over**
+
+- **The 60fps number is not from this container.** The headless runner is software-rendered and
+  the Xvfb session has no GPU at all (`libEGL: DRI3 error` on every launch), so the figure the
+  ticker reports here measures the software rasteriser, not the budget §8.6 sets. What is
+  asserted in the suite is that twelve familiars with five working does not collapse the frame
+  rate, and that a hidden floor renders nothing. The honest 60fps measurement is one for the
+  owner's machine, and it is listed below with the other Mac work.
+- **The intermediate frames of a walk were not caught on camera.** Positions before and after
+  are right, and the pacing — every journey 1.1s, split between legs in proportion to their
+  length, measured once rather than re-measured as it shrinks — has its own test.
+- **`prefers-reduced-motion` was exercised through the media query in Playwright, not in the
+  real binary.** Nothing in this container sets the GTK setting the webview reads.
+- **VoiceOver on the floor is not done** (§10). macOS. The live region it would read is here and
+  its wording is asserted, but the screen reader itself is not.
+
+---
+
 ## Later phases
 
 Phases 4–9 are unstarted. Three things are worth carrying forward, all discovered early:
 
-Phase 4 is done; its report is above. Carried forward from it:
+Phases 4 and 5 are done; their reports are above. Carried forward:
 
 - **A dead hook should withdraw its request.** The socket closing is detectable and currently
   is not acted on, so a killed hook leaves a row in the queue until it times out. Belongs with
   the stall detection in Phase 6, which is already about noticing that nothing is happening.
-- **The rail's status does not follow a summoning.** A summoned familiar still reads "dormant"
-  in the roster. The states in §7.4 and §8.3 are Phase 5's work and this is where they land.
+- **Aether arcs are drawn from whatever budget data exists.** They become meaningful in Phase 6,
+  when the breaker is the thing setting them. The shape, the colour thresholds and the wiring
+  are in and verified; the numbers behind them are not yet a breaker's numbers.
+- **`stalled` and `bound` have no producer yet.** Phase 6. They render, driven from the dev
+  override panel, so the drawing is known good before the thing that causes them exists.
 
 ---
 
@@ -246,6 +316,8 @@ cannot check, and none of it is claimed as done anywhere in this repository.
 | `.dmg`, signing, notarisation | 9 | `tauri build --target aarch64-apple-darwin` on a Mac |
 | VoiceOver on the floor (§8.4) | 5 | VoiceOver |
 | Retina rendering of the floor at 2× | 5 | No Retina display |
+| The floor's real frame rate (§8.6, §10) | 5 | No GPU. `Xvfb` reports `libEGL: DRI3 error` and falls back to software, so any number measured here is the rasteriser's, not the budget's. |
+| `prefers-reduced-motion` in the real binary | 5 | Nothing here sets the GTK setting the webview reads. The media-query path is covered in Playwright. |
 
 Everything else — the PTY, the breaker, the ward arithmetic, path canonicalisation and the
 symlink escape case, binding validation, the whole interface through the mock IPC backend — is

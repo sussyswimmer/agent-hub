@@ -343,3 +343,71 @@ line, rather than presenting a near-empty buffer as though it were the whole sto
 
 The real record of a run is the transcript and the ledger, which is where it belongs. The
 terminal is a window onto a live process, not its history.
+
+---
+
+## 0011 — The floor is baked in world space, not screen space
+
+**Date.** 2026-09-13. **Replaces.** Nothing; this is the first statement of it.
+
+§8.6 asks for the static layer — walls, hatching, furniture, labels — to be drawn once into a
+`RenderTexture` and blitted. The texture covers the room's own 1000 × 1000 world, and the sprite
+holding it lives inside the container that pans and zooms, rather than covering the viewport.
+
+**Why.** A texture the size of the viewport has to be redrawn every time the view moves, which
+is every frame of a pan and every notch of a wheel — precisely the moments the frame budget is
+tightest. Baking in world space means panning and zooming are a transform on one sprite and cost
+nothing at all. The texture is re-made only when the window resizes, where a larger viewport
+wants more texels, and when the zoom crosses 0.9×, where the station labels come and go.
+
+**Consequence.** The texture is `1000 × 1000 × resolution`, where resolution is how many device
+pixels a world unit is about to occupy, capped at 3. At a 1600-pixel-tall window that is a
+4.8k-square texture — about 90 MB — which is the cost of the decision and is paid once.
+
+---
+
+## 0012 — Pixi's `arc()` does not lift the pen
+
+**Date.** 2026-09-13. **Replaces.** Every direct `arc()` call in `floor/`.
+
+All arcs go through `bake.ts`'s `arcAt()`, which issues a `moveTo` to the arc's first point
+before the arc itself.
+
+**Why.** `arc()` mirrors the canvas call it is named after, including the part nobody remembers:
+it draws a line from wherever the path currently is to where the arc begins. An arc issued after
+any other drawing therefore arrives with a chord attached.
+
+**Evidence.** The baked floor drew a 26-unit-wide band clean across the room, from the end of
+the lectern's book line to the start of the hearth's recess, because those two calls are
+consecutive and the hearth is a thick stroke. The wall's hairlines picked up smaller ones at the
+door, and the keyboard focus ring — four brass arcs — came out as a brass cat's cradle.
+
+**Consequence.** None of this was visible in the Playwright suite, which does not look at
+pixels, and none of it was visible in the unit tests, which check geometry rather than drawing.
+It was visible the instant the real binary was run and looked at, which is the second time that
+rule has paid for itself (see 0006).
+
+---
+
+## 0013 — The roster answers with what a familiar is doing, not only with what it is
+
+**Date.** 2026-09-13. **Replaces.** `list_familiars` returning the binding's row verbatim.
+
+`list_familiars` overlays three live sources onto each row: whether the familiar has a process,
+what its current commission's status is, and whether anything of its is waiting on a seal.
+
+**Why.** A binding is a file and says who a familiar is. It cannot say what it is doing, and the
+row was reporting `dormant` for every familiar for ever. That made §7.4's six sigil states and
+the whole of §8.3's floor decorative — the room drew a state table that nothing in the
+application could move. Found by summoning a familiar in the running binary and watching it sit
+at the hearth.
+
+**A seal outranks everything else.** §8.4 makes "is anything waiting on me?" the one question the
+floor has to answer at a glance, so a familiar with a pending request reads as `awaiting-seal`
+whatever else is true of it.
+
+**Why it is polled.** Most of these transitions are invisible to the filesystem: a summoning
+starting, an engine taking a turn, a commission ending. There is no event to subscribe to for
+"the engine is working now", so the window asks every 2.5 seconds and stores the answer only
+when it differs. A seal being raised or answered also refreshes it immediately, because that one
+does have an event.

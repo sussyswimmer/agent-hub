@@ -16,12 +16,21 @@ code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
 ## State
 
-Phase 4 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
+Phase 5 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
 appears, edit it and the change arrives without a restart, break it and it says what is wrong
 rather than vanishing. Give one a commission and it queues; summon it and the oldest starts,
 running a real agent CLI in a pseudo-terminal with the binding's writ as its briefing. What it
 costs is recorded, and what it stopped halfway through is still there, correctly marked, after a
 restart. Five bindings ship and are placed on first run.
+
+**The floor is what it opens on.** A plan of the tower, inked on vellum, drawn top-down with
+every familiar on it at once: dormant ones resting at the hearth, working ones at their own
+order's desk with a thread of ink running to the lamp, and anything waiting on you standing in
+the ward circle with the circle lit brass around it. Summoning walks a familiar in through the
+door; banishing walks it out. Hover a mark for what it is doing and what it has spent, click it
+to open its workspace with the floor still in sight above. Every mark on it is drawn in code —
+there is not one image file in this repository — and there is a Roster toggle for when you would
+rather have the list.
 
 **The seal is real.** A familiar stops before every tool call and, when its binding does not
 already allow what it is about to do, waits on your answer — genuinely waits, blocked on a local
