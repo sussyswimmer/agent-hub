@@ -34,3 +34,13 @@ export const aether = z.object({
   seconds: z.number(),
   seconds_max: z.number().nullable(),
 });
+
+export const pid = z.number().int().positive();
+export const rung = z.enum(["already", "interrupt", "terminate", "kill"]);
+export const summoningIds = z.array(z.string());
+
+/** Mirrors `Emission` in src-tauri/src/summonings.rs. */
+export const emission = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("output"), bytes: z.array(z.number().int().min(0).max(255)) }),
+  z.object({ kind: z.literal("ended"), code: z.number().int().nullable() }),
+]);

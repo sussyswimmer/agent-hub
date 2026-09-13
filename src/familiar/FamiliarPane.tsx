@@ -3,17 +3,17 @@ import { useStore } from "@/store";
 import type { FamiliarSummary, Tab } from "@/lib/types";
 
 import { AetherBar } from "./AetherBar";
+import { Terminal } from "./Terminal";
 
 const TABS: Tab[] = ["commission", "terminal", "outputs", "codex"];
 
-const COMING: Record<Tab, string> = {
+const COMING: Record<Exclude<Tab, "terminal">, string> = {
   commission: "Commissions arrive in Phase 3. The intake form that starts them arrives in Phase 2.",
-  terminal: "The live terminal arrives in Phase 1.",
   outputs: "Outputs arrive in Phase 3.",
   codex: "The codex arrives in Phase 3.",
 };
 
-function Header({ familiar }: { familiar: FamiliarSummary }) {
+function Header({ familiar, onSummon }: { familiar: FamiliarSummary; onSummon: () => void }) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 px-4" data-testid="pane-header">
       <Sigil name={familiar.name} order={familiar.order} state={familiar.state} size={26} />
@@ -31,6 +31,7 @@ function Header({ familiar }: { familiar: FamiliarSummary }) {
       <div className="ml-auto">
         <button
           type="button"
+          onClick={onSummon}
           disabled={familiar.cannot_summon !== null || familiar.error !== null}
           title={familiar.cannot_summon ?? familiar.error ?? undefined}
           data-testid="summon"
@@ -47,7 +48,7 @@ export function FamiliarPane({ familiar }: { familiar: FamiliarSummary }) {
   const { tab, setTab, aether } = useStore();
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-void">
-      <Header familiar={familiar} />
+      <Header familiar={familiar} onSummon={() => setTab("terminal")} />
       <Rule />
       <div role="tablist" aria-label="Familiar" className="flex shrink-0 items-center gap-1 px-4 py-2">
         {TABS.map((t, i) => (
@@ -68,11 +69,20 @@ export function FamiliarPane({ familiar }: { familiar: FamiliarSummary }) {
           </span>
         ))}
       </div>
-      <section role="tabpanel" aria-label={tab} className="min-h-0 flex-1 overflow-y-auto rule-scroll px-4 py-3" data-testid="tabpanel">
+      <section
+        role="tabpanel"
+        aria-label={tab}
+        className={`flex min-h-0 flex-1 flex-col px-4 py-3 ${tab === "terminal" ? "" : "overflow-y-auto rule-scroll"}`}
+        data-testid="tabpanel"
+      >
         {familiar.error ? (
           <p className="measure text-base text-oxblood-text">{familiar.error}</p>
+        ) : tab === "terminal" ? (
+          // Keyed on the familiar so switching in the rail builds a fresh terminal rather than
+          // showing one familiar's scrollback under another's name.
+          <Terminal key={familiar.id} familiar={familiar} />
         ) : (
-          <p className="measure text-base text-bone-dim">{COMING[tab]}</p>
+          <p className="measure text-base text-bone-dim">{COMING[tab as Exclude<Tab, "terminal">]}</p>
         )}
       </section>
       <AetherBar aether={aether} />

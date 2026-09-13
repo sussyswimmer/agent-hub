@@ -40,7 +40,10 @@ export const useStore = create<State>((set, get) => ({
   },
 
   select: (id) => {
-    set({ selected: id, tab: "commission", aether: null });
+    // The tab deliberately survives the switch. The app is for watching a bench of familiars
+    // at once, so flicking between two terminals is the common move; being thrown back to
+    // the commission tab every time would fight it.
+    set({ selected: id, aether: null });
     void backend()
       .then((be) => be.aetherFor(id))
       .then((a) => {

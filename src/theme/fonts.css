@@ -1,14 +1,11 @@
 /* Self-hosted, no CDN (§7.3). Vendored by `bun run fonts`.
-   Junicode ships its webfonts only in GitHub release archives; where it could not be fetched
-   the display stack falls through to EB Garamond. See DECISIONS.md 0003. */
 
-@font-face {
-  font-family: "Junicode";
-  src: url("./fonts/junicode-400-normal.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
+   There is deliberately no @font-face for Junicode. It ships its webfonts only inside GitHub
+   release archives and could not be fetched here, and a rule pointing at a file that is not
+   there costs a 404 and a font-decode error on every single page load. The display stack in
+   tokens.css still names "Junicode" first, so it falls through to EB Garamond cleanly now and
+   picks Junicode up the moment `bun run fonts` can place the file and this rule returns.
+   See DECISIONS.md 0003. */
 
 @font-face {
   font-family: "EB Garamond";

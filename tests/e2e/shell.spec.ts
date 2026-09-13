@@ -152,5 +152,9 @@ test("tabs switch and say which phase they arrive in rather than showing an empt
   await page.goto("/");
   await page.locator('[data-tab="terminal"]').click();
   await expect(page.locator('[data-tab="terminal"]')).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("tabpanel")).toContainText("Phase 1");
+  // Terminal is real from Phase 1 on, so this tab shows one rather than a note about a phase.
+  await expect(page.getByTestId("xterm-host")).toBeVisible();
+
+  await page.locator('[data-tab="codex"]').click();
+  await expect(page.getByTestId("tabpanel")).toContainText("Phase 3");
 });
