@@ -3,7 +3,9 @@
 use grimoire_core::binding::schema::IntakeField;
 use grimoire_core::commission::Commission;
 use grimoire_core::ledger::{Event, LedgerSummary};
+use grimoire_core::commission::Status as CommissionStatus;
 use grimoire_core::seal::{Resolution, Seal as GrimoireSeal};
+use grimoire_core::types::SigilState;
 use grimoire_core::types::FamiliarSummary;
 use tauri::State;
 use tauri::ipc::Channel;
@@ -33,9 +35,59 @@ pub fn home_info(state: State<'_, AppState>) -> R<HomeInfo> {
 
 /// The rail's rows, read from `~/.grimoire/bindings`. A binding that failed to validate is in
 /// here too, carrying its error (§4).
+///
+/// The binding says who a familiar *is*; it cannot say what it is doing. That comes from three
+/// live sources — whether it has a process, what its commission is up to, and whether anything
+/// of its is waiting on a seal — and it is overlaid here.
+///
+/// Until this existed every familiar reported `dormant` for ever, which made §7.4's six sigil
+/// states and the whole of §8.3's floor decorative: the room drew a state table nothing in the
+/// application could ever move. Found by summoning a familiar in the running binary and
+/// watching it stay at the hearth.
 #[tauri::command]
 pub fn list_familiars(state: State<'_, AppState>) -> R<Vec<FamiliarSummary>> {
-    Ok(state.roster.rows())
+    let mut rows = state.roster.rows();
+    let live: std::collections::HashSet<String> = state.summonings.live_ids().into_iter().collect();
+    let waiting = grimoire_core::seal::pending(&state.db).unwrap_or_default();
+
+    for row in &mut rows {
+        // A binding that will not parse is already `misfired` and says why. Nothing about a
+        // process changes that: there is no familiar here to be doing anything.
+        if row.error.is_some() {
+            continue;
+        }
+
+        let commission = grimoire_core::commission::for_familiar(&state.db, &row.id)
+            .ok()
+            .and_then(|rows| rows.into_iter().find(|c| c.status.is_live() || c.ended.is_some()));
+
+        let summoned = live.contains(&row.id);
+        let asking = waiting.iter().any(|s| s.familiar_id == row.id);
+
+        (row.state, row.status) = match (&commission, summoned, asking) {
+            // Anything waiting on you outranks everything else, because §8.4 makes it the one
+            // question the floor has to answer at a glance.
+            (_, _, true) => (SigilState::AwaitingSeal, "waiting on your seal".into()),
+            (Some(c), true, _) if c.status == CommissionStatus::Running => {
+                (SigilState::Working, "working".into())
+            }
+            (Some(c), true, _) if c.status == CommissionStatus::AwaitingSeal => {
+                (SigilState::AwaitingSeal, "waiting on your seal".into())
+            }
+            (_, true, _) => (SigilState::Idle, "summoned, idle".into()),
+            // Not summoned. How the last commission ended is the most recent true thing known
+            // about it, and §8.3 draws both of these at its desk rather than at the hearth.
+            (Some(c), false, _) if c.status == CommissionStatus::Misfired => (
+                SigilState::Misfired,
+                c.note.clone().unwrap_or_else(|| "the last commission misfired".into()),
+            ),
+            (Some(c), false, _) if c.status == CommissionStatus::Banished => {
+                (SigilState::Banished, "banished".into())
+            }
+            _ => (SigilState::Dormant, "dormant".into()),
+        };
+    }
+    Ok(rows)
 }
 
 /// The intake questions for one familiar, as its binding declares them (§6.2).
@@ -46,6 +98,32 @@ pub fn intake_for(state: State<'_, AppState>, id: String) -> R<Vec<IntakeField>>
 }
 
 // ── Summoning ──────────────────────────────────────────────────────────────────────────
+
+/// Make sure the familiar has a row before anything points at it.
+///
+/// `summonings` and `commissions` both carry a foreign key to `familiars`, and the roster is
+/// read from disk rather than from the database — so a familiar that has never been given a
+/// commission has no row, and summoning it failed with `FOREIGN KEY constraint failed`. That is
+/// a true statement about SQLite and tells the owner nothing about their study (§12: a failure
+/// says what happened and what to do). Found by summoning a freshly seeded Sconce in the
+/// running application, which is the ordinary first thing anyone would do.
+fn ensure_familiar(state: &State<'_, AppState>, binding: &grimoire_core::binding::Binding) -> R<()> {
+    let front = binding.front.as_ref().ok_or_else(|| {
+        format!(
+            "{}'s binding does not load, so it cannot be given work. Fix the binding first.",
+            binding.id
+        )
+    })?;
+    grimoire_core::db::familiars::upsert(
+        &state.db,
+        &binding.id,
+        &front.name,
+        serde_json::to_string(&front.order).unwrap_or_default().trim_matches('"'),
+        &binding.path.display().to_string(),
+        &binding.writ,
+    )
+    .map_err(|e| e.to_string())
+}
 
 /// Start a familiar in a pty. `channel` is the pipe its output arrives on.
 #[tauri::command]
@@ -63,6 +141,7 @@ pub fn summon(state: State<'_, AppState>, req: SummonArgs, channel: Channel<Emis
     // holding it: it comes from the binding on disk, and the shortest path from that file to
     // the engine is the one least able to alter it on the way.
     let binding = state.roster.get(&req.id).ok_or_else(|| format!("There is no familiar called {}.", req.id))?;
+    ensure_familiar(&state, &binding)?;
     let mut req = req;
     req.args = engine_args(&state, &binding);
     if req.model.is_none() {
@@ -151,20 +230,7 @@ pub fn commission_create(
     intake: serde_json::Value,
 ) -> R<Commission> {
     let binding = state.roster.get(&id).ok_or_else(|| format!("There is no familiar called {id}."))?;
-    let front = binding.front.as_ref().ok_or_else(|| {
-        format!("{id}'s binding does not load, so it cannot be given work. Fix the binding first.")
-    })?;
-
-    // The familiar has to exist in the database before anything can reference it.
-    grimoire_core::db::familiars::upsert(
-        &state.db,
-        &binding.id,
-        &front.name,
-        serde_json::to_string(&front.order).unwrap_or_default().trim_matches('"'),
-        &binding.path.display().to_string(),
-        &binding.writ,
-    )
-    .map_err(|e| e.to_string())?;
+    ensure_familiar(&state, &binding)?;
 
     // §4's one substitution, and the only one.
     let answers: std::collections::BTreeMap<String, String> = intake

@@ -67,6 +67,24 @@ mod tests {
     }
 
     #[test]
+    fn a_summoning_needs_its_familiar_to_exist_first() {
+        // The shape of a bug found by running the application: the roster is read from disk, so
+        // a familiar that has never been given a commission had no row here, and summoning it
+        // came back as `FOREIGN KEY constraint failed`. The constraint is right and doing its
+        // job; the caller was wrong to reach this without upserting first, and the message the
+        // owner saw said nothing about their study.
+        //
+        // `commands::ensure_familiar` is the caller-side fix. This pins the reason it is needed,
+        // so nobody removes it as ceremony.
+        let db = Db::memory().expect("db");
+        let refused = open(&db, "never-seen", "claude", "sonnet", "/tmp", "none", 1);
+        assert!(refused.is_err(), "a summoning must not attach to a familiar that is not there");
+
+        familiars::upsert(&db, "never-seen", "Ferrule", "quill", "/b/f.binding.md", "writ").expect("familiar");
+        open(&db, "never-seen", "claude", "sonnet", "/tmp", "none", 1).expect("opens once the familiar is known");
+    }
+
+    #[test]
     fn a_summoning_opens_live_and_closes_once() {
         let db = db_with_familiar();
         let s = open(&db, "v", "claude", "sonnet", "/tmp", "none", 4242).expect("open");
