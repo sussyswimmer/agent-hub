@@ -295,3 +295,51 @@ a zero that looks like a measurement is not.
 The cost built from those tokens is an estimate at list prices and never becomes anything else.
 It exists to answer "was that run expensive?", not "what do I owe?" — the owner is on a
 subscription, where no money changes hands per token at all.
+
+---
+
+## 0009 — A summoning's rules are fixed when it starts, not read per tool call
+
+**Date.** 2026-09-13. **Replaces.** Nothing; this is the first statement of it.
+
+A familiar's autonomy and bounds are copied into the seal's session table at summon time and
+read from there for every tool call, rather than re-read from the binding each time.
+
+Found by trying to test it the other way round: Tally's binding was edited from `propose` to
+`free` while it was running, the watcher hot-reloaded the file, and the running summoning went
+on asking for a seal on everything. That is the right answer, and it is worth saying why rather
+than treating it as a rough edge.
+
+A binding is a file. Files are edited by whatever can write to them — the owner, an editor, a
+script, and in a harness like this one, conceivably a familiar with write access to the bindings
+folder. If the leash were re-read per call, widening it would be a matter of writing one line to
+one file mid-run. Fixing it at summon time means a change of rules takes a banish and a fresh
+summon: a deliberate act, with the old process gone.
+
+**Consequence.** Editing a binding does not affect a familiar already summoned. The roster picks
+the change up immediately, as §4 requires, and the next summoning uses it.
+
+---
+
+## 0010 — Output goes to a slot the backend can swap, not to the channel that asked
+
+**Date.** 2026-09-13. **Replaces.** The channel captured at spawn in `summonings.rs`.
+
+A summoning's output is written to `Arc<Mutex<Option<Channel>>>` and a terminal attaches to that
+slot, rather than the spawn closure owning the one channel it was handed.
+
+**Why.** A summoning outlives the pane showing it. React unmounts the terminal whenever another
+familiar is selected, so the channel captured at spawn belongs to something that no longer
+exists, and the pane that comes back starts from nothing and assumes dormant. The result was a
+familiar that could be neither banished nor re-summoned: the button offered to summon it, the
+backend refused because it was already summoned, and the engine ran on with no way to reach it.
+Found by clicking away from a live Tally and back, with the real `claude` still on the process
+table — no test had a reason to leave and return.
+
+**Nothing is buffered while nobody is attached.** A pty is a stream, not a log. Holding every
+byte for a pane that may never be reopened would mean an unbounded buffer per familiar, for
+output nobody asked to keep. So a re-attached terminal starts empty and says so, in one dim
+line, rather than presenting a near-empty buffer as though it were the whole story.
+
+The real record of a run is the transcript and the ledger, which is where it belongs. The
+terminal is a window onto a live process, not its history.

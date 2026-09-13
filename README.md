@@ -16,16 +16,20 @@ code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
 ## State
 
-Phase 3 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
+Phase 4 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
 appears, edit it and the change arrives without a restart, break it and it says what is wrong
 rather than vanishing. Give one a commission and it queues; summon it and the oldest starts,
 running a real agent CLI in a pseudo-terminal with the binding's writ as its briefing. What it
 costs is recorded, and what it stopped halfway through is still there, correctly marked, after a
 restart. Five bindings ship and are placed on first run.
 
-**The seal does not yet exist.** A familiar's `bounds` are advisory until Phase 4 puts
-enforcement in Rust, so nothing currently stops a summoned familiar doing anything its engine
-will do.
+**The seal is real.** A familiar stops before every tool call and, when its binding does not
+already allow what it is about to do, waits on your answer — genuinely waits, blocked on a local
+socket, not asked nicely in a prompt. Deleting outside the workspace, force-pushing, and touching
+anything with `.env`, `.ssh`, `credentials` or `.git/config` in its path always ask, at every
+autonomy level, because that list is in code and `free` does not reach it. Enforcement is in
+Rust: a writ instructing a familiar to ignore the seal has been tried against a live engine and
+gets nowhere.
 
 `TASKS.md` has the detail, including the two Phase 1 criteria this development container cannot
 check and why.

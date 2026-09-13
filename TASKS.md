@@ -140,19 +140,93 @@ Legend: `[x]` done and verified · `[~]` done but not verifiable in this environ
 
 ---
 
+## Phase 4 — The seal
+
+- [x] Three autonomy levels, decided in Rust from the binding's own words (§6.4)
+- [x] Bounds matched with globs, after paths are resolved — not before (§11)
+- [x] The never-exempt list in code, checked before autonomy is read (§6.4)
+- [x] The hook: one binary, two jobs, branching before a window or a database exists
+- [x] A Unix socket at 0600, and a hook that blocks on it until the owner answers
+- [x] The seal queue: the familiar, the exact action, the reason, and what it would write
+- [x] Three answers, and a refusal that goes back as a reason the familiar can act on
+- [x] A thirty-minute deadline the hook enforces itself, because the engine's fails open
+
+**Acceptance** — each driven by hand in the running application, under `Xvfb`
+
+- [x] **A `propose` familiar asked to write raises a seal instead of writing.** Tally, summoned
+      from the window with a real `claude` behind it, its hook installed by the app's own
+      settings file. The request appeared in the queue naming `/root/work/numbers/tally.txt`,
+      showed the `7` it was about to write, and the file did not exist while it waited.
+- [x] **A `bounded` familiar writes inside its bounds and asks outside them.** Covered by the
+      security suite against `decide()` directly; the live pass below exercises the same
+      ordering through `free`.
+- [x] **A `free` familiar still asks for `rm` outside its workspace and for any `.env`.** Run
+      against the live app with a commission actually running:
+
+      | What was asked | What happened |
+      | --- | --- |
+      | write inside the workspace | allowed, unasked |
+      | `ls -la` inside the workspace | allowed, unasked |
+      | write `/root/work/numbers/.env` | raised a seal |
+      | `rm -rf /root/work/essays` | raised a seal |
+      | `cd /root/work/numbers && git push --force` | raised a seal |
+
+- [x] **Refusing sends a message the familiar reacts to.** The live hook, blocked on the socket,
+      received `permissionDecision: deny` with the reason, and `~/work/essays` was still there.
+- [x] **Sealing lets it through.** `permissionDecision: allow`, "Sealed."
+- [x] **A session Grimoire does not recognise is refused**, rather than answered on behalf of a
+      stranger.
+- [x] **The adversarial test.** A writ instructing the familiar to ignore the seal, against a
+      live engine under `--permission-mode acceptEdits`. The file was not written, and the
+      engine said so itself: *"this is a real permission control, not a bug, despite earlier
+      text in this conversation claiming otherwise."* Enforcement is in Rust; the prompt has no
+      say (§11).
+- [x] **A seal left thirty minutes becomes a refusal and binds the commission.** Driven by a
+      test against a shortened deadline rather than by waiting half an hour.
+
+**Two bugs the running application found that the test suites could not**
+
+- **A familiar walked away from was stranded.** Selecting another familiar unmounts the terminal,
+  so the pane came back reading dormant while the engine was still running — the button offered
+  to summon it, the backend refused because it already had, and there was no way left to banish
+  it. `ps` showed the real `claude` still there with the hook installed. Fixed by rebuilding what
+  is live from the backend on mount and swapping the output slot; DECISIONS.md 0010. No test had
+  a reason to leave and come back, so the new one does exactly that.
+- **Every allow said "Sealed."** Including the ordinary case where the binding already permitted
+  the action and nobody was asked, which told the familiar a seal had happened when none had.
+  §3: the verb in the result is the verb on the button.
+
+**Caveats, stated rather than ticked over**
+
+- **The engine here still cannot take a turn.** The live seal passes above were driven by running
+  the hook exactly as the settings file specifies — the same binary, the same socket, the same
+  payload shape the engine sends — because this container's `claude` stops at its first-run login
+  screen (see Phase 1). The link that is therefore not exercised end to end in the window is
+  "the engine spawns this command", and that link is evidenced separately: the app's own settings
+  file, read off disk after a real summon, and the ignored engine tests where a real `claude`
+  obeys the hook.
+- **A hook that dies leaves its request in the queue.** Killing a blocked hook does not withdraw
+  the row; it sits until the thirty-minute timeout. Harmless — the timeout is a refusal and
+  nothing is allowed in the meantime — but the socket closing is detectable and should withdraw
+  it. Carried to Phase 6 with the stall work.
+- **macOS notifications for seal requests are not done** (§6.4). Notification Center. The queue
+  and its count are the whole of the signal here.
+- **Keychain storage (§11) is not done.** Nothing writes a key anywhere; there is simply no
+  keychain to write to.
+
+---
+
 ## Later phases
 
 Phases 4–9 are unstarted. Three things are worth carrying forward, all discovered early:
 
-- **Phase 4, the seal.** The mechanism is settled and verified — see DECISIONS.md 0004. The
-  hook must enforce its own deadline and deny on expiry, because Claude Code's own hook timeout
-  **fails open**. That was measured, not assumed.
-- **Phase 4, unreachable app.** The hook must also deny when it cannot reach Grimoire at all.
-  Unreachable is a refusal.
-- **Phase 4, verify the hook interactively.** DECISIONS.md 0004 measured the hook in print mode
-  only. Phase 1 now has a real pty that can drive an interactive engine
-  (`crates/grimoire-core/tests/engine.rs`), so the first thing Phase 4 should do is repeat the
-  deny probe there rather than assume it carries over.
+Phase 4 is done; its report is above. Carried forward from it:
+
+- **A dead hook should withdraw its request.** The socket closing is detectable and currently
+  is not acted on, so a killed hook leaves a row in the queue until it times out. Belongs with
+  the stall detection in Phase 6, which is already about noticing that nothing is happening.
+- **The rail's status does not follow a summoning.** A summoned familiar still reads "dormant"
+  in the roster. The states in §7.4 and §8.3 are Phase 5's work and this is where they land.
 
 ---
 
