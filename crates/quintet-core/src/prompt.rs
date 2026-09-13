@@ -94,17 +94,18 @@ pub fn format_saigon(t: chrono::DateTime<chrono::Utc>) -> String {
 
 /// Render intake answers as simple YAML (`key: value` per line; lists inline).
 pub fn intake_to_yaml(intake: &serde_json::Map<String, serde_json::Value>) -> String {
-    let mut lines = Vec::new();
-    for (k, v) in intake {
-        let rendered = match v {
-            serde_json::Value::String(s) => yaml_scalar(s),
-            serde_json::Value::Array(a) => format!("[{}]", a.iter().map(|x| match x { serde_json::Value::String(s) => yaml_scalar(s), o => o.to_string() }).collect::<Vec<_>>().join(", ")),
-            serde_json::Value::Null => "null".to_string(),
-            o => o.to_string(),
-        };
-        lines.push(format!("{k}: {rendered}"));
-    }
-    lines.join("\n")
+    intake.iter().map(|(k, v)| yaml_entry(k, v)).collect::<Vec<_>>().join("\n")
+}
+
+/// One `key: value` YAML line.
+pub fn yaml_entry(k: &str, v: &serde_json::Value) -> String {
+    let rendered = match v {
+        serde_json::Value::String(s) => yaml_scalar(s),
+        serde_json::Value::Array(a) => format!("[{}]", a.iter().map(|x| match x { serde_json::Value::String(s) => yaml_scalar(s), o => o.to_string() }).collect::<Vec<_>>().join(", ")),
+        serde_json::Value::Null => "null".to_string(),
+        o => o.to_string(),
+    };
+    format!("{k}: {rendered}")
 }
 
 fn yaml_scalar(s: &str) -> String {

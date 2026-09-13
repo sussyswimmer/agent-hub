@@ -6,6 +6,7 @@ import { useStore } from "@/app/store";
 import { IntegrityPill } from "@/features/workspace/IntegrityPill";
 import type { RunRow, RunStatus } from "@/lib/types";
 
+import { QuestionForm } from "./QuestionForm";
 import { ResultCard } from "./ResultCard";
 import { ToolStepRow } from "./ToolStepRow";
 
@@ -56,6 +57,7 @@ export function RunCard({ run, defaultOpen }: { run: RunRow; defaultOpen?: boole
         {live && <Button variant="ghost" className="h-6 px-2 text-xs" onClick={() => void cancel()}>Cancel</Button>}
       </div>
       <div className="mt-2"><ResultCard run={run} /></div>
+      {run.status === "waiting_user" && <div className="mt-2"><QuestionForm runId={run.id} /></div>}
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mt-2 flex items-center gap-1 text-xs text-secondary hover:text-label" data-testid="steps-toggle">
         <ChevronRight size={12} className={`transition-transform duration-150 ${open ? "rotate-90" : ""}`} />
         {steps.length} step{steps.length === 1 ? "" : "s"}

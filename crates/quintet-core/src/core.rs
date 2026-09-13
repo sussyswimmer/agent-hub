@@ -10,7 +10,7 @@ use crate::registry::Registry;
 use crate::runs::recovery::{recover_on_launch, Recovered};
 use crate::runs::{RunConfig, RunManager, RunSink};
 use crate::seed::{seed, SeedReport, SeedSource};
-use crate::types::{AgentRunState, AgentSummary, IntakeForm, PathsInfo, ResolvedIntake, RunRow, RunStatus, StartRunArgs, TaskArgs};
+use crate::types::{AgentRunState, AgentSummary, IntakeForm, PathsInfo, Question, ResolvedIntake, RunRow, RunStatus, StartRunArgs, TaskArgs};
 
 pub struct Core {
     pub paths: QuintetPaths,
@@ -68,6 +68,42 @@ impl Core {
     pub fn start_task(&self, args: TaskArgs) -> Result<RunRow> {
         let resolved = self.resolve_intake(&args.agent_id, &args.task_text, &args.answers)?;
         self.runs.start(StartRunArgs { agent_id: args.agent_id, task_text: args.task_text, intake: resolved.intake, integrity_level: resolved.integrity_level, trigger: args.trigger })
+    }
+
+    pub fn list_questions(&self, run_id: Option<&str>, status: Option<&str>) -> Result<Vec<Question>> {
+        db::questions::list(&self.db, run_id, status)
+    }
+
+    /// Store Maxwell's answers; when no pending questions remain for the run, resume it with the
+    /// answers rendered as YAML (CLAUDE.md §6.3).
+    pub fn answer_questions(&self, question_id: &str, answers: &serde_json::Map<String, serde_json::Value>) -> Result<RunRow> {
+        let q = db::questions::list(&self.db, None, None)?.into_iter().find(|q| q.id == question_id).ok_or_else(|| crate::CoreError::other(format!("question {question_id} not found")))?;
+        if q.status != "pending" {
+            return Err(crate::CoreError::InvalidState(format!("question {question_id} is {}", q.status)));
+        }
+        for item in &q.questions {
+            if !answers.contains_key(&item.id) {
+                return Err(crate::CoreError::InvalidState(format!("missing answer for `{}`", item.id)));
+            }
+        }
+        db::questions::answer(&self.db, question_id, &serde_json::to_string(answers)?)?;
+        if db::questions::pending_count(&self.db, &q.run_id)? > 0 {
+            return db::runs::get(&self.db, &q.run_id)?.ok_or_else(|| crate::CoreError::RunNotFound(q.run_id.clone()));
+        }
+        // Every answered batch for this run goes into the resume turn, most recent last.
+        let answered = db::questions::list(&self.db, Some(&q.run_id), Some("answered"))?;
+        let mut turn = String::from("# Answers to your questions\n\n");
+        for batch in answered {
+            if let Some(serde_json::Value::Object(map)) = batch.answers {
+                for item in &batch.questions {
+                    if let Some(v) = map.get(&item.id) {
+                        turn.push_str(&crate::prompt::yaml_entry(&item.id, v));
+                        turn.push('\n');
+                    }
+                }
+            }
+        }
+        self.runs.resume(&q.run_id, turn)
     }
 
     /// Sidebar summaries with live run state and pending-item badges merged in.

@@ -268,3 +268,37 @@ fn slug_and_title_helpers() {
     assert_eq!(task_title(""), "Untitled task");
     let _ = Path::new("x");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn core_answer_questions_resumes_with_yaml_turn() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let paths = QuintetPaths::at(tmp.path().join("Quintet"));
+    let scratch = tmp.path().join("scratch");
+    std::fs::create_dir_all(&scratch).expect("scratch");
+    let sink = Arc::new(Collect::default());
+    let cfg = RunConfig { claude_bin: fake_claude(), extra_env: vec![
+        ("FAKE_CLAUDE_FIXTURE".into(), fixture("simple_text.jsonl")), ("FAKE_CLAUDE_RESUME_FIXTURE".into(), fixture("resume_turn.jsonl")), ("FAKE_CLAUDE_DELAY_MS".into(), "80".into()),
+        ("FAKE_CLAUDE_STDIN_FILE".into(), scratch.join("stdin.txt").display().to_string()),
+    ], ..RunConfig::default() };
+    let core = Core::init(paths, &SeedSource::from_root(manifest().join("tests/fixtures/defaults")), cfg, sink).expect("init");
+    let run = core.start_task(quintet_core::types::TaskArgs { agent_id: "alpha".into(), task_text: "ask me".into(), answers: Default::default(), trigger: None }).expect("start");
+    let qid = db::questions::insert(&core.db, &run.id, "alpha", &[
+        QuestionItem { id: "style".into(), prompt: "Style?".into(), kind: "single".into(), options: Some(vec!["APA".into(), "Chicago".into()]) },
+        QuestionItem { id: "notes".into(), prompt: "Notes?".into(), kind: "text".into(), options: None },
+    ]).expect("q");
+    core.runs.wait_idle(Duration::from_secs(20)).await;
+    wait_status(&core.db, &run.id, RunStatus::WaitingUser, Duration::from_secs(5)).await;
+    assert_eq!(core.agent_summaries().expect("s").iter().find(|a| a.id == "alpha").expect("alpha").badge, 1, "pending question counts as a badge");
+    // Incomplete answers are rejected; the run stays waiting.
+    let err = core.answer_questions(&qid, &serde_json::from_str(r#"{"style":"APA"}"#).expect("json")).expect_err("missing notes");
+    assert!(err.to_string().contains("missing answer"), "{err}");
+    let r = core.answer_questions(&qid, &serde_json::from_str(r#"{"style":"Chicago","notes":"keep it short: 1 page"}"#).expect("json")).expect("answer");
+    assert_eq!(r.status, RunStatus::Queued);
+    core.runs.wait_idle(Duration::from_secs(20)).await;
+    let done = wait_status(&core.db, &run.id, RunStatus::Done, Duration::from_secs(5)).await;
+    assert!(done.summary.as_deref().unwrap_or("").contains("PELICAN-42"));
+    let stdin = std::fs::read_to_string(scratch.join("stdin.txt")).expect("stdin");
+    assert!(stdin.starts_with("# Answers to your questions\n\nstyle: Chicago\nnotes: \"keep it short: 1 page\"\n"), "{stdin}");
+    assert_eq!(core.list_questions(Some(&run.id), Some("pending")).expect("list").len(), 0);
+    assert!(core.answer_questions(&qid, &Default::default()).is_err(), "already answered");
+}

@@ -114,3 +114,24 @@ test("a quick task in Chat skips the sheet when every required field is inferred
   await expect(card).toContainText("Yale");
   await expect(card.locator('[data-integrity="1"]')).toBeVisible(); // essay_coach default → level 1 (cap 2)
 });
+
+test("a run that asks questions waits, takes answers as chips and text, then resumes to done", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Task").fill("Ask me what you need, then research FSRS");
+  await page.locator('[data-testid="run-button"]').click();
+  const card = page.locator('[data-testid="run-card"]').first();
+  await expect(card).toHaveAttribute("data-status", "waiting_user", { timeout: 10_000 });
+  await expect(page.locator('[data-agent="research"] [data-state="waiting"]')).toBeVisible();
+  await expect(page.locator('[data-agent="research"] [data-badge="1"]')).toBeVisible();
+  const form = card.locator('[data-testid="question-form"]');
+  await expect(form.locator('[data-question]')).toHaveCount(2);
+  await expect(form.locator('[data-testid="answer-submit"]')).toBeDisabled();
+  await form.locator('[data-question="style"] button', { hasText: "Chicago" }).click();
+  await form.locator('[data-question="focus"] textarea').fill("the 2023 benchmark");
+  await form.locator('[data-testid="answer-submit"]').click();
+  await expect(card).toHaveAttribute("data-status", "running", { timeout: 5_000 });
+  await expect(card).toHaveAttribute("data-status", "done", { timeout: 15_000 });
+  await expect(card.locator('[data-testid="result-card"]')).toHaveAttribute("data-outcome", "done");
+  await expect(card).toContainText("12 turns");
+  await expect(page.locator('[data-agent="research"] [data-badge]')).toHaveCount(0);
+});

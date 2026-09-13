@@ -3,7 +3,7 @@
 import type { Backend, Unsubscribe } from "./ipc";
 import replay from "./fixtures/run-research.json";
 import { shouldSkip } from "./skipIf";
-import type { AgentDef, AgentDetail, AgentSummary, IntakeFieldView, IntakeForm, Preflight, RunEventRow, RunRow, RunStatus, StartRunArgs, UiRow } from "./types";
+import type { AgentDef, AgentDetail, AgentSummary, IntakeFieldView, IntakeForm, Preflight, Question, RunEventRow, RunRow, RunStatus, StartRunArgs, UiRow } from "./types";
 
 type Listener<T> = (v: T) => void;
 
@@ -81,6 +81,7 @@ export function createMockBackend(): Backend {
   const agents = structuredClone(AGENTS);
   const runs = new Map<string, RunRow>();
   const rows = new Map<string, UiRow[]>();
+  const questions = new Map<string, Question>();
   const runEvents = new Emitter<{ runId: string; row: UiRow }>();
   const statusEvents = new Emitter<RunRow>();
   const registryEvents = new Emitter<AgentSummary[]>();
@@ -109,15 +110,31 @@ export function createMockBackend(): Backend {
     statusEvents.emit(next);
   };
 
-  const stream = (id: string) => {
-    const seq: UiRow[] = (replay as unknown as UiRow[]).map((r) => ({ ...r, ts: now() }));
-    rows.set(id, []);
+  const stream = (id: string, mode: "full" | "ask" | "resume" = "full") => {
+    const all = (replay as unknown as UiRow[]).map((r) => ({ ...r, ts: now() }));
+    // "ask": run the first steps, then stop with a question. "resume": finish the rest.
+    const seq: UiRow[] = mode === "full" ? all : mode === "ask" ? all.slice(0, 4) : all.slice(4);
+    if (mode !== "resume") rows.set(id, []);
     let i = 0;
     const tick = () => {
       const row = seq[i++];
       if (!row) {
+        const r = runs.get(id)!;
+        if (mode === "ask") {
+          const qrow: UiRow = { seq: 90, kind: "question", label: "Asked 2 questions", detail: null, tool_use_id: "tq", state: "done", ts: now() };
+          rows.get(id)?.push(qrow);
+          runEvents.emit({ runId: id, row: qrow });
+          const q: Question = { id: ulid(), run_id: id, agent_id: r.agent_id, questions: [
+            { id: "style", prompt: "Which citation style?", type: "single", options: ["APA", "Chicago", "MLA"] },
+            { id: "focus", prompt: "Anything to emphasise?", type: "text", options: null },
+          ], answers: null, status: "pending", created_at: now() };
+          questions.set(q.id, q);
+          const a = agents.find((x) => x.id === r.agent_id); if (a) a.badge += 1;
+          setStatus(id, { status: "waiting_user", ended_at: now(), cost_usd: 0.12, turns: 3, pid: null });
+          return;
+        }
         const last = rows.get(id)?.at(-1);
-        setStatus(id, { status: "done", ended_at: now(), cost_usd: 0.412, turns: 9, tokens_in: 31000, tokens_out: 2100, summary: last?.detail ?? null, pid: null });
+        setStatus(id, { status: "done", ended_at: now(), cost_usd: (r.cost_usd ?? 0) + 0.412, turns: (r.turns ?? 0) + 9, tokens_in: 31000, tokens_out: 2100, summary: last?.detail ?? null, pid: null });
         return;
       }
       rows.get(id)?.push(row);
@@ -165,8 +182,21 @@ export function createMockBackend(): Backend {
       };
       runs.set(id, run);
       statusEvents.emit(run);
-      setTimeout(() => { setStatus(id, { status: "running", started_at: now(), pid: 4242 }); stream(id); }, 120);
+      const asks = /\bask me\b/i.test(args.task_text);
+      setTimeout(() => { setStatus(id, { status: "running", started_at: now(), pid: 4242 }); stream(id, asks ? "ask" : "full"); }, 120);
       return run;
+    },
+    listQuestions: async (q = {}) => [...questions.values()].filter((x) => (!q.runId || x.run_id === q.runId) && (!q.status || x.status === q.status)),
+    answerQuestions: async (questionId, answers) => {
+      const q = questions.get(questionId);
+      if (!q) throw new Error(`question ${questionId} not found`);
+      if (q.status !== "pending") throw new Error(`question ${questionId} is ${q.status}`);
+      for (const item of q.questions) if (!(item.id in answers)) throw new Error(`missing answer for \`${item.id}\``);
+      questions.set(questionId, { ...q, status: "answered", answers });
+      const a = agents.find((x) => x.id === q.agent_id); if (a) a.badge = Math.max(0, a.badge - 1);
+      setStatus(q.run_id, { status: "queued", ended_at: null });
+      setTimeout(() => { setStatus(q.run_id, { status: "running", pid: 4243 }); stream(q.run_id, "resume"); }, 120);
+      return runs.get(q.run_id)!;
     },
     cancelRun: async (id) => { setStatus(id, { status: "failed", error: "cancelled by user", ended_at: now(), pid: null }); },
     listRuns: async (q = {}) => [...runs.values()].filter((r) => (!q.agentId || r.agent_id === q.agentId) && (!q.status || r.status === (q.status as RunStatus))).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, q.limit ?? 100),

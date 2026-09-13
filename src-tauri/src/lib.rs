@@ -110,6 +110,8 @@ pub fn run() {
             commands::start_run,
             commands::evaluate_intake,
             commands::start_task,
+            commands::list_questions,
+            commands::answer_questions,
             commands::cancel_run,
             commands::list_runs,
             commands::get_run,

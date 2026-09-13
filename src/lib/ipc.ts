@@ -1,6 +1,6 @@
 // The one boundary between the UI and the backend. Real Tauri when running inside the app,
 // an in-memory mock in a plain browser (Playwright, `vite dev` without Tauri).
-import type { AgentDetail, AgentSummary, IntakeForm, PathsInfo, Preflight, RunEventRow, RunRow, RunStatus, StartRunArgs, TaskArgs, UiRow } from "./types";
+import type { AgentDetail, AgentSummary, IntakeForm, PathsInfo, Preflight, Question, RunEventRow, RunRow, RunStatus, StartRunArgs, TaskArgs, UiRow } from "./types";
 
 export type Unsubscribe = () => void;
 
@@ -14,6 +14,9 @@ export interface Backend {
   /** Resolve intake (defaults, from_chat, integrity cap) and start. */
   startTask(args: TaskArgs): Promise<RunRow>;
   cancelRun(id: string): Promise<void>;
+  listQuestions(q?: { runId?: string; status?: string }): Promise<Question[]>;
+  /** Store answers; the run resumes once no pending questions remain. */
+  answerQuestions(questionId: string, answers: Record<string, unknown>): Promise<RunRow>;
   listRuns(q?: { agentId?: string; status?: RunStatus; limit?: number }): Promise<RunRow[]>;
   getRun(id: string): Promise<RunRow | null>;
   getRunEvents(id: string, afterSeq?: number): Promise<RunEventRow[]>;

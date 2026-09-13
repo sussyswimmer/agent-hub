@@ -108,3 +108,6 @@ export const settingsList = z.array(z.tuple([z.string(), z.string()]));
 
 export const intakeFieldView = z.object({ field: intakeField, skipped: z.boolean(), prefill: z.unknown().nullable(), satisfied: z.boolean() });
 export const intakeForm = z.object({ agent_id: z.string(), fields: z.array(intakeFieldView), can_start: z.boolean(), missing: z.array(z.string()) });
+
+export const questionItem = z.object({ id: z.string(), prompt: z.string(), type: z.string(), options: z.array(z.string()).nullable() });
+export const question = z.object({ id: z.string(), run_id: z.string(), agent_id: z.string(), questions: z.array(questionItem), answers: z.record(z.string(), z.unknown()).nullable(), status: z.string(), created_at: z.string() });

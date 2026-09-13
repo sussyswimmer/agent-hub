@@ -1,7 +1,7 @@
 //! IPC commands. Each is a thin wrapper over quintet-core; errors become strings for the UI.
 
 use quintet_core::db;
-use quintet_core::types::{AgentDetail, AgentSummary, IntakeForm, PathsInfo, Preflight, RunRow, RunStatus, StartRunArgs, TaskArgs, UiRow};
+use quintet_core::types::{AgentDetail, AgentSummary, IntakeForm, PathsInfo, Preflight, Question, RunRow, RunStatus, StartRunArgs, TaskArgs, UiRow};
 use tauri::State;
 
 use crate::AppState;
@@ -40,6 +40,16 @@ pub fn evaluate_intake(state: State<'_, AppState>, agent_id: String, task_text: 
 #[tauri::command]
 pub fn start_task(state: State<'_, AppState>, args: TaskArgs) -> R<RunRow> {
     state.core.start_task(args).map_err(err)
+}
+
+#[tauri::command]
+pub fn list_questions(state: State<'_, AppState>, run_id: Option<String>, status: Option<String>) -> R<Vec<Question>> {
+    state.core.list_questions(run_id.as_deref(), status.as_deref()).map_err(err)
+}
+
+#[tauri::command]
+pub fn answer_questions(state: State<'_, AppState>, question_id: String, answers: serde_json::Map<String, serde_json::Value>) -> R<RunRow> {
+    state.core.answer_questions(&question_id, &answers).map_err(err)
 }
 
 #[tauri::command]
