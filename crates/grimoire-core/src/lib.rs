@@ -13,6 +13,7 @@ pub mod db;
 pub mod error;
 pub mod ledger;
 pub mod paths;
+pub mod seal;
 pub mod security;
 pub mod summon;
 pub mod types;

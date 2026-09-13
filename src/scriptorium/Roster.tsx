@@ -46,7 +46,7 @@ function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary
 }
 
 export function Roster({ seals = 0 }: { seals?: number }) {
-  const { familiars, selected, select, ready, showLedger, setShowLedger } = useStore();
+  const { familiars, selected, select, ready, view, setView } = useStore();
   return (
     <nav style={{ width: "var(--rail)" }}
       className="flex h-full shrink-0 flex-col bg-panel" aria-label="Roster" data-testid="roster">
@@ -57,7 +57,7 @@ export function Roster({ seals = 0 }: { seals?: number }) {
           <RosterRow
             key={f.id}
             familiar={f}
-            selected={!showLedger && f.id === selected}
+            selected={view === "familiar" && f.id === selected}
             onSelect={() => select(f.id)}
           />
         ))}
@@ -73,29 +73,35 @@ export function Roster({ seals = 0 }: { seals?: number }) {
           is the only way in, so it lives here beside the seals. */}
       <button
         type="button"
-        onClick={() => setShowLedger(!showLedger)}
-        aria-pressed={showLedger}
+        onClick={() => setView(view === "ledger" ? "familiar" : "ledger")}
+        aria-pressed={view === "ledger"}
         data-testid="ledger-toggle"
-        style={{ borderLeft: `2px solid ${showLedger ? "var(--brass)" : "transparent"}` }}
+        style={{ borderLeft: `2px solid ${view === "ledger" ? "var(--brass)" : "transparent"}` }}
         className={`w-full py-1.5 pl-2.5 pr-3 text-left text-base transition-colors duration-150 ${
-          showLedger ? "bg-void text-bone" : "text-bone-dim hover:text-bone"
+          view === "ledger" ? "bg-void text-bone" : "text-bone-dim hover:text-bone"
         }`}
       >
         Ledger of ink
       </button>
       <Rule />
-      <div className="px-3 py-2" data-testid="seal-rail">
-        <div className="mb-1 text-xs text-bone-dim">Seals</div>
-        {seals > 0 ? (
-          <button type="button" className="text-base text-brass-text hover:underline" data-seal-count={seals}>
-            {seals} waiting
-          </button>
-        ) : (
-          <span className="text-base text-bone-dim" data-seal-count={0}>
-            none waiting
-          </span>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={() => setView(view === "seals" ? "familiar" : "seals")}
+        aria-pressed={view === "seals"}
+        data-testid="seal-rail"
+        style={{ borderLeft: `2px solid ${view === "seals" ? "var(--brass)" : "transparent"}` }}
+        className={`w-full px-3 py-2 text-left transition-colors duration-150 ${
+          view === "seals" ? "bg-void" : "hover:bg-void/60"
+        }`}
+      >
+        <span className="mb-1 block text-xs text-bone-dim">Seals</span>
+        <span
+          className={`block text-base ${seals > 0 ? "text-brass-text" : "text-bone-dim"}`}
+          data-seal-count={seals}
+        >
+          {seals > 0 ? `${seals} waiting` : "none waiting"}
+        </span>
+      </button>
     </nav>
   );
 }

@@ -17,6 +17,8 @@ pub struct AppState {
     pub db: Db,
     pub roster: Arc<roster::Roster>,
     pub summonings: Arc<Summonings>,
+    /// The seal's socket end, which every hook talks to (§6.4).
+    pub seal: Arc<grimoire_core::seal::server::Server>,
     /// Kept alive for as long as the application is: dropping it stops the watch, and a
     /// `_watcher` that goes out of scope at the end of `setup` is a silent hot-reload failure.
     _watcher: Option<grimoire_core::binding::WatchHandle>,
@@ -79,6 +81,26 @@ pub fn run() {
                 let roster = Arc::new(roster::Roster::default());
                 roster.reload(&bindings_dir);
 
+                // §6.4: the seal listens before any familiar can be summoned. A summoning that
+                // started with no gate behind it would be a familiar acting unwatched.
+                let seal = grimoire_core::seal::server::Server::start(
+                    db.clone(),
+                    summonings.sessions(),
+                    &paths.seal_socket(),
+                )?;
+                // Anything left waiting across a restart is nobody's open question, and §6.4
+                // gives it thirty minutes regardless. Swept now and then every minute.
+                {
+                    // The interface asks again when this fires; the rows themselves stay in one
+                    // place (§6.4's queue is the database, not a copy in the window).
+                    let handle = app.handle().clone();
+                    seal.on_change(std::sync::Arc::new(move || {
+                        let _ = handle.emit("seals-changed", ());
+                    }));
+                }
+                seal.tick();
+                seal.tick_forever(std::time::Duration::from_secs(60));
+
                 // §4: the folder is watched and an edit reaches the rail without a restart.
                 let watcher = {
                     let roster = Arc::clone(&roster);
@@ -95,7 +117,7 @@ pub fn run() {
 
                 tracing::info!(home = %paths.home.display(), "grimoire ready");
                 let _ = DB.set(db.clone());
-                app.manage(AppState { paths, db, roster, summonings, _watcher: watcher });
+                app.manage(AppState { paths, db, roster, summonings, seal, _watcher: watcher });
                 Ok(())
             }
         })
@@ -108,11 +130,14 @@ pub fn run() {
             commands::resize_summoning,
             commands::banish,
             commands::live_summonings,
+            commands::attach_summoning,
             commands::commission_create,
             commands::commissions_for,
             commands::ledger_summary,
             commands::ledger_events,
             commands::codex_for,
+            commands::seals_pending,
+            commands::seal_decide,
         ])
         .build(tauri::generate_context!())
         .expect("Grimoire failed to start");

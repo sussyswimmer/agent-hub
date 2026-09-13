@@ -13,8 +13,10 @@ test("the scriptorium draws the §7.5 layout: 240px rail, roster, pane, seals, a
   await expect(page.getByTestId("pane-header")).toContainText("quill");
   await expect(page.getByTestId("pane-header").locator("[data-workspace]")).toHaveText("~/work/essays");
 
-  // Seals live at the bottom of the rail with a count (§7.5). Astrolabe is awaiting one.
-  await expect(page.getByTestId("seal-rail")).toContainText("1 waiting");
+  // Seals live at the bottom of the rail with a count (§7.5). The count is the real queue from
+  // Phase 4 on, which is empty until a familiar actually stops for one.
+  await expect(page.getByTestId("seal-rail")).toContainText("none waiting");
+  await expect(page.locator("[data-seal-count]")).toHaveAttribute("data-seal-count", "0");
 
   // §3: sentence case, no ALL-CAPS labels anywhere.
   const shouted = await page.evaluate(() =>

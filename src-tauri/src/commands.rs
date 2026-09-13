@@ -3,6 +3,7 @@
 use grimoire_core::binding::schema::IntakeField;
 use grimoire_core::commission::Commission;
 use grimoire_core::ledger::{Event, LedgerSummary};
+use grimoire_core::seal::{Resolution, Seal as GrimoireSeal};
 use grimoire_core::types::FamiliarSummary;
 use tauri::State;
 use tauri::ipc::Channel;
@@ -78,7 +79,44 @@ pub fn summon(state: State<'_, AppState>, req: SummonArgs, channel: Channel<Emis
             cwd.display()
         ));
     }
-    state.summonings.summon(&state.db, req, workbench_binary(&state), cwd, channel)
+    let front = binding.front.as_ref();
+    let seal = crate::summonings::Seal {
+        familiar_name: front.map(|f| f.name.clone()).unwrap_or_else(|| req.id.clone()),
+        autonomy: front.map(|f| f.autonomy).unwrap_or_default(),
+        bounds: front.map(|f| f.bounds.clone()).unwrap_or_default(),
+        socket: state.paths.seal_socket(),
+        settings_dir: state.paths.summon_dir(),
+    };
+
+    state.summonings.summon(&state.db, req, workbench_binary(&state), cwd, &seal, channel)
+}
+
+/// Re-attach a terminal to a summoning that is already running.
+///
+/// Answers whether there was one. The window rebuilds its picture of what is live from here on
+/// every mount rather than trusting what it last remembered, because a pane that has been
+/// unmounted remembers nothing.
+#[tauri::command]
+pub fn attach_summoning(state: State<'_, AppState>, id: String, channel: Channel<Emission>) -> R<bool> {
+    state.summonings.attach(&id, channel)
+}
+
+// ── The seal (§6.4) ────────────────────────────────────────────────────────────────────
+
+/// Everything waiting on the owner, oldest first.
+#[tauri::command]
+pub fn seals_pending(state: State<'_, AppState>) -> R<Vec<GrimoireSeal>> {
+    grimoire_core::seal::pending(&state.db).map_err(|e| e.to_string())
+}
+
+/// Answer one request. The familiar blocked on it is woken by this.
+#[tauri::command]
+pub async fn seal_decide(
+    state: State<'_, AppState>,
+    id: String,
+    resolution: Resolution,
+) -> R<GrimoireSeal> {
+    state.seal.decide(&id, resolution).map_err(|e| e.to_string())
 }
 
 /// Typed input, as bytes. The familiar is reading keys, not lines.
