@@ -48,7 +48,9 @@ pub struct Spawn {
 
 /// A running summoning.
 pub struct PtySession {
-    master: Box<dyn MasterPty + Send>,
+    /// Behind a mutex so the whole session is `Sync` and can live in shared application state.
+    /// `MasterPty` is `Send` but not `Sync`, and the only thing we do with it is `resize`.
+    master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
     child: Mutex<Box<dyn portable_pty::Child + Send + Sync>>,
     /// The child's process id, which is also its process-group id: `portable-pty` calls
@@ -100,7 +102,7 @@ impl PtySession {
         spawn_pump(reader, sink, Arc::clone(&reader_done));
 
         Ok(Self {
-            master: pair.master,
+            master: Mutex::new(pair.master),
             writer: Mutex::new(writer),
             child: Mutex::new(child),
             pid,
@@ -119,6 +121,8 @@ impl PtySession {
     /// to the old geometry and the buffer tears.
     pub fn resize(&self, size: PtySize) -> Result<()> {
         self.master
+            .lock()
+            .map_err(|_| Error::other("the pty master was poisoned"))?
             .resize(size)
             .map_err(|e| Error::other(format!("could not resize the pseudo-terminal: {e}")))
     }
@@ -284,25 +288,70 @@ fn emit(bytes: &[u8], sink: &Sink) {
 
 /// Build the environment a familiar runs with.
 ///
-/// Allow-list, not deny-list. Inheriting the whole environment and removing the keys we happen
-/// to recognise would leak every one we did not think of; §11 keeps credentials in the keychain,
-/// and a process that never receives them cannot echo them.
+/// Allow-list, not deny-list. Inheriting the whole environment and removing the names we happen
+/// to recognise would leak every one we did not think of, so the default is to pass nothing and
+/// name what gets through.
 ///
-/// `TERM` is set to something xterm.js renders faithfully, and `extra` carries whatever the
-/// binding asks for, after the allow-list, so a binding can add but never smuggle.
+/// **The first version of this list was too short, and a real engine caught it.** Started with
+/// only the shell basics, `claude` came up on its login screen: it could not reach the network,
+/// because the proxy and CA settings had been stripped, and it had no provider credentials,
+/// because those live in the environment for anyone not signed in through the keychain. An
+/// engine that cannot authenticate is not a security win; it is a familiar that does nothing.
+///
+/// So three groups get through, and nothing else:
+///
+/// * **Shell basics** — where home is, what is on PATH, which locale to format in.
+/// * **Reachability** — proxy and CA-bundle settings. These carry no secrets, and without them
+///   an engine on a proxied or corporate network simply cannot make a request.
+/// * **Provider credentials** — the variables each engine defines for its own auth. §11 requires
+///   that *Grimoire* never stores a key, logs one, or puts one in an error message, and it does
+///   none of those: these are read straight from the environment the user already has, passed to
+///   the one process entitled to them, and never touched again. On macOS, where `claude` signs
+///   in through the keychain by itself, none of them will be set and none will be passed.
+///
+/// Anything outside those groups does not reach the familiar, including names that do not exist
+/// yet. `extra` is appended last, so a binding can add to its own environment but never smuggle
+/// something in ahead of the list.
 pub fn scrubbed_env(
     inherited: impl IntoIterator<Item = (String, String)>,
     extra: impl IntoIterator<Item = (String, String)>,
 ) -> Vec<(String, String)> {
-    const KEEP: &[&str] = &[
+    /// Where home is, what is runnable, how to format.
+    const BASICS: &[&str] = &[
         "HOME", "PATH", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR",
     ];
 
-    let mut env: Vec<(String, String)> = inherited
-        .into_iter()
-        .filter(|(k, _)| KEEP.contains(&k.as_str()))
-        .collect();
+    /// How to reach the network. No secrets here — addresses and certificate paths.
+    const REACHABILITY: &[&str] = &[
+        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+        "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+        "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
+        "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "AWS_CA_BUNDLE",
+    ];
 
+    /// Each engine's own auth. Passed through, never stored, never logged.
+    const PROVIDER: &[&str] = &[
+        // Anthropic, direct or through a gateway.
+        "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+        "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+        // Amazon Bedrock.
+        "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+        "AWS_REGION", "AWS_DEFAULT_REGION", "AWS_PROFILE",
+        // Google Vertex.
+        "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT", "CLOUD_ML_REGION",
+        // The other engines' keys, for when §4's other values can be summoned.
+        "OPENAI_API_KEY", "OPENAI_BASE_URL", "GEMINI_API_KEY", "DASHSCOPE_API_KEY",
+    ];
+
+    let allowed = |k: &str| {
+        BASICS.contains(&k) || REACHABILITY.contains(&k) || PROVIDER.contains(&k)
+    };
+
+    let mut env: Vec<(String, String)> =
+        inherited.into_iter().filter(|(k, _)| allowed(k)).collect();
+
+    // A terminal type xterm.js renders faithfully, and truecolour so the engine's own palette
+    // survives rather than being quantised to sixteen colours.
     env.push(("TERM".into(), "xterm-256color".into()));
     env.push(("COLORTERM".into(), "truecolor".into()));
     // Say who is asking, so an engine that wants to behave differently under a harness can.

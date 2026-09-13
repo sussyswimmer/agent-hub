@@ -19,7 +19,7 @@ request for type. Each licence text sits beside its files.
 | EB Garamond | OFL-1.1 | `src/theme/fonts/eb-garamond.LICENSE.txt` |
 | Iosevka | OFL-1.1 | `src/theme/fonts/iosevka.LICENSE.txt` |
 
-## Rust crates (490)
+## Rust crates (498)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -108,6 +108,7 @@ request for type. Each licence text sits beside its files.
 | `dlopen2` | 0.8.2 | MIT |
 | `dlopen2_derive` | 0.4.3 | MIT |
 | `dom_query` | 0.27.0 | MIT |
+| `downcast-rs` | 1.2.1 | MIT/Apache-2.0 |
 | `dpi` | 0.1.2 | Apache-2.0 AND MIT |
 | `dtoa` | 1.0.11 | MIT OR Apache-2.0 |
 | `dtoa-short` | 0.3.5 | MPL-2.0 |
@@ -129,6 +130,7 @@ request for type. Each licence text sits beside its files.
 | `fastrand` | 2.5.0 | Apache-2.0 OR MIT |
 | `fdeflate` | 0.3.7 | MIT OR Apache-2.0 |
 | `field-offset` | 0.3.6 | MIT OR Apache-2.0 |
+| `filedescriptor` | 0.8.3 | MIT |
 | `flate2` | 1.1.10 | MIT OR Apache-2.0 |
 | `fnv` | 1.0.7 | Apache-2.0 / MIT |
 | `foldhash` | 0.2.0 | Zlib |
@@ -242,6 +244,7 @@ request for type. Each licence text sits beside its files.
 | `ndk` | 0.9.0 | MIT OR Apache-2.0 |
 | `ndk-sys` | 0.6.0+11769913 | MIT OR Apache-2.0 |
 | `new_debug_unreachable` | 1.0.6 | MIT |
+| `nix` | 0.28.0 | MIT |
 | `notify-rust` | 4.18.0 | MIT OR Apache-2.0 |
 | `nu-ansi-term` | 0.50.3 | MIT |
 | `num_enum` | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 |
@@ -287,6 +290,7 @@ request for type. Each licence text sits beside its files.
 | `polling` | 3.11.0 | Apache-2.0 OR MIT |
 | `portable-atomic` | 1.15.0 | Apache-2.0 OR MIT |
 | `portable-atomic-util` | 0.2.8 | Apache-2.0 OR MIT |
+| `portable-pty` | 0.9.0 | MIT |
 | `potential_utf` | 0.1.6 | Unicode-3.0 |
 | `powerfmt` | 0.2.0 | MIT OR Apache-2.0 |
 | `ppv-lite86` | 0.2.21 | MIT OR Apache-2.0 |
@@ -339,12 +343,15 @@ request for type. Each licence text sits beside its files.
 | `serde_with` | 3.23.0 | MIT OR Apache-2.0 |
 | `serde_with_macros` | 3.23.0 | MIT OR Apache-2.0 |
 | `serde-untagged` | 0.1.9 | MIT OR Apache-2.0 |
+| `serial2` | 0.2.38 | BSD-2-Clause OR Apache-2.0 |
 | `serialize-to-javascript` | 0.1.2 | MIT OR Apache-2.0 |
 | `serialize-to-javascript-impl` | 0.1.2 | MIT OR Apache-2.0 |
 | `servo_arc` | 0.4.3 | MIT OR Apache-2.0 |
 | `sha2` | 0.10.9 | MIT OR Apache-2.0 |
 | `sha2` | 0.11.0 | MIT OR Apache-2.0 |
 | `sharded-slab` | 0.1.7 | MIT |
+| `shared_library` | 0.1.9 | Apache-2.0/MIT |
+| `shell-words` | 1.1.1 | MIT/Apache-2.0 |
 | `signal-hook-registry` | 1.4.8 | MIT OR Apache-2.0 |
 | `simd-adler32` | 0.3.10 | MIT |
 | `siphasher` | 1.0.3 | MIT/Apache-2.0 |
@@ -490,6 +497,7 @@ request for type. Each licence text sits beside its files.
 | `windows-version` | 0.1.7 | MIT OR Apache-2.0 |
 | `winnow` | 1.0.4 | MIT |
 | `winnow` | 0.5.40 | MIT |
+| `winreg` | 0.10.1 | MIT |
 | `wit-bindgen` | 0.57.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | `writeable` | 0.6.4 | Unicode-3.0 |
 | `wry` | 0.55.1 | Apache-2.0 OR MIT |

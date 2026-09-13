@@ -211,6 +211,47 @@ fn stopping_takes_the_whole_process_tree_not_just_the_child() {
 }
 
 #[test]
+fn a_thread_watching_for_the_exit_does_not_block_the_stop_ladder() {
+    // Found by pressing Banish in the running application, where nothing happened at all and no
+    // error was shown. The interface runs a watcher thread so it can mark a summoning ended;
+    // the obvious way to write it is `session.wait()`, which holds the child lock until the
+    // process exits — and `stop` needs that same lock. Every Banish then deadlocks, silently,
+    // for as long as the familiar is alive. No test had a waiter thread, so nothing caught it.
+    //
+    // This reproduces the shape the application uses: a watcher polling alongside a stop.
+    let out = Arc::new(Collector::default());
+    let s = Arc::new(PtySession::spawn(bash(&["-c", "sleep 300"]), out.sink()).expect("spawn"));
+    let pid = s.pid();
+
+    let watcher = {
+        let s = Arc::clone(&s);
+        std::thread::spawn(move || {
+            // Poll, never block: exactly what src-tauri/src/summonings.rs must do.
+            for _ in 0..200 {
+                if matches!(s.try_wait(), Ok(Some(_)) | Err(_)) || s.drained() {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            false
+        })
+    };
+
+    // The stop must complete promptly even with the watcher running. A deadlock shows up here
+    // as this call never returning, so the bound is the assertion.
+    let started = Instant::now();
+    let how = stop_with(&s, Duration::from_millis(300), Duration::from_millis(300)).expect("stop");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "stop took {:?} with a watcher running — the child lock is being held",
+        started.elapsed()
+    );
+    assert_eq!(how, Stopped::Interrupt);
+    assert!(watcher.join().expect("watcher"), "the watcher never noticed the exit");
+    assert!(until(Duration::from_secs(5), || !group_alive(pid)));
+}
+
+#[test]
 fn stopping_something_already_finished_is_not_an_error() {
     let out = Arc::new(Collector::default());
     let s = PtySession::spawn(bash(&["-c", "true"]), out.sink()).expect("spawn");
@@ -278,9 +319,11 @@ fn the_environment_is_built_from_an_allow_list_not_inherited() {
         [
             ("PATH".to_string(), "/usr/bin".to_string()),
             ("HOME".to_string(), "/home/someone".to_string()),
+            ("HTTPS_PROXY".to_string(), "http://proxy:3128".to_string()),
             ("ANTHROPIC_API_KEY".to_string(), "sk-ant-secret".to_string()),
-            ("AWS_SECRET_ACCESS_KEY".to_string(), "hunter2".to_string()),
             ("SOME_FUTURE_TOKEN".to_string(), "whatever".to_string()),
+            ("MY_DATABASE_PASSWORD".to_string(), "hunter2".to_string()),
+            ("SSH_AUTH_SOCK".to_string(), "/tmp/agent".to_string()),
         ],
         [("GRIMOIRE_RUN".to_string(), "01J".to_string())],
     );
@@ -289,10 +332,14 @@ fn the_environment_is_built_from_an_allow_list_not_inherited() {
     assert!(keys.contains(&"PATH") && keys.contains(&"HOME"));
     assert!(keys.contains(&"TERM"), "the engine needs a terminal type it can draw to");
     assert!(keys.contains(&"GRIMOIRE_RUN"), "the caller's own variables must get through");
+    // Learned from a real engine: strip these and it cannot reach the network, so it falls
+    // through to a login screen no matter how it is authenticated.
+    assert!(keys.contains(&"HTTPS_PROXY"), "the engine must be able to reach the network");
+    assert!(keys.contains(&"ANTHROPIC_API_KEY"), "the engine must be able to authenticate");
 
-    // Not just the ones we recognise — anything not on the list, including names nobody has
-    // thought of yet. That is the whole point of an allow-list.
-    for leaked in ["ANTHROPIC_API_KEY", "AWS_SECRET_ACCESS_KEY", "SOME_FUTURE_TOKEN"] {
+    // Everything else stays out — including names nobody has thought of yet. That is the whole
+    // point of an allow-list, and it is what a deny-list could never promise.
+    for leaked in ["SOME_FUTURE_TOKEN", "MY_DATABASE_PASSWORD", "SSH_AUTH_SOCK"] {
         assert!(!keys.contains(&leaked), "{leaked} was inherited");
     }
 }

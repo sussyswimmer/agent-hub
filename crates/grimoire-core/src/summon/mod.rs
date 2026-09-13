@@ -12,6 +12,7 @@ pub mod pty;
 
 pub use binary::{Resolved, Unavailable, resolve};
 pub use lifecycle::{Stopped, group_alive, stop, stop_with};
+pub use portable_pty::PtySize;
 pub use pty::{PtySession, Sink, Spawn, scrubbed_env};
 
 /// Where Phase 4 writes the per-summoning settings file that installs the seal's `PreToolUse`

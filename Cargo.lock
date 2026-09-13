@@ -1474,6 +1474,7 @@ name = "grimoire-app"
 version = "0.1.0"
 dependencies = [
  "grimoire-core",
+ "libc",
  "serde",
  "serde_json",
  "tauri",
