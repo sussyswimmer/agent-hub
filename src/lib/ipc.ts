@@ -1,6 +1,16 @@
 // The one boundary between the UI and Rust. Real Tauri inside the app, an in-memory stand-in
 // in a plain browser, so the whole shell is testable headless.
-import type { Aether, Engine, FamiliarSummary, HomeInfo, IntakeField } from "./types";
+import type {
+  Aether,
+  CodexView,
+  Commission,
+  Engine,
+  Event,
+  FamiliarSummary,
+  HomeInfo,
+  IntakeField,
+  LedgerSummary,
+} from "./types";
 
 /** One message from a summoning's pty. Bytes, not text: see `Emission` in Rust. */
 export type Emission =
@@ -14,6 +24,8 @@ export interface SummonRequest {
   cwd: string;
   cols: number;
   rows: number;
+  /** From the binding. Recorded on the summoning and used to price the run (§6.9). */
+  model?: string | null;
   onEmission: (e: Emission) => void;
 }
 
@@ -36,6 +48,16 @@ export interface Backend {
   /** Walk the stop ladder. Resolves to which rung it took. */
   banish(id: string): Promise<string>;
   liveSummonings(): Promise<string[]>;
+
+  /** Place a commission. It queues; it starts when its familiar is next free (§6.2). */
+  commissionCreate(id: string, prompt: string, intake: Record<string, string>): Promise<Commission>;
+  /** Every commission for one familiar, newest first. */
+  commissionsFor(id: string): Promise<Commission[]>;
+  /** The ledger's roll-ups (§6.9). */
+  ledgerSummary(): Promise<LedgerSummary>;
+  ledgerEvents(limit?: number): Promise<Event[]>;
+  /** What a familiar has written into its codex (§6.6). */
+  codexFor(id: string): Promise<CodexView>;
 }
 
 declare global {

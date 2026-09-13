@@ -1,6 +1,14 @@
 // Stand-in backend for the browser and for Playwright. Mirrors src-tauri/src/roster.rs.
 import type { Backend, Emission, SummonRequest } from "./ipc";
-import type { Aether, FamiliarSummary, IntakeField } from "./types";
+import type {
+  Aether,
+  CodexView,
+  Commission,
+  Event,
+  FamiliarSummary,
+  IntakeField,
+  LedgerSummary,
+} from "./types";
 
 const roster: FamiliarSummary[] = [
   { id: "vellum", workspace: "~/work/essays", name: "Vellum", order: "quill", engine: "claude", state: "idle", status: "idle", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/vellum.binding.md" },
@@ -92,8 +100,109 @@ const intake: Record<string, IntakeField[]> = {
   ],
 };
 
+/**
+ * An in-memory stand-in for the commissions table, with the one rule that matters: a familiar
+ * runs one at a time and the rest queue behind it (§6.2). The queue is the thing worth testing
+ * in the interface, so the mock has to actually have one rather than always answering "queued".
+ */
+class Commissions {
+  private rows: Commission[] = [];
+  private seq = 0;
+
+  place(familiarId: string, prompt: string, intake: Record<string, string>): Commission {
+    const row: Commission = {
+      // Padded so string ordering matches insertion order, as the rowid does in SQLite.
+      id: `c${String(++this.seq).padStart(4, "0")}`,
+      familiar_id: familiarId,
+      summoning_id: null,
+      prompt,
+      intake,
+      status: "queued",
+      created: Math.floor(Date.now() / 1000),
+      ended: null,
+      tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+      turns: 0,
+      cost: { usd: 0, estimated: true },
+      note: null,
+    };
+    this.rows.push(row);
+    return structuredClone(row);
+  }
+
+  /** Newest first, as the real one returns them. */
+  for(familiarId: string): Commission[] {
+    return this.rows.filter((c) => c.familiar_id === familiarId).reverse().map((c) => structuredClone(c));
+  }
+
+  /** Start the oldest queued one, if the familiar is free. Mirrors `next_to_run`. */
+  startNext(familiarId: string): Commission | null {
+    const mine = this.rows.filter((c) => c.familiar_id === familiarId);
+    if (mine.some((c) => c.status === "running" || c.status === "awaiting_seal")) return null;
+    const next = mine.find((c) => c.status === "queued");
+    if (!next) return null;
+    next.status = "running";
+    next.summoning_id = "s1";
+    return structuredClone(next);
+  }
+
+  end(familiarId: string) {
+    for (const c of this.rows) {
+      if (c.familiar_id === familiarId && (c.status === "running" || c.status === "awaiting_seal")) {
+        c.status = "banished";
+        c.ended = Math.floor(Date.now() / 1000);
+        // A run that did something costs something, so the ledger has a number to show.
+        c.tokens = { input: 24_000, output: 1_200, cache_read: 0, cache_write: 0 };
+        c.turns = 3;
+        c.cost = { usd: 0.09, estimated: true };
+      }
+    }
+  }
+
+  summary(): LedgerSummary {
+    const zero = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
+    const add = (a: typeof zero, b: typeof zero) => ({
+      input: a.input + b.input,
+      output: a.output + b.output,
+      cache_read: a.cache_read + b.cache_read,
+      cache_write: a.cache_write + b.cache_write,
+    });
+
+    const byFamiliar = [...new Set(this.rows.map((c) => c.familiar_id))].map((familiar_id) => {
+      const mine = this.rows.filter((c) => c.familiar_id === familiar_id);
+      return {
+        familiar_id,
+        commissions: mine.length,
+        tokens: mine.map((c) => c.tokens).reduce(add, zero),
+        cost: { usd: mine.reduce((n, c) => n + c.cost.usd, 0), estimated: true as const },
+        seconds: mine.reduce((n, c) => n + ((c.ended ?? c.created) - c.created), 0),
+      };
+    });
+    byFamiliar.sort((a, b) => b.cost.usd - a.cost.usd);
+
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      by_familiar: byFamiliar,
+      by_day: this.rows.length
+        ? [
+            {
+              day: today,
+              commissions: this.rows.length,
+              tokens: this.rows.map((c) => c.tokens).reduce(add, zero),
+              cost: { usd: this.rows.reduce((n, c) => n + c.cost.usd, 0), estimated: true as const },
+            },
+          ]
+        : [],
+      total: { usd: this.rows.reduce((n, c) => n + c.cost.usd, 0), estimated: true },
+      tokens: this.rows.map((c) => c.tokens).reduce(add, zero),
+      commissions: this.rows.length,
+    };
+  }
+}
+
 export function createMockBackend(): Backend {
   const live = new Map<string, FakeSummoning>();
+  const commissions = new Commissions();
+  const events: Event[] = [];
 
   return {
     kind: "mock",
@@ -108,6 +217,11 @@ export function createMockBackend(): Backend {
       if (live.has(id)) throw new Error(`${id} is already summoned.`);
       const s = new FakeSummoning(id, onEmission);
       live.set(id, s);
+      const taken = commissions.startNext(id);
+      if (taken) {
+        events.push(event(events.length + 1, id, taken.id, "commission_started"));
+      }
+      events.push(event(events.length + 1, id, taken?.id ?? null, "summoned"));
       // Next tick, so a caller that renders on the resolved promise is mounted first.
       setTimeout(() => s.greet(), 0);
       return 4242;
@@ -120,11 +234,52 @@ export function createMockBackend(): Backend {
       const s = live.get(id);
       if (!s) throw new Error(`${id} is not summoned.`);
       live.delete(id);
+      commissions.end(id);
+      events.push(event(events.length + 1, id, null, "banished"));
       s.end();
       return "interrupt";
     },
     async liveSummonings() {
       return [...live.keys()];
     },
+
+    async commissionCreate(id, prompt, intake) {
+      const row = commissions.place(id, prompt, intake);
+      events.push(event(events.length + 1, id, row.id, "commission_queued"));
+      return row;
+    },
+    async commissionsFor(id) {
+      return commissions.for(id);
+    },
+    async ledgerSummary() {
+      return commissions.summary();
+    },
+    async ledgerEvents(limit) {
+      return events.slice(-(limit ?? 100)).reverse();
+    },
+    async codexFor(id) {
+      return codex[id] ?? { path: `~/.grimoire/codex/${id}.md`, text: "", words: 0, needs_condense: false };
+    },
   };
 }
+
+function event(id: number, familiar: string, commission: string | null, kind: Event["kind"]): Event {
+  return {
+    id,
+    at: Math.floor(Date.now() / 1000),
+    commission_id: commission,
+    familiar_id: familiar,
+    kind,
+    payload: {},
+  };
+}
+
+/** One familiar with something already written, so the codex tab has content to show. */
+const codex: Record<string, CodexView> = {
+  vellum: {
+    path: "~/.grimoire/codex/vellum.md",
+    text: "Prefers short paragraphs.\nDislikes the word `leverage`.\nThe swimming essay is the one that matters.\n",
+    words: 18,
+    needs_condense: false,
+  },
+};

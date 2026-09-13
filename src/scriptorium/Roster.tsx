@@ -46,7 +46,7 @@ function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary
 }
 
 export function Roster({ seals = 0 }: { seals?: number }) {
-  const { familiars, selected, select, ready } = useStore();
+  const { familiars, selected, select, ready, showLedger, setShowLedger } = useStore();
   return (
     <nav style={{ width: "var(--rail)" }}
       className="flex h-full shrink-0 flex-col bg-panel" aria-label="Roster" data-testid="roster">
@@ -54,7 +54,12 @@ export function Roster({ seals = 0 }: { seals?: number }) {
       <div className="h-9 shrink-0" data-tauri-drag-region />
       <div className="flex-1 overflow-y-auto rule-scroll">
         {familiars.map((f) => (
-          <RosterRow key={f.id} familiar={f} selected={f.id === selected} onSelect={() => select(f.id)} />
+          <RosterRow
+            key={f.id}
+            familiar={f}
+            selected={!showLedger && f.id === selected}
+            onSelect={() => select(f.id)}
+          />
         ))}
         {ready && familiars.length === 0 && (
           <p className="px-3 py-4 text-xs text-bone-dim">
@@ -63,6 +68,21 @@ export function Roster({ seals = 0 }: { seals?: number }) {
           </p>
         )}
       </div>
+      <Rule />
+      {/* §6.9's ledger is reached from the lectern on the floor in Phase 5; until then the rail
+          is the only way in, so it lives here beside the seals. */}
+      <button
+        type="button"
+        onClick={() => setShowLedger(!showLedger)}
+        aria-pressed={showLedger}
+        data-testid="ledger-toggle"
+        style={{ borderLeft: `2px solid ${showLedger ? "var(--brass)" : "transparent"}` }}
+        className={`w-full py-1.5 pl-2.5 pr-3 text-left text-base transition-colors duration-150 ${
+          showLedger ? "bg-void text-bone" : "text-bone-dim hover:text-bone"
+        }`}
+      >
+        Ledger of ink
+      </button>
       <Rule />
       <div className="px-3 py-2" data-testid="seal-rail">
         <div className="mb-1 text-xs text-bone-dim">Seals</div>

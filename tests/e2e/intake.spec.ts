@@ -67,7 +67,11 @@ test("submit is blocked while a required answer is missing, and says which", asy
   // Answer the last one and it goes through. The optional field stays empty on purpose.
   await page.locator('[data-field="mode"] select').selectOption("structural");
   await page.getByTestId("intake-submit").click();
-  await expect(page.locator('[data-tab="terminal"]')).toHaveAttribute("aria-selected", "true");
+
+  // "Goes through" means a commission was placed and is visible in the queue (§6.2), not that
+  // some other tab opened. The complaint is gone too.
+  await expect(page.getByTestId("queue").locator("[data-commission]")).toHaveCount(1);
+  await expect(page.getByTestId("intake-blocked")).toHaveCount(0);
 });
 
 test("whitespace is not an answer", async ({ page }) => {

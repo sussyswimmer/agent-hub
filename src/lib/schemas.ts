@@ -56,3 +56,87 @@ export const intakeField = z.object({
   options: z.array(z.string()),
   required: z.boolean(),
 });
+
+// ── Commissions and the ledger (§6.2, §6.9) ────────────────────────────────────────────
+
+export const commissionStatus = z.enum([
+  "queued",
+  "running",
+  "awaiting_seal",
+  "done",
+  "banished",
+  "misfired",
+]);
+
+export const tokens = z.object({
+  input: z.number(),
+  output: z.number(),
+  cache_read: z.number(),
+  cache_write: z.number(),
+});
+
+/** §6.9: cost is never a settled number. The flag travels with it, and is checked here. */
+export const estimate = z.object({ usd: z.number(), estimated: z.literal(true) });
+
+export const commission = z.object({
+  id: z.string(),
+  familiar_id: z.string(),
+  summoning_id: z.string().nullable(),
+  prompt: z.string(),
+  intake: z.unknown(),
+  status: commissionStatus,
+  created: z.number(),
+  ended: z.number().nullable(),
+  tokens,
+  turns: z.number(),
+  cost: estimate,
+  note: z.string().nullable(),
+});
+
+export const ledgerSummary = z.object({
+  by_familiar: z.array(
+    z.object({
+      familiar_id: z.string(),
+      commissions: z.number(),
+      tokens,
+      cost: estimate,
+      seconds: z.number(),
+    }),
+  ),
+  by_day: z.array(
+    z.object({ day: z.string(), commissions: z.number(), tokens, cost: estimate }),
+  ),
+  total: estimate,
+  tokens,
+  commissions: z.number(),
+});
+
+/** Mirrors `EventKind` in crates/grimoire-core/src/ledger/mod.rs. */
+export const eventKind = z.enum([
+  "summoned",
+  "banished",
+  "commission_queued",
+  "commission_started",
+  "commission_ended",
+  "usage",
+  "seal_raised",
+  "seal_resolved",
+  "breaker_tripped",
+  "misfired",
+]);
+
+export const ledgerEvent = z.object({
+  id: z.number(),
+  at: z.number(),
+  commission_id: z.string().nullable(),
+  familiar_id: z.string().nullable(),
+  kind: eventKind,
+  payload: z.unknown(),
+});
+
+export const codexView = z.object({
+  path: z.string(),
+  text: z.string(),
+  words: z.number(),
+  needs_condense: z.boolean(),
+});

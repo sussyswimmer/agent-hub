@@ -22,6 +22,13 @@ pub struct AppState {
     _watcher: Option<grimoire_core::binding::WatchHandle>,
 }
 
+/// The database, reachable from the quit paths.
+///
+/// Both of them run outside the window: `RunEvent::Exit` has no `State`, and the signal thread
+/// is started before the application is built. Without this a clean quit could not record what
+/// it stopped, and every shutdown would look to the next launch exactly like a crash.
+static DB: std::sync::OnceLock<Db> = std::sync::OnceLock::new();
+
 pub fn run() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
@@ -43,6 +50,17 @@ pub fn run() {
                 let paths = Paths::resolve()?;
                 paths.ensure()?;
                 let db = Db::open(&paths.db_file())?;
+
+                // §10 Phase 3: a commission survives a restart with the correct status. Nothing
+                // that was running can still be running — its process died with the application —
+                // so those rows are closed as misfires that say why, which also frees the queue
+                // they would otherwise block for ever.
+                if let Err(e) = grimoire_core::commission::recover(&db) {
+                    tracing::warn!(error = %e, "could not tidy up commissions from an earlier run");
+                }
+                if let Err(e) = grimoire_core::db::summonings::recover(&db) {
+                    tracing::warn!(error = %e, "could not tidy up summonings from an earlier run");
+                }
 
                 // First run only: an empty folder gets the shipped bindings, so the application
                 // opens with five familiars rather than an explanation of how to write one.
@@ -76,6 +94,7 @@ pub fn run() {
                 };
 
                 tracing::info!(home = %paths.home.display(), "grimoire ready");
+                let _ = DB.set(db.clone());
                 app.manage(AppState { paths, db, roster, summonings, _watcher: watcher });
                 Ok(())
             }
@@ -89,6 +108,11 @@ pub fn run() {
             commands::resize_summoning,
             commands::banish,
             commands::live_summonings,
+            commands::commission_create,
+            commands::commissions_for,
+            commands::ledger_summary,
+            commands::ledger_events,
+            commands::codex_for,
         ])
         .build(tauri::generate_context!())
         .expect("Grimoire failed to start");
@@ -103,7 +127,7 @@ pub fn run() {
     // was supposed to have happened had left no trace at all.
     app.run(move |_handle, event| {
         if matches!(event, RunEvent::Exit) {
-            summonings.banish_all();
+            summonings.banish_all(DB.get());
         }
     });
 }
@@ -143,7 +167,7 @@ fn watch_for_signals(summonings: Arc<Summonings>) {
             let mut sig: libc::c_int = 0;
             if libc::sigwait(&set, &mut sig) == 0 {
                 tracing::info!(signal = sig, "asked to quit; stopping familiars");
-                summonings.banish_all();
+                summonings.banish_all(DB.get());
                 std::process::exit(0);
             }
         }

@@ -4,6 +4,7 @@ import { Terminal as Xterm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 import { backend } from "@/lib/ipc";
+import { useStore } from "@/store";
 import type { FamiliarSummary } from "@/lib/types";
 
 /** Read a theme token as a concrete colour. xterm paints to canvas and cannot resolve `var()`. */
@@ -24,6 +25,7 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
   const [status, setStatus] = useState<Status>("dormant");
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const noteCommissionsChanged = useStore((s) => s.noteCommissionsChanged);
 
   // Built once and kept for the life of the pane, so switching tabs does not throw away
   // scrollback. Teardown disposes it; xterm leaves a canvas behind otherwise.
@@ -115,6 +117,7 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
           } else {
             typed.dispose();
             setStatus("ended");
+            noteCommissionsChanged();
             // Reported beside the button rather than written into the buffer. The engine owns
             // the buffer and redraws it as it dies — a line appended here was simply wiped,
             // which is how this was found. The chrome is ours and stays put.
@@ -123,6 +126,8 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
         },
       });
       setStatus("live");
+      // A summoning takes the oldest queued commission, so the queue has just changed.
+      noteCommissionsChanged();
       xterm.focus();
     } catch (e) {
       setStatus("failed");

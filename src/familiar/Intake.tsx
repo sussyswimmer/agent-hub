@@ -17,7 +17,7 @@ export function Intake({
   onSubmit,
 }: {
   familiar: FamiliarSummary;
-  onSubmit: (prompt: string, answers: Answers) => void;
+  onSubmit: (prompt: string, answers: Answers) => void | Promise<void>;
 }) {
   const [fields, setFields] = useState<IntakeField[] | null>(null);
   const [answers, setAnswers] = useState<Answers>({});
@@ -51,13 +51,19 @@ export function Intake({
   );
   const blocked = missing.length > 0 || !prompt.trim();
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (blocked) {
       setShowMissing(true);
       return;
     }
-    onSubmit(prompt.trim(), answers);
+    await onSubmit(prompt.trim(), answers);
+    // Clear it. Found by placing two commissions in a row in the running application: the
+    // second inherited the first's text, so the queue showed one prompt with another stuck on
+    // the end of it. A form that has been submitted is not still holding a draft.
+    setPrompt("");
+    setAnswers({});
+    setShowMissing(false);
   }
 
   if (fields === null) {
@@ -67,7 +73,7 @@ export function Intake({
   const set = (id: string, v: string) => setAnswers((a) => ({ ...a, [id]: v }));
 
   return (
-    <form className="measure flex flex-col gap-4" onSubmit={submit} data-testid="intake">
+    <form className="measure flex flex-col gap-4" onSubmit={(e) => void submit(e)} data-testid="intake">
       <label className="flex flex-col gap-1">
         <span className="text-base text-bone">What is the commission?</span>
         <textarea

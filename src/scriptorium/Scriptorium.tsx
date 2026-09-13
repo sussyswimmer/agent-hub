@@ -3,11 +3,12 @@ import { useEffect } from "react";
 import { Rule } from "@/ui";
 import { useStore } from "@/store";
 import { FamiliarPane } from "@/familiar/FamiliarPane";
+import { Ledger } from "@/ledger/Ledger";
 
 import { Roster } from "./Roster";
 
 export function Scriptorium() {
-  const { load, familiars, selected, ready, error, kind } = useStore();
+  const { load, familiars, selected, ready, error, kind, showLedger } = useStore();
   useEffect(() => {
     void load();
   }, [load]);
@@ -19,7 +20,15 @@ export function Scriptorium() {
     <div className="flex h-screen w-screen overflow-hidden" data-backend={kind ?? "loading"}>
       <Roster seals={seals} />
       <Rule vertical />
-      {familiar ? (
+      {showLedger ? (
+        <main className="flex min-w-0 flex-1 flex-col bg-void">
+          <header className="flex h-12 shrink-0 items-center px-4">
+            <h1 className="display text-md text-bone">The ledger of ink</h1>
+          </header>
+          <Rule />
+          <Ledger names={new Map(familiars.map((f) => [f.id, f.name]))} />
+        </main>
+      ) : familiar ? (
         <FamiliarPane key={familiar.id} familiar={familiar} />
       ) : (
         <main className="flex flex-1 items-center justify-center bg-void">

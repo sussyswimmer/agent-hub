@@ -61,8 +61,8 @@ test("a flood does not freeze the interface", async ({ page }) => {
       timeout: 15_000,
     })
     .toBe(1);
-  await page.locator('[data-tab="codex"]').click();
-  await expect(page.getByTestId("tabpanel")).toContainText("codex arrives");
+  await page.locator('[data-tab="outputs"]').click();
+  await expect(page.getByTestId("tabpanel")).toContainText("Outputs arrive");
 });
 
 test("switching familiars does not show one familiar's scrollback under another's name", async ({ page }) => {

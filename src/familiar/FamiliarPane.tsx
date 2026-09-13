@@ -1,16 +1,20 @@
+import { useCallback, useEffect, useState } from "react";
+
 import { Rule, Sigil } from "@/ui";
+import { backend } from "@/lib/ipc";
 import { useStore } from "@/store";
-import type { FamiliarSummary, Tab } from "@/lib/types";
+import type { Commission, FamiliarSummary, Tab } from "@/lib/types";
 
 import { AetherBar } from "./AetherBar";
+import { Codex } from "./Codex";
 import { Intake } from "./Intake";
+import { Queue } from "./Queue";
 import { Terminal } from "./Terminal";
 
 const TABS: Tab[] = ["commission", "terminal", "outputs", "codex"];
 
-const COMING: Record<Exclude<Tab, "terminal" | "commission">, string> = {
-  outputs: "Outputs arrive in Phase 3.",
-  codex: "The codex arrives in Phase 3.",
+const COMING: Record<Exclude<Tab, "terminal" | "commission" | "codex">, string> = {
+  outputs: "Outputs arrive in a later phase.",
 };
 
 function Header({ familiar, onSummon }: { familiar: FamiliarSummary; onSummon: () => void }) {
@@ -45,7 +49,36 @@ function Header({ familiar, onSummon }: { familiar: FamiliarSummary; onSummon: (
 }
 
 export function FamiliarPane({ familiar }: { familiar: FamiliarSummary }) {
-  const { tab, setTab, aether } = useStore();
+  const { tab, setTab, aether, commissionsChanged } = useStore();
+  const [commissions, setCommissions] = useState<Commission[]>([]);
+  const [placeError, setPlaceError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const b = await backend();
+      setCommissions(await b.commissionsFor(familiar.id));
+    } catch {
+      // The queue is a view of the truth, not the truth. A failed read leaves the last one up
+      // rather than blanking the pane.
+    }
+  }, [familiar.id]);
+
+  // Re-read when the tab is opened and whenever a summoning starts or ends, so what is on
+  // screen is what is actually happening rather than what was true when the pane mounted.
+  useEffect(() => {
+    if (tab === "commission") void refresh();
+  }, [refresh, tab, commissionsChanged]);
+
+  async function place(prompt: string, answers: Record<string, string>) {
+    setPlaceError(null);
+    try {
+      const b = await backend();
+      await b.commissionCreate(familiar.id, prompt, answers);
+      await refresh();
+    } catch (e) {
+      setPlaceError(e instanceof Error ? e.message : String(e));
+    }
+  }
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-void">
       <Header familiar={familiar} onSummon={() => setTab("terminal")} />
@@ -95,18 +128,19 @@ export function FamiliarPane({ familiar }: { familiar: FamiliarSummary }) {
           <Terminal key={familiar.id} familiar={familiar} />
         ) : tab === "commission" ? (
           <>
-            <Intake
-              key={familiar.id}
-              familiar={familiar}
-              onSubmit={() => setTab("terminal")}
-            />
-            <p className="measure pt-4 text-xs text-bone-dim">
-              Dispatching a commission arrives in Phase 3. For now this opens the terminal.
-            </p>
+            <Intake key={familiar.id} familiar={familiar} onSubmit={place} />
+            {placeError && (
+              <p className="measure pt-3 text-base text-oxblood-text" data-testid="commission-error">
+                {placeError}
+              </p>
+            )}
+            <Queue commissions={commissions} />
           </>
+        ) : tab === "codex" ? (
+          <Codex key={familiar.id} familiar={familiar} />
         ) : (
           <p className="measure text-base text-bone-dim">
-            {COMING[tab as Exclude<Tab, "terminal" | "commission">]}
+            {COMING[tab as Exclude<Tab, "terminal" | "commission" | "codex">]}
           </p>
         )}
       </section>

@@ -148,13 +148,23 @@ test("selecting a familiar switches the pane and its aether meters", async ({ pa
   await expect(aether.locator('[data-meter="time"] [role="meter"] > div')).toHaveCSS("background-color", "rgb(176, 141, 63)");
 });
 
-test("tabs switch and say which phase they arrive in rather than showing an empty box", async ({ page }) => {
+test("every tab shows its own thing rather than an empty box", async ({ page }) => {
   await page.goto("/");
+
+  // Terminal is real from Phase 1 on.
   await page.locator('[data-tab="terminal"]').click();
   await expect(page.locator('[data-tab="terminal"]')).toHaveAttribute("aria-selected", "true");
-  // Terminal is real from Phase 1 on, so this tab shows one rather than a note about a phase.
   await expect(page.getByTestId("xterm-host")).toBeVisible();
 
+  // Codex is real from Phase 3.
   await page.locator('[data-tab="codex"]').click();
-  await expect(page.getByTestId("tabpanel")).toContainText("Phase 3");
+  await expect(page.getByTestId("codex")).toBeVisible();
+
+  // Commission is real from Phase 2's intake onward.
+  await page.locator('[data-tab="commission"]').click();
+  await expect(page.getByTestId("intake")).toBeVisible();
+
+  // Outputs has not arrived, and §3 asks an empty state to say so rather than show nothing.
+  await page.locator('[data-tab="outputs"]').click();
+  await expect(page.getByTestId("tabpanel")).toContainText("Outputs arrive");
 });

@@ -14,6 +14,18 @@ interface State {
   error: string | null;
   /** Whether the bindings-changed subscription is already in place. */
   watching: boolean;
+  /** The ledger replaces the familiar pane when it is open (§6.9). */
+  showLedger: boolean;
+  setShowLedger: (v: boolean) => void;
+  /**
+   * Bumped whenever a summoning starts or ends. Anything showing commission state watches it.
+   *
+   * §6.2 wants the queue *visible*, and a queue that still says "queued" while the commission is
+   * running is not visible, it is wrong. A counter rather than the rows themselves, so there is
+   * still one source of truth: this says "ask again", the backend answers.
+   */
+  commissionsChanged: number;
+  noteCommissionsChanged: () => void;
   load: () => Promise<void>;
   select: (id: string) => void;
   setTab: (t: Tab) => void;
@@ -29,6 +41,8 @@ export const useStore = create<State>((set, get) => ({
   aether: null,
   error: null,
   watching: false,
+  showLedger: false,
+  commissionsChanged: 0,
 
   load: async () => {
     try {
@@ -56,6 +70,8 @@ export const useStore = create<State>((set, get) => ({
   },
 
   select: (id) => {
+    // Picking a familiar is a request to look at that familiar, so it closes the ledger.
+    set({ showLedger: false });
     // The tab deliberately survives the switch. The app is for watching a bench of familiars
     // at once, so flicking between two terminals is the common move; being thrown back to
     // the commission tab every time would fight it.
@@ -68,6 +84,10 @@ export const useStore = create<State>((set, get) => ({
   },
 
   setTab: (tab) => set({ tab }),
+
+  setShowLedger: (showLedger) => set({ showLedger }),
+
+  noteCommissionsChanged: () => set((s) => ({ commissionsChanged: s.commissionsChanged + 1 })),
 }));
 
 export function selectedFamiliar(): FamiliarSummary | null {
