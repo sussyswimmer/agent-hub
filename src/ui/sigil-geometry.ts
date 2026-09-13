@@ -95,37 +95,82 @@ export function ringPath(r: number, gap = 0): string {
   return `M ${sx.toFixed(3)} ${sy.toFixed(3)} A ${r} ${r} 0 1 1 ${ex.toFixed(3)} ${ey.toFixed(3)}`;
 }
 
-/** One of eight interior marks, drawn as paths. No text glyphs, no font dependency. */
-export function glyphPath(which: number): string {
+/**
+ * One stroke of an interior mark: a run of points, open or closed.
+ *
+ * Polylines rather than arcs, and this is the reason: the rail draws sigils as SVG and the floor
+ * draws them as WebGL geometry (§8.3). Two renderers describing the same eight marks in two
+ * notations is two chances to disagree, and a familiar whose glyph changes when you look at it
+ * from the floor is a bug nobody would think to test for. Both read this.
+ */
+export interface Mark {
+  points: [number, number][];
+  close: boolean;
+}
+
+/** Sample a circular or elliptical arc, in the same 0° = twelve o'clock frame as `polar`. */
+function sweep(fromDeg: number, toDeg: number, rx: number, ry: number, steps = 24): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const deg = fromDeg + ((toDeg - fromDeg) * i) / steps;
+    const a = ((deg - 90) * Math.PI) / 180;
+    out.push([rx * Math.cos(a), ry * Math.sin(a)]);
+  }
+  return out;
+}
+
+/** One of eight interior marks. No text glyphs, no font dependency, no asset (§1). */
+export function glyphMarks(which: number): Mark[] {
   const r = 14;
   switch (which % 8) {
-    case 0: {
+    case 0:
       // upward triangle
-      const p = [polar(0, r), polar(120, r), polar(240, r)];
-      return `M ${p[0]![0]} ${p[0]![1]} L ${p[1]![0]} ${p[1]![1]} L ${p[2]![0]} ${p[2]![1]} Z`;
-    }
+      return [{ points: [polar(0, r), polar(120, r), polar(240, r)], close: true }];
     case 1:
       // lozenge
-      return `M 0 ${-r} L ${r} 0 L 0 ${r} L ${-r} 0 Z`;
+      return [{ points: [[0, -r], [r, 0], [0, r], [-r, 0]], close: true }];
     case 2:
-      // crescent
-      return `M 0 ${-r} A ${r} ${r} 0 1 0 0 ${r} A ${r * 0.62} ${r} 0 1 1 0 ${-r} Z`;
+      // crescent: a circle's left edge, cut back by a narrower ellipse
+      return [{ points: [...sweep(0, -180, r, r), ...sweep(180, 360, r * 0.62, r)], close: true }];
     case 3:
       // cross of four bars
-      return `M 0 ${-r} L 0 ${r} M ${-r} 0 L ${r} 0`;
+      return [
+        { points: [[0, -r], [0, r]], close: false },
+        { points: [[-r, 0], [r, 0]], close: false },
+      ];
     case 4:
       // chevron
-      return `M ${-r} ${r * 0.45} L 0 ${-r * 0.55} L ${r} ${r * 0.45}`;
+      return [{ points: [[-r, r * 0.45], [0, -r * 0.55], [r, r * 0.45]], close: false }];
     case 5:
-      // lens
-      return `M ${-r} 0 A ${r} ${r} 0 0 1 ${r} 0 A ${r} ${r} 0 0 1 ${-r} 0 Z`;
+      // ring
+      return [{ points: sweep(0, 360, r, r), close: true }];
     case 6:
       // bar over dot
-      return `M ${-r} ${-r * 0.35} L ${r} ${-r * 0.35} M -0.5 ${r * 0.45} A 0.5 0.5 0 1 1 0.5 ${r * 0.45} Z`;
+      return [
+        { points: [[-r, -r * 0.35], [r, -r * 0.35]], close: false },
+        { points: sweep(0, 360, 2.2, 2.2, 12).map(([x, y]) => [x, y + r * 0.45] as [number, number]), close: true },
+      ];
     default:
-      // square, cornered to the compass points
-      return `M 0 ${-r} L ${r} 0 L 0 ${r} L ${-r} 0 Z M ${-r * 0.45} 0 L ${r * 0.45} 0`;
+      // square cornered to the compass points, barred across
+      return [
+        { points: [[0, -r], [r, 0], [0, r], [-r, 0]], close: true },
+        { points: [[-r * 0.45, 0], [r * 0.45, 0]], close: false },
+      ];
   }
+}
+
+/** The same marks as an SVG `d`, for the rail. Built from `glyphMarks`, never beside it. */
+export function glyphPath(which: number): string {
+  return glyphMarks(which)
+    .map(({ points, close }) => {
+      const [first, ...rest] = points;
+      if (!first) return "";
+      const head = `M ${first[0].toFixed(2)} ${first[1].toFixed(2)}`;
+      const body = rest.map(([x, y]) => `L ${x.toFixed(2)} ${y.toFixed(2)}`).join(" ");
+      return `${head} ${body}${close ? " Z" : ""}`;
+    })
+    .filter(Boolean)
+    .join(" ");
 }
 
 /** Whether a state paints the sigil in oxblood and breaks the ring (§7.4). */
