@@ -5,6 +5,8 @@ import { backend } from "@/lib/ipc";
 import { useStore } from "@/store";
 import type { Commission, FamiliarSummary, Tab } from "@/lib/types";
 
+import { FloorToggle } from "@/scriptorium/Scriptorium";
+
 import { AetherBar } from "./AetherBar";
 import { Codex } from "./Codex";
 import { Intake } from "./Intake";
@@ -17,7 +19,16 @@ const COMING: Record<Exclude<Tab, "terminal" | "commission" | "codex">, string> 
   outputs: "Outputs arrive in a later phase.",
 };
 
-function Header({ familiar, onSummon }: { familiar: FamiliarSummary; onSummon: () => void }) {
+function Header({
+  familiar,
+  onSummon,
+  toggle,
+}: {
+  familiar: FamiliarSummary;
+  onSummon: () => void;
+  /** The Floor/Roster switch, shown here when the floor is not carrying it (§8.7). */
+  toggle?: React.ReactNode;
+}) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 px-4" data-testid="pane-header">
       <Sigil name={familiar.name} order={familiar.order} state={familiar.state} size={26} />
@@ -32,7 +43,8 @@ function Header({ familiar, onSummon }: { familiar: FamiliarSummary; onSummon: (
           </span>
         </>
       )}
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-3">
+        {toggle}
         <button
           type="button"
           onClick={onSummon}
@@ -48,7 +60,14 @@ function Header({ familiar, onSummon }: { familiar: FamiliarSummary; onSummon: (
   );
 }
 
-export function FamiliarPane({ familiar }: { familiar: FamiliarSummary }) {
+export function FamiliarPane({
+  familiar,
+  showToggle = false,
+}: {
+  familiar: FamiliarSummary;
+  /** True when the floor is put away, so its switch has to live somewhere (§8.7). */
+  showToggle?: boolean;
+}) {
   const { tab, setTab, aether, commissionsChanged } = useStore();
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [placeError, setPlaceError] = useState<string | null>(null);
@@ -80,8 +99,18 @@ export function FamiliarPane({ familiar }: { familiar: FamiliarSummary }) {
     }
   }
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-void">
-      <Header familiar={familiar} onSummon={() => setTab("terminal")} />
+    // A section, not a `main`: the scriptorium around it is the window's one main landmark, and
+    // the floor now sits inside it above this. Two `main` elements is one too many for a screen
+    // reader and, as it happens, for any `locator("main")` that means the pane.
+    <section
+      aria-label={`${familiar.name}'s workspace`}
+      className="flex min-h-0 min-w-0 flex-1 flex-col bg-void"
+    >
+      <Header
+        familiar={familiar}
+        onSummon={() => setTab("terminal")}
+        {...(showToggle ? { toggle: <FloorToggle /> } : {})}
+      />
       <Rule />
       <div role="tablist" aria-label="Familiar" className="flex shrink-0 items-center gap-1 px-4 py-2">
         {TABS.map((t, i) => (
@@ -145,6 +174,6 @@ export function FamiliarPane({ familiar }: { familiar: FamiliarSummary }) {
         )}
       </section>
       <AetherBar aether={aether} />
-    </main>
+    </section>
   );
 }

@@ -94,6 +94,46 @@ class FakeSummoning {
   }
 }
 
+/**
+ * The roster, optionally padded out to `?familiars=N`.
+ *
+ * §10 sets the floor's budget at twelve familiars with five of them working, and five is all
+ * the seeds there are. Rather than invent a thirteenth seed nobody wants in their study, the
+ * mock will make up as many as a test asks for — original names in §3's register, spread across
+ * the five orders so the desks share and queue the way §8.2 describes.
+ *
+ * Only the mock does this. The real roster is whatever is in the bindings folder.
+ */
+function crowd(): FamiliarSummary[] {
+  const wanted = Number(new URLSearchParams(location.search).get("familiars") ?? 0);
+  if (!Number.isFinite(wanted) || wanted <= roster.length) return roster;
+
+  const orders = ["quill", "lantern", "crucible", "compass", "ledger"] as const;
+  const names = [
+    "Gnomon", "Camber", "Rubric", "Plumb", "Ferrule", "Signet", "Bezel",
+    "Sextant", "Verso", "Colophon", "Armature", "Quire",
+  ];
+  const made: FamiliarSummary[] = [];
+  for (let i = 0; roster.length + made.length < wanted; i++) {
+    const name = names[i % names.length]! + (i >= names.length ? ` ${Math.floor(i / names.length) + 1}` : "");
+    // Five working, because that is the case §10 puts a number on. The rest are idle.
+    made.push({
+      id: `made-${i}`,
+      name,
+      order: orders[i % orders.length]!,
+      engine: "claude",
+      state: i < 4 ? "working" : "idle",
+      status: i < 4 ? "working" : "idle",
+      workspace: "~/work/elsewhere",
+      error: null,
+      warnings: [],
+      cannot_summon: null,
+      binding_path: `~/.grimoire/bindings/made-${i}.binding.md`,
+    });
+  }
+  return [...roster, ...made];
+}
+
 /** Mirrors the intake in seeds/*.binding.md, so the form has something real to render. */
 const intake: Record<string, IntakeField[]> = {
   vellum: [
@@ -276,7 +316,13 @@ export function createMockBackend(): Backend {
   return {
     kind: "mock",
     homeInfo: async () => ({ home: "~/.grimoire", bindings: "~/.grimoire/bindings", db_file: "~/.grimoire/grimoire.db", schema_version: 1 }),
-    listFamiliars: async () => structuredClone(roster),
+    listFamiliars: async () =>
+      structuredClone(
+        // The real backend overlays what is actually happening onto the binding's own row
+        // (see `list_familiars`). The mock does the one part a test can observe: a familiar
+        // with a live summoning is not dormant.
+        crowd().map((f) => (live.has(f.id) && f.state === "dormant" ? { ...f, state: "idle" as const, status: "summoned, idle" } : f)),
+      ),
     aetherFor: async (id) => aether[id] ?? null,
     intakeFor: async (id) => structuredClone(intake[id] ?? []),
     // The mock backend has no folder to watch, so nothing ever changes under it.
