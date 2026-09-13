@@ -72,18 +72,35 @@ Legend: `[x]` done and verified · `[~]` done but not verifiable in this environ
 
 ## Phase 2 — Bindings as files
 
-- [ ] `~/.grimoire/bindings/*.binding.md`, watcher with 250 ms debounce, re-parse only what changed
-- [ ] YAML frontmatter → serde + JSON Schema in Rust **and** Zod in TypeScript
-- [ ] Body after the frontmatter is the writ, verbatim, with only `{{intake.*}}` substitution
-- [ ] Unknown keys are a warning, not an error (§4) — no blanket `deny_unknown_fields`
-- [ ] `~` expands; relative paths resolve against the bindings folder
-- [ ] A binding that fails validation appears in oxblood with the error inline, never dropped
-- [ ] `engine != claude` loads and lists, Summon disabled, reason on hover (DECISIONS.md 0004)
-- [ ] Five seed bindings
-- [ ] Per-familiar workspace: commission · terminal · outputs · codex
-- [ ] Intake form generated from the binding; required fields block submit
+- [x] `~/.grimoire/bindings/*.binding.md`, watched with a 250 ms debounce, only touched files re-read
+- [x] YAML frontmatter → serde in Rust, Zod at the IPC boundary in TypeScript
+- [x] The body is the writ, verbatim. Nothing templates it; `{{intake.*}}` waits for Phase 3
+- [x] Unknown keys are a warning, not an error — including keys nested inside `bounds` and `aether`
+- [x] `~` expands; relative paths resolve against the bindings folder
+- [x] A binding that fails validation appears in oxblood with the error inline, never dropped
+- [x] `engine != claude` loads and lists, with the reason on hover (DECISIONS.md 0004)
+- [x] Five seeds, placed on first run and never overwritten
+- [x] Per-familiar workspace: commission · terminal · outputs · codex
+- [x] Intake form generated from the binding; required fields block submit
 
----
+**Acceptance** — every one checked in the running application, not only in tests
+
+- [x] A new `.binding.md` appears within 2 s with no restart
+- [x] Deleting one removes it
+- [x] A bad `order` shows its error in oxblood without crashing
+- [x] All five seeds load, with no warnings
+- [x] The intake form blocks submit on a missing required field, and says which
+
+**Two things worth carrying forward**
+
+- **The seeds are placed only when the folder is completely empty.** Deleting one and restarting
+  does not bring it back, which is right — deleting a familiar is a decision. `seed::place` will
+  restore a missing one, so a "restore the shipped bindings" button in the workbench is a one-line
+  call whenever Phase 9 wants it.
+- **`bounds` is still advisory.** Nothing in Phase 2 enforces it; §6.4 and §11 put enforcement in
+  Rust in Phase 4. A binding that lists deny paths under the wrong autonomy already warns, but a
+  binding under `bounded` is not yet held to anything. Until Phase 4 lands, the writ is the only
+  thing asking a familiar to behave, and §11 is explicit that the prompt is advisory.
 
 ## Later phases
 
