@@ -16,9 +16,12 @@ code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
 ## State
 
-Phase 0 of twelve. The interface shell, the theme, the sigil system and the database schema
-exist; no familiar can be summoned yet. `TASKS.md` has the detail, including what this
-development container cannot check.
+Phase 1 of twelve. A familiar can be summoned: the terminal tab spawns a real agent CLI in a
+pseudo-terminal, streams it to xterm.js, takes typed input, and stops it cleanly on quit with
+nothing orphaned. Familiars are still a hardcoded roster — reading them from files is Phase 2.
+
+`TASKS.md` has the detail, including the two Phase 1 criteria this development container cannot
+check and why.
 
 ## Running it
 
@@ -43,6 +46,13 @@ bun run typecheck
 bun test src                 # contrast ratios, sigil determinism
 bunx playwright test         # layout at 1280×800 and 1024×640
 bun run licences             # regenerates THIRD-PARTY.md; should leave no diff
+```
+
+Some tests drive a real agent CLI and are ignored by default, so a machine without one still
+passes. Run them deliberately:
+
+```
+cargo test -p grimoire-core --test engine -- --ignored --nocapture
 ```
 
 ## Building a release

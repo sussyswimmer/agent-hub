@@ -34,28 +34,41 @@ Legend: `[x]` done and verified · `[~]` done but not verifiable in this environ
 
 ## Phase 1 — One real familiar
 
-- [ ] `summon/pty.rs`: `portable-pty` spawn with cwd, scrubbed env, `PtySize`
-- [ ] Reader thread to a Tauri `ipc::Channel`, coalesced on a ~16 ms tick with a byte cap
-- [ ] Writer for typed input; `resize()` on panel resize
-- [ ] `summon/lifecycle.rs`: SIGINT → 5 s → SIGTERM → 3 s → SIGKILL, on the process **group**
-- [ ] Binary resolution: workbench path → `PATH`; missing binary disables Summon with the reason
-- [ ] xterm.js with fit + webgl addons, Iosevka, tokens applied
-- [ ] **First-run onboarding.** An interactive `claude` in a fresh environment opens a theme
-      picker and further first-run screens before it will accept a turn. A summoning has to
-      either pre-seed that state or drive past it, or the familiar looks hung on first use.
-      Found while verifying DECISIONS.md 0004; not yet solved.
-- [ ] Confirm `--append-system-prompt` and `--model` behave in interactive mode; record it
+- [x] `summon/pty.rs`: `portable-pty` spawn with cwd, scrubbed env, `PtySize`
+- [x] Reader thread to a Tauri `ipc::Channel`, coalesced on a 16 ms tick with a 64 KB cap
+- [x] Writer for typed input; `resize()` on panel resize
+- [x] `summon/lifecycle.rs`: SIGINT → 5 s → SIGTERM → 3 s → SIGKILL, on the process **group**
+- [x] Binary resolution: workbench path → `PATH`; missing binary disables Summon with the reason
+- [x] xterm.js with fit and webgl addons, Iosevka, tokens applied
+- [x] Restore intent persisted on quit — the stop runs on `RunEvent::Exit` and on `SIGTERM`
+- [x] **First-run onboarding** understood. A fresh machine opens a theme picker and a
+      login-method screen before the engine will take a turn. Grimoire shows them and the owner
+      answers them once, as in any terminal. It deliberately does not pre-write
+      `hasCompletedOnboarding` to skip a consent screen that is not ours to skip.
 
 **Acceptance**
 
-- [ ] Summon and hold a real conversation
-- [ ] Resize mid-run without corrupting the buffer
-- [ ] `cat` a 50k-line file with the UI responsive
-- [ ] Quit leaves no orphan — `ps` check plus a test asserting the child group is gone
-- [ ] An honest written report of `portable-pty` friction against the one-session budget in §5.
-      **This is the Tauri-vs-Electron decision point.**
+- [x] Summon a real engine — `claude` 2.1.270 runs in the app, drawing its full interface
+- [x] Type into it — a keystroke advanced the engine from one screen to the next
+- [~] Hold a full model turn — blocked by this container's onboarding, see below
+- [ ] Resize mid-run without corrupting the buffer — mechanism tested, window resize needs a WM
+- [x] `cat` 50k lines with the interface responsive
+- [x] Quit leaves no orphan — verified from the log, not merely from `ps`
+- [x] An honest report of `portable-pty` friction — **DECISIONS.md 0007: stay on Tauri**
 
----
+**The two criteria not fully met here, and why**
+
+- **A full model turn through the interactive interface.** This container has never run `claude`
+  interactively, so `hasCompletedOnboarding` is unset and the first-run flow asks to choose a
+  login method — even though `oauthAccount` is present and `claude -p` answers normally with
+  exactly the environment `scrubbed_env` provides. Completing it wants an OAuth code pasted from
+  a browser, which a sandbox cannot do. Everything up to the model turn is verified: the engine
+  runs, draws, and advances screens in response to keystrokes sent through the application.
+  **On a machine where the CLI has been used once, this should work with no change.**
+- **Resizing the window mid-run.** The geometry change is tested directly in Rust, where a
+  resize is reflected in `stty size` inside the pty, and the front-end wires a `ResizeObserver`
+  to that call. What could not be done here is dragging the window: `Xvfb` runs with no window
+  manager, so the window has no resizable frame.
 
 ## Phase 2 — Bindings as files
 
@@ -82,6 +95,10 @@ discovered early:
   **fails open**. That was measured, not assumed.
 - **Phase 4, unreachable app.** The hook must also deny when it cannot reach Grimoire at all.
   Unreachable is a refusal.
+- **Phase 4, verify the hook interactively.** DECISIONS.md 0004 measured the hook in print mode
+  only. Phase 1 now has a real pty that can drive an interactive engine
+  (`crates/grimoire-core/tests/engine.rs`), so the first thing Phase 4 should do is repeat the
+  deny probe there rather than assume it carries over.
 
 ---
 
@@ -93,6 +110,8 @@ cannot check, and none of it is claimed as done anywhere in this repository.
 | What | Phase | Why it cannot be checked here |
 | --- | --- | --- |
 | Native window chrome, traffic lights, overlay title bar | 0 | macOS window server |
+| Dragging the window to resize a live terminal | 1 | `Xvfb` has no window manager, so no resizable frame. The pty side is tested directly. |
+| A full model turn through the interactive interface | 1 | This container's CLI is not onboarded and its login flow needs a browser |
 | macOS notifications | 4, 7 | Notification Center |
 | Menu-bar residency, closing to the tray | 7 | `NSStatusItem` |
 | Keychain storage for API keys (§11) | 4 | macOS keychain. Nothing may fall back to a file. |

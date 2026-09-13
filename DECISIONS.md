@@ -206,3 +206,50 @@ with its `<svg>` and inside its row, so the fix is held in place from both direc
 drives Chromium, and they disagree. A green Playwright run says the markup and the logic are
 right; it says nothing about how WebKit will paint it. Run the real binary and look at it before
 calling any phase done — §0 already asks for exactly this, and this is what it is for.
+
+---
+
+## 0007 — Stay on Tauri. `portable-pty` was not the problem
+
+**Status:** accepted · **Concerns:** §5's Electron decision point · **Settles:** Phase 1
+
+**Context.** §5 says: *"If PTY handling in Rust costs more than one full working session of
+thrash in Phase 1, stop and say so — switching to Electron at the end of Phase 1 is cheap, and
+at the end of Phase 4 it is not."* This is that report.
+
+**Decision.** Stay on Tauri with `portable-pty`. Switching would buy nothing.
+
+**What `portable-pty` actually cost.** Close to nothing. `openpty`, `spawn_command`,
+`try_clone_reader`, `take_writer`, `resize` behaved exactly as documented, on the first try,
+against both `bash` and a real `claude`. Two things had to be learned rather than read:
+
+- The parent must drop its copy of the slave, or the master never reports end-of-file and the
+  reader thread lives for the life of the application. One line, and a test now covers it.
+- `MasterPty` is `Send` but not `Sync`, so the session cannot go into shared application state
+  until the master sits behind a mutex. One line.
+
+**What did cost time, and none of it was the crate.** Every real problem in Phase 1 was mine:
+
+| What broke | Where it actually was |
+| --- | --- |
+| A waiting engine displayed nothing | My reader held bytes while blocked on the next read |
+| A trailing word never appeared | My redaction carry had no expiry |
+| Banish did nothing, silently | My watcher thread held the child lock the stop ladder needed |
+| Quit ran no stop ladder | I hung it off a window event that does not fire on `SIGTERM` |
+| A real engine sat on its login screen | My environment allow-list was too narrow to let it reach the network |
+
+Every one of those would have arrived unchanged with `node-pty` under Electron, because none of
+them is about how a pty is opened. They are about what you do with the bytes afterwards, whose
+thread holds which lock, and which of the process's several possible deaths you listened for.
+
+**What Electron would have cost.** A second runtime in the bundle, tens of megabytes against
+§5's ~15 MB target, a rewrite of the core crate's thirty-seven tests into a stack with no
+`cargo test`, and the loss of the split in DECISIONS.md 0001 that lets the interesting code be
+tested in two seconds without linking a webview.
+
+**One genuine friction worth naming.** Tauri ships WebKit, the Playwright suite drives Chromium,
+and they disagree — see DECISIONS.md 0006, where sixteen green tests coexisted with a sigil
+drawn on top of its own status line. That is a real tax, and Electron would not charge it, since
+it is Chromium everywhere. It is still much smaller than the cost of the switch, and the answer
+is cheap: build the binary and look at it at the end of every phase. Doing that is what found
+four of the five bugs in the table above.
