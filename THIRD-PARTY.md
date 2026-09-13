@@ -544,19 +544,31 @@ request for type. Each licence text sits beside its files.
 | `zvariant_derive` | 5.15.0 | MIT |
 | `zvariant_utils` | 4.2.0 | MIT |
 
-## npm packages (12)
+## npm packages (24)
 
 | Package | Version | Licence |
 | --- | --- | --- |
+| `@pixi/colord` | 2.9.6 | MIT |
 | `@tauri-apps/api` | 2.11.1 | Apache-2.0 OR MIT |
 | `@tauri-apps/plugin-notification` | 2.4.0 | MIT OR Apache-2.0 |
 | `@tauri-apps/plugin-opener` | 2.5.5 | MIT OR Apache-2.0 |
+| `@types/earcut` | 3.0.0 | MIT |
+| `@webgpu/types` | 0.1.72 | BSD-3-Clause |
+| `@xmldom/xmldom` | 0.8.15 | MIT |
 | `@xterm/addon-fit` | 0.11.0 | MIT |
 | `@xterm/addon-webgl` | 0.19.0 | MIT |
 | `@xterm/xterm` | 6.0.0 | MIT |
+| `earcut` | 3.2.3 | ISC |
+| `eventemitter3` | 5.0.4 | MIT |
+| `gifuct-js` | 2.1.2 | MIT |
+| `ismobilejs` | 1.1.1 | MIT |
+| `js-binary-schema-parser` | 2.0.3 | MIT |
+| `parse-svg-path` | 0.2.0 | MIT |
+| `pixi.js` | 8.20.1 | MIT |
 | `react` | 19.3.0 | MIT |
 | `react-dom` | 19.3.0 | MIT |
 | `scheduler` | 0.28.0 | MIT |
+| `tiny-lru` | 11.4.7 | BSD-3-Clause |
 | `yaml` | 2.9.1 | ISC |
 | `zod` | 4.6.4 | MIT |
 | `zustand` | 5.0.15 | MIT |
