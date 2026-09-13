@@ -1,0 +1,24 @@
+[package]
+name = "grimoire-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Grimoire core: summoning, the seal, the breaker, wards, the ledger"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+rusqlite = { version = "0.40", features = ["bundled"] }
+ulid = "3"
+sha2 = "0.11"
+ts-rs = { version = "12", features = ["serde-compat"] }
+
+[dev-dependencies]
+tempfile = "3"
