@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use grimoire_core::summon::{PtySession, PtySize, Spawn, resolve, scrubbed_env, stop, usage};
 use grimoire_core::types::Engine;
+use grimoire_core::seal::server::{Sessions, Summoned};
 use grimoire_core::{Db, commission, db as gdb, ledger};
 use tauri::ipc::Channel;
 
@@ -44,9 +45,32 @@ pub struct SummonArgs {
     pub model: Option<String>,
 }
 
+/// Where a summoning's output is currently going.
+///
+/// A slot rather than the channel itself, because the terminal that asked for the output is not
+/// the same object for the life of the summoning: React unmounts the pane when you look at
+/// another familiar and mounts a fresh one when you come back. The pty does not care — it is
+/// still running — so the outlet has to be swappable, and [`Summonings::attach`] swaps it.
+type Outlet = Arc<Mutex<Option<Channel<Emission>>>>;
+
+/// Send to whichever terminal is currently attached, if any.
+///
+/// Nothing is buffered while no one is listening. A pty is a stream, not a log: bytes written
+/// while the pane was closed are gone, and pretending otherwise would mean an unbounded buffer
+/// per familiar for output nobody asked to keep.
+fn emit(outlet: &Outlet, emission: Emission) {
+    if let Ok(slot) = outlet.lock()
+        && let Some(channel) = slot.as_ref()
+    {
+        let _ = channel.send(emission);
+    }
+}
+
 /// A summoning the application is holding, plus what it is working on.
 struct Live {
     session: Arc<PtySession>,
+    /// The terminal currently showing this summoning, swapped on re-attach.
+    outlet: Outlet,
     /// The row in `summonings`, so the exit can be recorded against it.
     summoning_id: String,
     /// The commission it is running, when it was started to do one.
@@ -59,15 +83,27 @@ struct Live {
 #[derive(Default)]
 pub struct Summonings {
     live: Mutex<HashMap<String, Live>>,
+    /// What the seal needs to judge each live session, keyed by the engine session id the hook
+    /// reports. Shared with the seal's server rather than copied, so a familiar's autonomy
+    /// cannot be stale by the time one of its tool calls is judged.
+    sessions: Sessions,
 }
 
 impl Summonings {
+    pub fn sessions(&self) -> Sessions {
+        Arc::clone(&self.sessions)
+    }
+}
+
+impl Summonings {
+    #[allow(clippy::too_many_arguments)]
     pub fn summon(
         &self,
         db: &Db,
         req: SummonArgs,
         workbench_path: Option<String>,
         cwd: std::path::PathBuf,
+        seal: &Seal,
         channel: Channel<Emission>,
     ) -> Result<u32, String> {
         let SummonArgs { id, engine, args, cols, rows, model, .. } = req;
@@ -93,7 +129,28 @@ impl Summonings {
         args.push("--session-id".into());
         args.push(engine_session.clone());
 
-        let out = channel.clone();
+        // §6.4: install the seal for this summoning. The settings file is written per summoning
+        // and named on the command line, so the hook is configuration *outside* the
+        // conversation — there is no prompt, tool argument or writ that can reach it.
+        //
+        // `--setting-sources ''` keeps the owner's own engine settings out of an agent run
+        // (§11), and would otherwise be where a leftover permission could quietly widen things.
+        match install_hook(&seal.settings_dir, &engine_session, &seal.socket) {
+            Ok(settings) => {
+                args.push("--settings".into());
+                args.push(settings.display().to_string());
+                args.push("--setting-sources".into());
+                args.push(String::new());
+            }
+            Err(e) => {
+                // Refuse to summon rather than start a familiar with no gate behind it. A
+                // summoning without the seal is the one thing §11 exists to prevent.
+                return Err(format!("The seal could not be installed for this summoning, so it was not started: {e}"));
+            }
+        }
+
+        let outlet: Outlet = Arc::new(Mutex::new(Some(channel)));
+        let out = Arc::clone(&outlet);
         let session = PtySession::spawn(
             Spawn {
                 program: resolved.path().to_path_buf(),
@@ -105,7 +162,7 @@ impl Summonings {
             // Send failures are ignored on purpose: the only way this fails is the window
             // having gone, and a closed window is not a reason to tear down the familiar.
             Arc::new(move |bytes| {
-                let _ = out.send(Emission::Output { bytes });
+                emit(&out, Emission::Output { bytes });
             }),
         )
         .map_err(|e| e.to_string())?;
@@ -139,10 +196,27 @@ impl Summonings {
             tracing::warn!(error = %e, "could not mark the commission running");
         }
 
+        // Tell the seal whose session this is, and what it is allowed to do, before the engine
+        // has had a chance to call a single tool.
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.insert(
+                engine_session.clone(),
+                Summoned {
+                    familiar_id: id.clone(),
+                    familiar_name: seal.familiar_name.clone(),
+                    commission_id: commission_id.clone(),
+                    autonomy: seal.autonomy,
+                    bounds: seal.bounds.clone(),
+                    workspace: cwd.clone(),
+                },
+            );
+        }
+
         self.live.lock().map_err(poisoned)?.insert(
             id.clone(),
             Live {
                 session: Arc::clone(&session),
+                outlet: Arc::clone(&outlet),
                 summoning_id: summoning_id.clone(),
                 commission_id: commission_id.clone(),
                 engine_session: engine_session.clone(),
@@ -158,6 +232,7 @@ impl Summonings {
         // deadlocks every Banish, silently, for as long as the familiar is alive. Found by
         // pressing the button in the running application; no Rust test spawned a waiter, so
         // nothing caught it. Polling releases the lock between looks.
+        let watch_outlet = Arc::clone(&outlet);
         let watch_db = db.clone();
         let watch_commission = commission_id.clone();
         let watch_session = engine_session.clone();
@@ -196,10 +271,28 @@ impl Summonings {
             }
             // The transcript is complete now, so this is the figure that stands.
             record_usage(&watch_db, watch_commission.as_deref(), &watch_session, &watch_model);
-            let _ = channel.send(Emission::Ended { code });
+            emit(&watch_outlet, Emission::Ended { code });
         });
 
         Ok(pid)
+    }
+
+    /// Point a freshly-mounted terminal at a summoning that is already running.
+    ///
+    /// The window's idea of what is live is rebuilt from the backend rather than remembered,
+    /// because it cannot be remembered: looking at another familiar unmounts the pane and the
+    /// next mount starts from nothing. Without this, a familiar you walked away from came back
+    /// looking dormant while its engine was still running — unbanishable, because the button
+    /// offered to summon it, and unsummonable, because the backend knew better. Found by
+    /// clicking away from a live Tally and back.
+    ///
+    /// Returns false when this familiar is not summoned, which is the ordinary case and not an
+    /// error: most familiars are dormant most of the time.
+    pub fn attach(&self, id: &str, channel: Channel<Emission>) -> Result<bool, String> {
+        let live = self.live.lock().map_err(poisoned)?;
+        let Some(entry) = live.get(id) else { return Ok(false) };
+        *entry.outlet.lock().map_err(poisoned)? = Some(channel);
+        Ok(true)
     }
 
     pub fn write(&self, id: &str, bytes: &[u8]) -> Result<(), String> {
@@ -230,6 +323,11 @@ impl Summonings {
 
     /// Record the end of a summoning: its usage, its row, and the fate of its commission.
     fn close_rows(&self, db: &Db, familiar_id: &str, live: &Live, reason: &str) {
+        // Forget the session first. A hook arriving after its familiar has gone must find
+        // nothing rather than a stale entry, and an unrecognised session is refused (§6.4).
+        if let Ok(mut sessions) = self.sessions.lock() {
+            sessions.remove(&live.engine_session);
+        }
         record_usage(db, live.commission_id.as_deref(), &live.engine_session, &live.model);
         let _ = gdb::summonings::close(db, &live.summoning_id, reason);
         let _ = ledger::append(
@@ -295,6 +393,43 @@ fn record_usage(db: &Db, commission_id: Option<&str>, engine_session: &str, mode
     let cost = ledger::cost::estimate(u.tokens, model);
     if let Err(e) = commission::record_usage(db, cid, u.tokens, u.turns, cost) {
         tracing::warn!(error = %e, "could not record what the run cost");
+    }
+}
+
+/// What the seal needs to know about a summoning before it starts.
+pub struct Seal {
+    pub familiar_name: String,
+    pub autonomy: grimoire_core::types::Autonomy,
+    pub bounds: grimoire_core::binding::schema::Bounds,
+    pub socket: std::path::PathBuf,
+    pub settings_dir: std::path::PathBuf,
+}
+
+/// Write the settings file that installs the seal's hook for one summoning.
+///
+/// Named after the session so two familiars running at once cannot overwrite each other's, and
+/// written fresh every time: a file left behind by an older version would install an older gate.
+fn install_hook(
+    dir: &std::path::Path,
+    engine_session: &str,
+    socket: &std::path::Path,
+) -> std::io::Result<std::path::PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let exe = std::env::current_exe()?;
+    let command = format!("{} seal-hook {}", shell_quote(&exe.display().to_string()), shell_quote(&socket.display().to_string()));
+    let settings = grimoire_core::seal::hook::settings_json(&command);
+
+    let path = dir.join(format!("{engine_session}.json"));
+    std::fs::write(&path, serde_json::to_vec_pretty(&settings)?)?;
+    Ok(path)
+}
+
+/// Quote a path for the shell the engine runs hook commands through.
+fn shell_quote(s: &str) -> String {
+    if s.chars().all(|c| c.is_alphanumeric() || "/._-".contains(c)) {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', r"'\''"))
     }
 }
 

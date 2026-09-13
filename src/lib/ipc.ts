@@ -10,6 +10,8 @@ import type {
   HomeInfo,
   IntakeField,
   LedgerSummary,
+  Resolution,
+  Seal,
 } from "./types";
 
 /** One message from a summoning's pty. Bytes, not text: see `Emission` in Rust. */
@@ -48,6 +50,11 @@ export interface Backend {
   /** Walk the stop ladder. Resolves to which rung it took. */
   banish(id: string): Promise<string>;
   liveSummonings(): Promise<string[]>;
+  /**
+   * Point a freshly-mounted terminal at a summoning that is already running, and say whether
+   * there was one. Output written while nothing was attached is gone: a pty is a stream.
+   */
+  attachSummoning(id: string, onEmission: (e: Emission) => void): Promise<boolean>;
 
   /** Place a commission. It queues; it starts when its familiar is next free (§6.2). */
   commissionCreate(id: string, prompt: string, intake: Record<string, string>): Promise<Commission>;
@@ -58,6 +65,13 @@ export interface Backend {
   ledgerEvents(limit?: number): Promise<Event[]>;
   /** What a familiar has written into its codex (§6.6). */
   codexFor(id: string): Promise<CodexView>;
+
+  /** Everything waiting on the owner, oldest first (§6.4). */
+  sealsPending(): Promise<Seal[]>;
+  /** Answer one request. The familiar blocked on it is woken by this. */
+  sealDecide(id: string, resolution: Resolution): Promise<Seal>;
+  /** Called when the queue moves. Returns an unsubscribe. */
+  onSealsChanged(fn: () => void): Promise<() => void>;
 }
 
 declare global {
@@ -66,15 +80,25 @@ declare global {
   }
 }
 
-let instance: Backend | null = null;
+/**
+ * The one backend, as a promise rather than a resolved value.
+ *
+ * Caching the *result* looks equivalent and is not: two callers that arrive before the first
+ * `await` finishes both see an empty cache, both build a backend, and the second overwrites the
+ * first. Whoever captured the first is then talking to an orphan. With the mock that showed up
+ * as a subscription that never fired — the roster watching one backend while the terminal
+ * summoned on another — and against Tauri it would be two clients and two sets of listeners.
+ * Caching the promise means every caller waits on the same construction.
+ */
+let building: Promise<Backend> | null = null;
 
 export async function backend(): Promise<Backend> {
-  if (instance) return instance;
-  const forceMock = import.meta.env["VITE_IPC_MOCK"] === "1";
-  if (!forceMock && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-    instance = (await import("./ipc.tauri")).createTauriBackend();
-  } else {
-    instance = (await import("./ipc.mock")).createMockBackend();
-  }
-  return instance;
+  building ??= (async () => {
+    const forceMock = import.meta.env["VITE_IPC_MOCK"] === "1";
+    const useTauri = !forceMock && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+    return useTauri
+      ? (await import("./ipc.tauri")).createTauriBackend()
+      : (await import("./ipc.mock")).createMockBackend();
+  })();
+  return building;
 }

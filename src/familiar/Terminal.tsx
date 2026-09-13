@@ -19,6 +19,14 @@ type Status = "dormant" | "summoning" | "live" | "ended" | "failed";
 const DIM = "[2m";
 const RESET = "[0m";
 
+/** Send what is typed to the familiar. Returns the disposable xterm gives back. */
+function typeInto(xterm: Xterm, id: string, b: Awaited<ReturnType<typeof backend>>) {
+  const encoder = new TextEncoder();
+  return xterm.onData((data) => {
+    void b.sendInput(id, encoder.encode(data)).catch(() => {});
+  });
+}
+
 export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
   const host = useRef<HTMLDivElement>(null);
   const term = useRef<Xterm | null>(null);
@@ -81,12 +89,49 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
     const observer = new ResizeObserver(onResize);
     observer.observe(host.current);
 
+    // Ask the backend whether this familiar is already running before assuming it is not.
+    //
+    // The pane is unmounted whenever you look at another familiar, so it remembers nothing —
+    // and a summoning outlives it. Without this, walking away from a live familiar and coming
+    // back showed a dormant one: the button offered to summon it, and the backend refused
+    // because it was already summoned, leaving it impossible to banish from the window while
+    // its engine ran on. Found by clicking away from a live Tally and back.
+    //
+    // Scrollback from before the re-attach is genuinely gone — a pty is a stream, not a log —
+    // so the pane says so rather than pretending the blank buffer is the whole story.
+    let abandoned = false;
+    let typed: { dispose: () => void } | undefined;
+    void (async () => {
+      try {
+        const b = await backend();
+        const found = await b.attachSummoning(familiar.id, (e) => {
+          if (e.kind === "output") {
+            xterm.write(e.bytes);
+          } else {
+            typed?.dispose();
+            setStatus("ended");
+            noteCommissionsChanged();
+            setNote(e.code === null ? "the summoning ended" : `the summoning ended (${e.code})`);
+          }
+        });
+        if (!found || abandoned) return;
+        typed = typeInto(xterm, familiar.id, b);
+        xterm.write(`${DIM}— reattached; what came before is not shown —${RESET}\r\n`);
+        setStatus("live");
+      } catch {
+        // A backend that cannot be reached is reported by the buttons that need it, not by a
+        // pane that was only asking a question.
+      }
+    })();
+
     return () => {
+      abandoned = true;
+      typed?.dispose();
       observer.disconnect();
       term.current = null;
       xterm.dispose();
     };
-  }, [familiar.id]);
+  }, [familiar.id, noteCommissionsChanged]);
 
   async function summon() {
     const xterm = term.current;
@@ -94,13 +139,10 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
     setStatus("summoning");
     setError(null);
     setNote(null);
-    const encoder = new TextEncoder();
 
     try {
       const b = await backend();
-      const typed = xterm.onData((data) => {
-        void b.sendInput(familiar.id, encoder.encode(data)).catch(() => {});
-      });
+      const typed = typeInto(xterm, familiar.id, b);
 
       await b.summon({
         id: familiar.id,

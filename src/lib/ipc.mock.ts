@@ -8,6 +8,8 @@ import type {
   FamiliarSummary,
   IntakeField,
   LedgerSummary,
+  Resolution,
+  Seal,
 } from "./types";
 
 const roster: FamiliarSummary[] = [
@@ -34,8 +36,13 @@ class FakeSummoning {
   private readonly encoder = new TextEncoder();
   constructor(
     readonly id: string,
-    private readonly emit: (e: Emission) => void,
+    private emit: (e: Emission) => void,
   ) {}
+
+  /** A new terminal takes over the output, as it does in the real backend. */
+  attach(emit: (e: Emission) => void) {
+    this.emit = emit;
+  }
 
   greet() {
     this.say(`Grimoire mock terminal — ${this.id}\r\nThere is no engine here. Type and it will echo.\r\n`);
@@ -97,6 +104,14 @@ const intake: Record<string, IntakeField[]> = {
   sconce: [
     { id: "question", ask: "What is the question?", type: "multiline", options: [], required: true },
     { id: "shape", ask: "What should come back?", type: "select", options: ["brief", "literature review", "data and charts"], required: true },
+  ],
+  astrolabe: [
+    { id: "horizon", ask: "How far ahead are we planning?", type: "select", options: ["today", "this week", "the next fortnight"], required: true },
+    { id: "fixed", ask: "What is immovable this period?", type: "multiline", options: [], required: false },
+  ],
+  anvil: [
+    { id: "change", ask: "What should change?", type: "multiline", options: [], required: true },
+    { id: "done", ask: "What does done look like?", type: "multiline", options: [], required: true },
   ],
 };
 
@@ -199,9 +214,63 @@ class Commissions {
   }
 }
 
+/**
+ * A stand-in for the seal's queue (§6.4).
+ *
+ * The mock familiar has no real tool calls to judge, so requests are raised on a schedule the
+ * interface can drive: summoning a familiar whose binding is `propose` puts one in front of the
+ * owner, which is exactly the shape the real one produces.
+ */
+class Seals {
+  private rows: Seal[] = [];
+  private seq = 0;
+  private listeners = new Set<() => void>();
+
+  raise(familiarId: string, name: string, commissionId: string, kind: Seal["kind"], action: string, reason: string, preview: string | null) {
+    this.rows.push({
+      id: `s${String(++this.seq).padStart(4, "0")}`,
+      commission_id: commissionId,
+      familiar_id: familiarId,
+      familiar_name: name,
+      kind,
+      action,
+      reason,
+      preview,
+      raised: Math.floor(Date.now() / 1000),
+      resolved: null,
+      resolution: null,
+    });
+    this.changed();
+  }
+
+  pending(): Seal[] {
+    return this.rows.filter((s) => s.resolved === null).map((s) => structuredClone(s));
+  }
+
+  decide(id: string, resolution: Resolution): Seal {
+    const row = this.rows.find((s) => s.id === id);
+    if (!row) throw new Error(`there is no seal ${id}`);
+    if (row.resolved !== null) throw new Error("that request has already been answered");
+    row.resolved = Math.floor(Date.now() / 1000);
+    row.resolution = resolution;
+    this.changed();
+    return structuredClone(row);
+  }
+
+  watch(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private changed() {
+    for (const fn of this.listeners) fn();
+  }
+}
+
 export function createMockBackend(): Backend {
   const live = new Map<string, FakeSummoning>();
   const commissions = new Commissions();
+  const seals = new Seals();
   const events: Event[] = [];
 
   return {
@@ -220,6 +289,19 @@ export function createMockBackend(): Backend {
       const taken = commissions.startNext(id);
       if (taken) {
         events.push(event(events.length + 1, id, taken.id, "commission_started"));
+        // Astrolabe stands in for a familiar whose binding is `propose`: the first thing it
+        // tries needs a seal, which is what the queue is for.
+        if (id === "astrolabe") {
+          seals.raise(
+            id,
+            "Astrolabe",
+            taken.id,
+            "write",
+            "write to ~/work/planning/week.md",
+            "Astrolabe is set to propose, so anything beyond reading and thinking comes to you first.",
+            "# The week\n\nMonday: the swimming essay.\n",
+          );
+        }
       }
       events.push(event(events.length + 1, id, taken?.id ?? null, "summoned"));
       // Next tick, so a caller that renders on the resolved promise is mounted first.
@@ -242,6 +324,12 @@ export function createMockBackend(): Backend {
     async liveSummonings() {
       return [...live.keys()];
     },
+    async attachSummoning(id, onEmission) {
+      const s = live.get(id);
+      if (!s) return false;
+      s.attach(onEmission);
+      return true;
+    },
 
     async commissionCreate(id, prompt, intake) {
       const row = commissions.place(id, prompt, intake);
@@ -256,6 +344,15 @@ export function createMockBackend(): Backend {
     },
     async ledgerEvents(limit) {
       return events.slice(-(limit ?? 100)).reverse();
+    },
+    async sealsPending() {
+      return seals.pending();
+    },
+    async sealDecide(id, resolution) {
+      return seals.decide(id, resolution);
+    },
+    async onSealsChanged(fn) {
+      return seals.watch(fn);
     },
     async codexFor(id) {
       return codex[id] ?? { path: `~/.grimoire/codex/${id}.md`, text: "", words: 0, needs_condense: false };

@@ -42,12 +42,24 @@ export function createTauriBackend(): Backend {
       invoke("resize_summoning", { id, cols, rows }).then(() => undefined),
     banish: (id) => call("banish", S.rung, { id }),
     liveSummonings: () => call("live_summonings", S.summoningIds),
+    async attachSummoning(id, onEmission) {
+      const channel = new Channel<RawEmission>();
+      channel.onmessage = (m) => onEmission(decode(m));
+      return S.attached.parse(await invoke("attach_summoning", { id, channel }));
+    },
 
     commissionCreate: (id, prompt, intake) => call("commission_create", S.commission, { id, prompt, intake }),
     commissionsFor: (id) => call("commissions_for", S.commission.array(), { id }),
     ledgerSummary: () => call("ledger_summary", S.ledgerSummary),
     ledgerEvents: (limit) => call("ledger_events", S.ledgerEvent.array(), { limit: limit ?? null }),
     codexFor: (id) => call("codex_for", S.codexView, { id }),
+
+    sealsPending: () => call("seals_pending", S.seal.array()),
+    sealDecide: (id, resolution) => call("seal_decide", S.seal, { id, resolution }),
+    async onSealsChanged(fn) {
+      const { listen } = await import("@tauri-apps/api/event");
+      return listen("seals-changed", () => fn());
+    },
   };
 }
 

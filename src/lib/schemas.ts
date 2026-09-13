@@ -38,6 +38,8 @@ export const aether = z.object({
 export const pid = z.number().int().positive();
 export const rung = z.enum(["already", "interrupt", "terminate", "kill"]);
 export const summoningIds = z.array(z.string());
+/** Whether a re-attach found a live summoning to attach to. */
+export const attached = z.boolean();
 
 /** Mirrors `Emission` in src-tauri/src/summonings.rs. */
 export const emission = z.discriminatedUnion("kind", [
@@ -139,4 +141,23 @@ export const codexView = z.object({
   text: z.string(),
   words: z.number(),
   needs_condense: z.boolean(),
+});
+
+// ── The seal (§6.4) ────────────────────────────────────────────────────────────────────
+
+export const sealKind = z.enum(["write", "shell", "network", "destructive", "send", "reliquary"]);
+export const resolution = z.enum(["sealed", "sealed_always", "refused", "timed_out"]);
+
+export const seal = z.object({
+  id: z.string(),
+  commission_id: z.string(),
+  familiar_id: z.string(),
+  familiar_name: z.string(),
+  kind: sealKind,
+  action: z.string(),
+  reason: z.string(),
+  preview: z.string().nullable(),
+  raised: z.number(),
+  resolved: z.number().nullable(),
+  resolution: resolution.nullable(),
 });

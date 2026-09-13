@@ -77,3 +77,39 @@ test("switching familiars does not show one familiar's scrollback under another'
   await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "dormant");
   expect(await screen(page)).not.toContain("vellum");
 });
+
+test("a familiar you walk away from is still live when you come back", async ({ page }) => {
+  // The regression this exists for. The pane is unmounted when you look at another familiar,
+  // so it remembers nothing — but the summoning outlives it. The pane used to come back
+  // reading "dormant" while the engine was still running, which left the familiar stranded:
+  // the button offered to summon it and the backend refused, already summoned, so there was
+  // no way to banish it from the window at all. Found by clicking away from a live Tally and
+  // back, with the real `claude` still on the process table.
+  await openTerminal(page);
+  await page.getByTestId("terminal-toggle").click();
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
+  await expect.poll(() => screen(page)).toContain("Grimoire mock terminal");
+
+  await page.locator('[data-familiar="sconce"]').click();
+  await expect(page.getByTestId("pane-header")).toContainText("Sconce");
+
+  await page.locator('[data-familiar="vellum"]').click();
+  await expect(page.getByTestId("pane-header")).toContainText("Vellum");
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
+  await expect(page.getByTestId("terminal-toggle")).toHaveText("Banish");
+
+  // And it says plainly that the scrollback is not the whole story, rather than presenting a
+  // near-empty buffer as if that were everything the familiar has done.
+  await expect.poll(() => screen(page)).toContain("what came before is not shown");
+
+  // Typing still reaches it: the input path is re-wired, not just the label. Clicking in
+  // first because coming back to a familiar does not steal the keyboard — moving through the
+  // roster with the arrow keys would be unusable if it did.
+  await page.getByTestId("xterm-host").click();
+  await page.keyboard.type("still-listening");
+  await expect.poll(() => screen(page)).toContain("still-listening");
+
+  // And it can now be banished, which was the part that was impossible.
+  await page.getByTestId("terminal-toggle").click();
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "ended");
+});
