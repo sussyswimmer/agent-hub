@@ -16,14 +16,16 @@ code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
 ## State
 
-Phase 2 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
+Phase 3 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
 appears, edit it and the change arrives without a restart, break it and it says what is wrong
-rather than vanishing. Each one can be summoned — the terminal tab spawns a real agent CLI in a
-pseudo-terminal, streams it to xterm.js, takes typed input, and stops cleanly on quit with
-nothing orphaned. Five bindings ship and are placed on first run.
+rather than vanishing. Give one a commission and it queues; summon it and the oldest starts,
+running a real agent CLI in a pseudo-terminal with the binding's writ as its briefing. What it
+costs is recorded, and what it stopped halfway through is still there, correctly marked, after a
+restart. Five bindings ship and are placed on first run.
 
-Commissions do not yet run, and **the seal does not yet exist**: a familiar's `bounds` are
-advisory until Phase 4 puts enforcement in Rust.
+**The seal does not yet exist.** A familiar's `bounds` are advisory until Phase 4 puts
+enforcement in Rust, so nothing currently stops a summoned familiar doing anything its engine
+will do.
 
 `TASKS.md` has the detail, including the two Phase 1 criteria this development container cannot
 check and why.

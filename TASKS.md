@@ -102,10 +102,47 @@ Legend: `[x]` done and verified · `[~]` done but not verifiable in this environ
   binding under `bounded` is not yet held to anything. Until Phase 4 lands, the writ is the only
   thing asking a familiar to behave, and §11 is explicit that the prompt is advisory.
 
+## Phase 3 — Commissions, persistence, ledger
+
+- [x] Commission lifecycle and queue, one at a time per familiar (§6.2)
+- [x] Every §9 table written to: familiars, summonings, commissions, ledger_events
+- [x] `{{intake.*}}` substitution, single-pass, the only templating in the application (§4)
+- [x] Codex read and append, condense threshold and backup-first condense (§6.6)
+- [x] Ledger events appended for every summon, start, end, usage and misfire
+- [x] Ledger view: spend by familiar and by day, cost labelled estimated everywhere (§6.9)
+- [x] The writ reaches the engine verbatim, with a note naming the codex (§4, §6.6)
+- [x] Recovery at startup for commissions and summonings left open by an earlier stop
+
+**Acceptance** — each checked in the running application
+
+- [x] A commission survives a restart with the correct status. Killed with `SIGKILL`
+      mid-commission; on restart it came back `misfired`, the log said why, and the queue behind
+      it was free again.
+- [x] A familiar with a running commission queues the next one visibly. Two placed, one
+      summoned: the first showed `running`, the second `queued · next`.
+- [x] The codex file contains what the familiar wrote — the tab reads the real file, in the
+      right study, with its word count. See the caveat below on the writing half.
+- [x] The ledger shows a non-zero token count for a real run, and labels cost as estimated in
+      every place it appears. Real numbers: 6,143 tokens, `$0.007638` estimated.
+
+**Caveats, stated rather than ticked over**
+
+- **The familiar has not yet written to its codex here.** Grimoire tells it the path and that it
+  may append — confirmed by reading the spawned engine's own command line — and the reading half
+  is verified against a real file. The writing half needs the engine to take a turn, which this
+  container's onboarding still blocks (see Phase 1). The file path, the append behaviour and the
+  condense-with-backup are covered by tests.
+- **The non-zero token count was measured through print mode, not the pty.** The code is the same
+  either way: `summon::usage` neither knows nor cares how the engine was started. DECISIONS.md
+  0008 has the evidence.
+- **`bounds` is still advisory.** Phase 4 is where §6.4 and §11 become real. Nothing in Phase 3
+  stops a familiar doing anything.
+
+---
+
 ## Later phases
 
-Phases 3–9 are unstarted. Two things are worth carrying forward now because they were
-discovered early:
+Phases 4–9 are unstarted. Three things are worth carrying forward, all discovered early:
 
 - **Phase 4, the seal.** The mechanism is settled and verified — see DECISIONS.md 0004. The
   hook must enforce its own deadline and deny on expiry, because Claude Code's own hook timeout

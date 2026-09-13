@@ -253,3 +253,45 @@ drawn on top of its own status line. That is a real tax, and Electron would not 
 it is Chromium everywhere. It is still much smaller than the cost of the switch, and the answer
 is cheap: build the binary and look at it at the end of every phase. Doing that is what found
 four of the five bugs in the table above.
+
+---
+
+## 0008 — Token counts come from the engine's transcript, not from the terminal
+
+**Status:** accepted · **Concerns:** §6.5, §6.9 · **Settles:** Phase 3's metering
+
+**Context.** §6.5 asks for tokens "parsed from the CLI's own reporting where it emits it,
+wall-clock otherwise". For an interactive engine the obvious reading is the terminal, since that
+is where the engine prints its own counts. It is the wrong place. Those numbers are drawn with
+cursor-positioning escapes rather than written as text, reflowed on every resize, and rewritten
+in place as a turn progresses. Anything recovered from them would be a guess dressed up as a
+measurement, and §6.9 puts those numbers in a ledger.
+
+**Decision.** Read the transcript the engine writes for itself. `claude` keeps one JSONL file per
+session with a `usage` object on every assistant message — `input_tokens`, `output_tokens`,
+`cache_read_input_tokens`, `cache_creation_input_tokens` — and the model that produced it.
+Grimoire names the session with `--session-id` when it spawns, so it knows exactly which file is
+its own instead of guessing from timestamps among all the sessions on the machine. The file is
+located by that name across the project directories rather than by deriving the directory from
+the working directory: the slug rule is the engine's business and may change, while the file is
+always `<session-id>.jsonl`.
+
+**Evidence.** Run against `claude` 2.1.270, with a session id chosen by the test:
+
+```
+turns: 1, tokens: Tokens { input: 2, output: 5, cache_read: 4479, cache_write: 1657 }
+estimated cost: $0.007638
+```
+
+`crates/grimoire-core/tests/engine.rs` does this end to end — spawn, find, total, price — with
+nothing stubbed. It is `#[ignore]`d, because it needs an engine and spends a little.
+
+**Consequence.** Cache reads are counted separately, which matters: a long session is mostly
+cache, and pricing those at the input rate would overstate a run several times over and make the
+meter useless for the one thing it is for. When the transcript is not there — a different engine,
+an older CLI, a session that produced no turn — nothing is reported. An absent figure is honest;
+a zero that looks like a measurement is not.
+
+The cost built from those tokens is an estimate at list prices and never becomes anything else.
+It exists to answer "was that run expensive?", not "what do I owe?" — the owner is on a
+subscription, where no money changes hands per token at all.
