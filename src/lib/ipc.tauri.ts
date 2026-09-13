@@ -20,6 +20,11 @@ export function createTauriBackend(): Backend {
     homeInfo: () => call("home_info", S.homeInfo),
     listFamiliars: () => call("list_familiars", S.familiarSummary.array()),
     aetherFor: async () => null,
+    intakeFor: (id) => call("intake_for", S.intakeField.array(), { id }),
+    async onBindingsChanged(fn) {
+      const { listen } = await import("@tauri-apps/api/event");
+      return listen("bindings-changed", () => fn());
+    },
 
     async summon({ id, engine, args, cwd, cols, rows, onEmission }: SummonRequest) {
       const channel = new Channel<RawEmission>();

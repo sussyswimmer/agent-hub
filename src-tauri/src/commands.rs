@@ -1,5 +1,6 @@
 //! IPC surface. Thin wrappers over grimoire-core; errors become strings the UI can show.
 
+use grimoire_core::binding::schema::IntakeField;
 use grimoire_core::types::FamiliarSummary;
 use tauri::State;
 use tauri::ipc::Channel;
@@ -27,11 +28,18 @@ pub fn home_info(state: State<'_, AppState>) -> R<HomeInfo> {
     })
 }
 
-/// Phase 0 draws the shell from a hardcoded roster; Phase 2 replaces this with the bindings
-/// folder. The shape it returns is already the real one.
+/// The rail's rows, read from `~/.grimoire/bindings`. A binding that failed to validate is in
+/// here too, carrying its error (§4).
 #[tauri::command]
 pub fn list_familiars(state: State<'_, AppState>) -> R<Vec<FamiliarSummary>> {
-    Ok(state.roster.clone())
+    Ok(state.roster.rows())
+}
+
+/// The intake questions for one familiar, as its binding declares them (§6.2).
+#[tauri::command]
+pub fn intake_for(state: State<'_, AppState>, id: String) -> R<Vec<IntakeField>> {
+    let binding = state.roster.get(&id).ok_or_else(|| format!("There is no familiar called {id}."))?;
+    Ok(binding.front.map(|f| f.intake).unwrap_or_default())
 }
 
 // ── Summoning ──────────────────────────────────────────────────────────────────────────

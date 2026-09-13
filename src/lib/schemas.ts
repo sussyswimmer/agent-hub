@@ -44,3 +44,15 @@ export const emission = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("output"), bytes: z.array(z.number().int().min(0).max(255)) }),
   z.object({ kind: z.literal("ended"), code: z.number().int().nullable() }),
 ]);
+
+/** Mirrors `IntakeField` in crates/grimoire-core/src/binding/schema.rs (§6.2). */
+export const intakeKind = z.enum(["text", "select", "multiline"]);
+export const intakeField = z.object({
+  id: z.string(),
+  ask: z.string(),
+  // `type` on the wire, because that is what a binding author writes in the YAML. The Rust
+  // field is `kind`, since `type` is a keyword there.
+  type: intakeKind,
+  options: z.array(z.string()),
+  required: z.boolean(),
+});

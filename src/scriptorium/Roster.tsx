@@ -4,6 +4,7 @@ import type { FamiliarSummary } from "@/lib/types";
 
 function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary; selected: boolean; onSelect: () => void }) {
   const broken = familiar.error !== null;
+  const warned = familiar.warnings.length > 0;
   return (
     <button
       type="button"
@@ -21,7 +22,21 @@ function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary
         <Sigil name={familiar.name} order={familiar.order} state={familiar.state} size={22} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`display block truncate text-base ${broken ? "text-oxblood-text" : "text-bone"}`}>{familiar.name}</span>
+        <span className={`display flex items-baseline gap-1.5 text-base ${broken ? "text-oxblood-text" : "text-bone"}`}>
+          <span className="min-w-0 truncate">{familiar.name}</span>
+          {warned && !broken && (
+            // A binding that works but has something odd in it. Not an error, so not oxblood:
+            // brass, and small, and it says what when you hover.
+            <span
+              className="shrink-0 text-xs text-brass-text"
+              data-warned={familiar.warnings.length}
+              title={familiar.warnings.join("\n")}
+              aria-label={`${familiar.warnings.length} thing${familiar.warnings.length === 1 ? "" : "s"} to look at in this binding`}
+            >
+              ·
+            </span>
+          )}
+        </span>
         <span className={`block truncate text-xs ${broken ? "text-oxblood-text" : "text-bone-dim"}`} data-status>
           {broken ? familiar.error : familiar.status}
         </span>

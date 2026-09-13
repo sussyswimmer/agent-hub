@@ -7,18 +7,19 @@ mod summonings;
 
 use std::sync::Arc;
 
-use grimoire_core::types::FamiliarSummary;
 use grimoire_core::{Db, Paths};
-use tauri::{Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent};
 
 use summonings::Summonings;
 
 pub struct AppState {
     pub paths: Paths,
     pub db: Db,
-    /// Phase 0 only. Phase 2 reads the bindings folder instead.
-    pub roster: Vec<FamiliarSummary>,
+    pub roster: Arc<roster::Roster>,
     pub summonings: Arc<Summonings>,
+    /// Kept alive for as long as the application is: dropping it stops the watch, and a
+    /// `_watcher` that goes out of scope at the end of `setup` is a silent hot-reload failure.
+    _watcher: Option<grimoire_core::binding::WatchHandle>,
 }
 
 pub fn run() {
@@ -42,14 +43,47 @@ pub fn run() {
                 let paths = Paths::resolve()?;
                 paths.ensure()?;
                 let db = Db::open(&paths.db_file())?;
+
+                // First run only: an empty folder gets the shipped bindings, so the application
+                // opens with five familiars rather than an explanation of how to write one.
+                // Never an overwrite — see `binding::seed`.
+                let bindings_dir = paths.bindings();
+                if grimoire_core::binding::seed::is_empty(&bindings_dir) {
+                    match grimoire_core::binding::seed::place(&bindings_dir) {
+                        Ok(names) if !names.is_empty() => {
+                            tracing::info!(count = names.len(), "placed the shipped bindings")
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!(error = %e, "could not place the shipped bindings"),
+                    }
+                }
+
+                let roster = Arc::new(roster::Roster::default());
+                roster.reload(&bindings_dir);
+
+                // §4: the folder is watched and an edit reaches the rail without a restart.
+                let watcher = {
+                    let roster = Arc::clone(&roster);
+                    let handle = app.handle().clone();
+                    grimoire_core::binding::watch(&bindings_dir, move |paths| {
+                        roster.refresh(&paths);
+                        // Tell the interface to ask again, rather than pushing rows through the
+                        // event: two copies of the roster would be two things to keep in step.
+                        let _ = handle.emit("bindings-changed", ());
+                    })
+                    .inspect_err(|e| tracing::warn!(error = %e, "bindings will not hot-reload"))
+                    .ok()
+                };
+
                 tracing::info!(home = %paths.home.display(), "grimoire ready");
-                app.manage(AppState { paths, db, roster: roster::placeholder(), summonings });
+                app.manage(AppState { paths, db, roster, summonings, _watcher: watcher });
                 Ok(())
             }
         })
         .invoke_handler(tauri::generate_handler![
             commands::home_info,
             commands::list_familiars,
+            commands::intake_for,
             commands::summon,
             commands::send_input,
             commands::resize_summoning,

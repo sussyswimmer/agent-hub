@@ -12,6 +12,8 @@ interface State {
   tab: Tab;
   aether: Aether | null;
   error: string | null;
+  /** Whether the bindings-changed subscription is already in place. */
+  watching: boolean;
   load: () => Promise<void>;
   select: (id: string) => void;
   setTab: (t: Tab) => void;
@@ -26,14 +28,28 @@ export const useStore = create<State>((set, get) => ({
   tab: "commission",
   aether: null,
   error: null,
+  watching: false,
 
   load: async () => {
     try {
       const be = await backend();
       const [home, familiars] = await Promise.all([be.homeInfo(), be.listFamiliars()]);
-      const selected = get().selected ?? familiars[0]?.id ?? null;
+      // Keep the selection if it survived the reload; otherwise fall to the first familiar.
+      const previous = get().selected;
+      const selected = familiars.some((f) => f.id === previous)
+        ? previous
+        : (familiars[0]?.id ?? null);
       set({ ready: true, kind: be.kind, home, familiars, selected });
       if (selected) set({ aether: await be.aetherFor(selected) });
+
+      // §4: an edit to a binding reaches the rail without a restart. Subscribed once, on the
+      // first load, and left for the life of the window.
+      if (!get().watching) {
+        set({ watching: true });
+        await be.onBindingsChanged(() => {
+          void get().load();
+        });
+      }
     } catch (e) {
       set({ ready: true, error: e instanceof Error ? e.message : String(e) });
     }

@@ -1,6 +1,6 @@
 // Stand-in backend for the browser and for Playwright. Mirrors src-tauri/src/roster.rs.
 import type { Backend, Emission, SummonRequest } from "./ipc";
-import type { Aether, FamiliarSummary } from "./types";
+import type { Aether, FamiliarSummary, IntakeField } from "./types";
 
 const roster: FamiliarSummary[] = [
   { id: "vellum", workspace: "~/work/essays", name: "Vellum", order: "quill", engine: "claude", state: "idle", status: "idle", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/vellum.binding.md" },
@@ -79,6 +79,19 @@ class FakeSummoning {
   }
 }
 
+/** Mirrors the intake in seeds/*.binding.md, so the form has something real to render. */
+const intake: Record<string, IntakeField[]> = {
+  vellum: [
+    { id: "piece", ask: "Which piece are we working on?", type: "text", options: [], required: true },
+    { id: "mode", ask: "What kind of pass?", type: "select", options: ["line edit", "structural", "fact check", "cut for length"], required: true },
+    { id: "audience", ask: "Who reads it?", type: "text", options: [], required: false },
+  ],
+  sconce: [
+    { id: "question", ask: "What is the question?", type: "multiline", options: [], required: true },
+    { id: "shape", ask: "What should come back?", type: "select", options: ["brief", "literature review", "data and charts"], required: true },
+  ],
+};
+
 export function createMockBackend(): Backend {
   const live = new Map<string, FakeSummoning>();
 
@@ -87,6 +100,9 @@ export function createMockBackend(): Backend {
     homeInfo: async () => ({ home: "~/.grimoire", bindings: "~/.grimoire/bindings", db_file: "~/.grimoire/grimoire.db", schema_version: 1 }),
     listFamiliars: async () => structuredClone(roster),
     aetherFor: async (id) => aether[id] ?? null,
+    intakeFor: async (id) => structuredClone(intake[id] ?? []),
+    // The mock backend has no folder to watch, so nothing ever changes under it.
+    onBindingsChanged: async () => () => {},
 
     async summon({ id, onEmission }: SummonRequest) {
       if (live.has(id)) throw new Error(`${id} is already summoned.`);

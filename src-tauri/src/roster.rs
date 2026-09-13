@@ -1,31 +1,61 @@
-//! The hardcoded roster Phase 0 draws the shell with. Deleted in Phase 2, when the bindings
-//! folder becomes the source of truth. Names are the five seeds from §4.
+//! The roster, read from `~/.grimoire/bindings` (§4).
+//!
+//! Held in memory and rebuilt when the folder changes, so the rail can be drawn without hitting
+//! the disk on every frame. The watcher tells the interface something moved; the interface asks
+//! for the roster again. Pushing whole rows through the event would mean two sources of truth.
 
-use grimoire_core::types::{Engine, FamiliarSummary, Order, SigilState};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
-fn f(id: &str, name: &str, order: Order, engine: Engine, state: SigilState, status: &str, workspace: &str) -> FamiliarSummary {
-    FamiliarSummary {
-        id: id.into(),
-        name: name.into(),
-        order,
-        engine,
-        state,
-        status: status.into(),
-        workspace: workspace.into(),
-        error: None,
-        warnings: vec![],
-        cannot_summon: (!engine.sealable())
-            .then(|| format!("Only the claude engine can be sealed. {name} is bound to {}.", engine.binary())),
-        binding_path: format!("~/.grimoire/bindings/{id}.binding.md"),
-    }
+use grimoire_core::binding::{Binding, load_folder, summarise};
+use grimoire_core::types::FamiliarSummary;
+
+#[derive(Default)]
+pub struct Roster {
+    bindings: Mutex<BTreeMap<String, Binding>>,
+    folder: Mutex<PathBuf>,
 }
 
-pub fn placeholder() -> Vec<FamiliarSummary> {
-    vec![
-        f("vellum", "Vellum", Order::Quill, Engine::Claude, SigilState::Idle, "idle", "~/work/essays"),
-        f("sconce", "Sconce", Order::Lantern, Engine::Claude, SigilState::Working, "reading · 6 sources", "~/work/research"),
-        f("astrolabe", "Astrolabe", Order::Compass, Engine::Claude, SigilState::AwaitingSeal, "waiting on your seal", "~/work/planning"),
-        f("anvil", "Anvil", Order::Crucible, Engine::Claude, SigilState::Dormant, "dormant", "~/src/grimoire"),
-        f("tally", "Tally", Order::Ledger, Engine::Claude, SigilState::Dormant, "dormant", "~/work/numbers"),
-    ]
+impl Roster {
+    /// Read the folder and keep what is there. Called at startup and after every change.
+    pub fn reload(&self, folder: &Path) {
+        if let Ok(mut f) = self.folder.lock() {
+            *f = folder.to_path_buf();
+        }
+        let found = load_folder(folder);
+        tracing::debug!(count = found.len(), "roster reloaded");
+        if let Ok(mut b) = self.bindings.lock() {
+            *b = found;
+        }
+    }
+
+    /// Re-read only the files that changed, and forget any that have gone.
+    ///
+    /// Cheaper than a full reload, but more importantly it leaves every other familiar's row
+    /// untouched — so saving one binding cannot make the whole rail flicker.
+    pub fn refresh(&self, paths: &[PathBuf]) {
+        let Ok(mut bindings) = self.bindings.lock() else { return };
+        for path in paths {
+            let id = grimoire_core::binding::id_for(path);
+            if path.exists() {
+                bindings.insert(id, grimoire_core::binding::load(path));
+            } else {
+                bindings.remove(&id);
+            }
+        }
+    }
+
+    /// The rows the rail draws, broken bindings included (§4).
+    pub fn rows(&self) -> Vec<FamiliarSummary> {
+        self.bindings
+            .lock()
+            .map(|b| b.values().map(summarise).collect())
+            .unwrap_or_default()
+    }
+
+    /// One binding, for the commands that need its frontmatter or its writ.
+    pub fn get(&self, id: &str) -> Option<Binding> {
+        self.bindings.lock().ok()?.get(id).cloned()
+    }
 }

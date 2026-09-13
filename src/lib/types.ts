@@ -2,6 +2,8 @@
 export type { Aether } from "./generated/Aether";
 export type { Autonomy } from "./generated/Autonomy";
 export type { Engine } from "./generated/Engine";
+export type { IntakeField } from "./generated/IntakeField";
+export type { IntakeKind } from "./generated/IntakeKind";
 export type { FamiliarSummary } from "./generated/FamiliarSummary";
 export type { Isolation } from "./generated/Isolation";
 export type { Order } from "./generated/Order";

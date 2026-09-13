@@ -3,12 +3,12 @@ import { useStore } from "@/store";
 import type { FamiliarSummary, Tab } from "@/lib/types";
 
 import { AetherBar } from "./AetherBar";
+import { Intake } from "./Intake";
 import { Terminal } from "./Terminal";
 
 const TABS: Tab[] = ["commission", "terminal", "outputs", "codex"];
 
-const COMING: Record<Exclude<Tab, "terminal">, string> = {
-  commission: "Commissions arrive in Phase 3. The intake form that starts them arrives in Phase 2.",
+const COMING: Record<Exclude<Tab, "terminal" | "commission">, string> = {
   outputs: "Outputs arrive in Phase 3.",
   codex: "The codex arrives in Phase 3.",
 };
@@ -75,14 +75,39 @@ export function FamiliarPane({ familiar }: { familiar: FamiliarSummary }) {
         className={`flex min-h-0 flex-1 flex-col px-4 py-3 ${tab === "terminal" ? "" : "overflow-y-auto rule-scroll"}`}
         data-testid="tabpanel"
       >
+        {familiar.warnings.length > 0 && (
+          <ul className="measure mb-4 flex flex-col gap-1 border-l-2 border-brass pl-3" data-testid="warnings">
+            {familiar.warnings.map((w) => (
+              <li key={w} className="text-xs text-bone-dim">
+                {w}
+              </li>
+            ))}
+          </ul>
+        )}
         {familiar.error ? (
-          <p className="measure text-base text-oxblood-text">{familiar.error}</p>
+          <div className="measure flex flex-col gap-2">
+            <p className="text-base text-oxblood-text">{familiar.error}</p>
+            <p className="mono text-xs text-bone-dim">{familiar.binding_path}</p>
+          </div>
         ) : tab === "terminal" ? (
           // Keyed on the familiar so switching in the rail builds a fresh terminal rather than
           // showing one familiar's scrollback under another's name.
           <Terminal key={familiar.id} familiar={familiar} />
+        ) : tab === "commission" ? (
+          <>
+            <Intake
+              key={familiar.id}
+              familiar={familiar}
+              onSubmit={() => setTab("terminal")}
+            />
+            <p className="measure pt-4 text-xs text-bone-dim">
+              Dispatching a commission arrives in Phase 3. For now this opens the terminal.
+            </p>
+          </>
         ) : (
-          <p className="measure text-base text-bone-dim">{COMING[tab as Exclude<Tab, "terminal">]}</p>
+          <p className="measure text-base text-bone-dim">
+            {COMING[tab as Exclude<Tab, "terminal" | "commission">]}
+          </p>
         )}
       </section>
       <AetherBar aether={aether} />

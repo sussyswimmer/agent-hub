@@ -1,6 +1,6 @@
 // The one boundary between the UI and Rust. Real Tauri inside the app, an in-memory stand-in
 // in a plain browser, so the whole shell is testable headless.
-import type { Aether, Engine, FamiliarSummary, HomeInfo } from "./types";
+import type { Aether, Engine, FamiliarSummary, HomeInfo, IntakeField } from "./types";
 
 /** One message from a summoning's pty. Bytes, not text: see `Emission` in Rust. */
 export type Emission =
@@ -23,6 +23,10 @@ export interface Backend {
   listFamiliars(): Promise<FamiliarSummary[]>;
   /** Phase 0 has no live commissions; the pane draws empty meters until Phase 3. */
   aetherFor(familiarId: string): Promise<Aether | null>;
+  /** The intake questions this familiar's binding declares (§6.2). */
+  intakeFor(familiarId: string): Promise<IntakeField[]>;
+  /** Called when the bindings folder changes. Returns an unsubscribe. */
+  onBindingsChanged(fn: () => void): Promise<() => void>;
 
   /** Start a familiar in a pty. Resolves to its pid. */
   summon(req: SummonRequest): Promise<number>;
