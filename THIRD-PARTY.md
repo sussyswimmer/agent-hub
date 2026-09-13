@@ -19,7 +19,7 @@ request for type. Each licence text sits beside its files.
 | EB Garamond | OFL-1.1 | `src/theme/fonts/eb-garamond.LICENSE.txt` |
 | Iosevka | OFL-1.1 | `src/theme/fonts/iosevka.LICENSE.txt` |
 
-## Rust crates (498)
+## Rust crates (518)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -138,6 +138,7 @@ request for type. Each licence text sits beside its files.
 | `foreign-types-macros` | 0.2.4 | MIT/Apache-2.0 |
 | `foreign-types-shared` | 0.3.1 | MIT/Apache-2.0 |
 | `form_urlencoded` | 1.2.2 | MIT OR Apache-2.0 |
+| `fsevent-sys` | 4.1.0 | MIT |
 | `futures-channel` | 0.3.34 | MIT OR Apache-2.0 |
 | `futures-core` | 0.3.34 | MIT OR Apache-2.0 |
 | `futures-executor` | 0.3.34 | MIT OR Apache-2.0 |
@@ -200,6 +201,8 @@ request for type. Each licence text sits beside its files.
 | `indexmap` | 2.14.2 | Apache-2.0 OR MIT |
 | `indexmap` | 1.9.3 | Apache-2.0 OR MIT |
 | `infer` | 0.19.0 | MIT |
+| `inotify` | 0.11.5 | ISC |
+| `inotify-sys` | 0.1.8 | ISC |
 | `ipnet` | 2.12.2 | MIT OR Apache-2.0 |
 | `is-docker` | 0.2.0 | MIT |
 | `is-wsl` | 0.4.0 | MIT |
@@ -219,6 +222,8 @@ request for type. Each licence text sits beside its files.
 | `json-patch` | 3.0.1 | MIT/Apache-2.0 |
 | `jsonptr` | 0.6.3 | MIT OR Apache-2.0 |
 | `keyboard-types` | 0.7.0 | MIT OR Apache-2.0 |
+| `kqueue` | 1.2.1 | MIT |
+| `kqueue-sys` | 1.1.2 | MIT |
 | `lazy_static` | 1.5.0 | MIT OR Apache-2.0 |
 | `libappindicator` | 0.9.0 | Apache-2.0 OR MIT |
 | `libappindicator-sys` | 0.9.0 | Apache-2.0 OR MIT |
@@ -245,7 +250,9 @@ request for type. Each licence text sits beside its files.
 | `ndk-sys` | 0.6.0+11769913 | MIT OR Apache-2.0 |
 | `new_debug_unreachable` | 1.0.6 | MIT |
 | `nix` | 0.28.0 | MIT |
+| `notify` | 8.2.0 | CC0-1.0 |
 | `notify-rust` | 4.18.0 | MIT OR Apache-2.0 |
+| `notify-types` | 2.1.0 | MIT OR Apache-2.0 |
 | `nu-ansi-term` | 0.50.3 | MIT |
 | `num_enum` | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 |
 | `num_enum_derive` | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 |
@@ -324,6 +331,7 @@ request for type. Each licence text sits beside its files.
 | `rustc-hash` | 2.1.3 | Apache-2.0 OR MIT |
 | `rustix` | 1.1.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | `rustversion` | 1.0.23 | MIT OR Apache-2.0 |
+| `ryu` | 1.0.23 | Apache-2.0 OR BSL-1.0 |
 | `same-file` | 1.0.6 | Unlicense/MIT |
 | `schemars` | 1.2.2 | MIT |
 | `schemars` | 0.9.0 | MIT |
@@ -342,6 +350,7 @@ request for type. Each licence text sits beside its files.
 | `serde_spanned` | 1.1.1 | MIT OR Apache-2.0 |
 | `serde_with` | 3.23.0 | MIT OR Apache-2.0 |
 | `serde_with_macros` | 3.23.0 | MIT OR Apache-2.0 |
+| `serde_yaml_ng` | 0.10.0 | MIT |
 | `serde-untagged` | 0.1.9 | MIT OR Apache-2.0 |
 | `serial2` | 0.2.38 | BSD-2-Clause OR Apache-2.0 |
 | `serialize-to-javascript` | 0.1.2 | MIT OR Apache-2.0 |
@@ -431,6 +440,7 @@ request for type. Each licence text sits beside its files.
 | `unic-ucd-version` | 0.9.0 | MIT/Apache-2.0 |
 | `unicode-ident` | 1.0.24 | (MIT OR Apache-2.0) AND Unicode-3.0 |
 | `unicode-segmentation` | 1.13.3 | MIT OR Apache-2.0 |
+| `unsafe-libyaml` | 0.2.11 | MIT |
 | `url` | 2.5.8 | MIT OR Apache-2.0 |
 | `urlpattern` | 0.3.0 | MIT |
 | `utf8_iter` | 1.0.4 | Apache-2.0 OR MIT |
@@ -462,19 +472,27 @@ request for type. Each licence text sits beside its files.
 | `windows` | 0.61.3 | MIT OR Apache-2.0 |
 | `windows_aarch64_gnullvm` | 0.52.6 | MIT OR Apache-2.0 |
 | `windows_aarch64_gnullvm` | 0.42.2 | MIT OR Apache-2.0 |
+| `windows_aarch64_gnullvm` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows_aarch64_msvc` | 0.52.6 | MIT OR Apache-2.0 |
 | `windows_aarch64_msvc` | 0.42.2 | MIT OR Apache-2.0 |
+| `windows_aarch64_msvc` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows_i686_gnu` | 0.52.6 | MIT OR Apache-2.0 |
 | `windows_i686_gnu` | 0.42.2 | MIT OR Apache-2.0 |
+| `windows_i686_gnu` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows_i686_gnullvm` | 0.52.6 | MIT OR Apache-2.0 |
+| `windows_i686_gnullvm` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows_i686_msvc` | 0.52.6 | MIT OR Apache-2.0 |
 | `windows_i686_msvc` | 0.42.2 | MIT OR Apache-2.0 |
+| `windows_i686_msvc` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows_x86_64_gnu` | 0.52.6 | MIT OR Apache-2.0 |
 | `windows_x86_64_gnu` | 0.42.2 | MIT OR Apache-2.0 |
+| `windows_x86_64_gnu` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows_x86_64_gnullvm` | 0.52.6 | MIT OR Apache-2.0 |
 | `windows_x86_64_gnullvm` | 0.42.2 | MIT OR Apache-2.0 |
+| `windows_x86_64_gnullvm` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows_x86_64_msvc` | 0.52.6 | MIT OR Apache-2.0 |
 | `windows_x86_64_msvc` | 0.42.2 | MIT OR Apache-2.0 |
+| `windows_x86_64_msvc` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows-collections` | 0.2.0 | MIT OR Apache-2.0 |
 | `windows-core` | 0.61.2 | MIT OR Apache-2.0 |
 | `windows-core` | 0.62.2 | MIT OR Apache-2.0 |
@@ -491,8 +509,10 @@ request for type. Each licence text sits beside its files.
 | `windows-sys` | 0.61.2 | MIT OR Apache-2.0 |
 | `windows-sys` | 0.59.0 | MIT OR Apache-2.0 |
 | `windows-sys` | 0.45.0 | MIT OR Apache-2.0 |
+| `windows-sys` | 0.60.2 | MIT OR Apache-2.0 |
 | `windows-targets` | 0.52.6 | MIT OR Apache-2.0 |
 | `windows-targets` | 0.42.2 | MIT OR Apache-2.0 |
+| `windows-targets` | 0.53.5 | MIT OR Apache-2.0 |
 | `windows-threading` | 0.1.0 | MIT OR Apache-2.0 |
 | `windows-version` | 0.1.7 | MIT OR Apache-2.0 |
 | `winnow` | 1.0.4 | MIT |

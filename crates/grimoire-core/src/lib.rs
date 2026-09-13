@@ -5,6 +5,7 @@
 //! interesting code in seconds without linking a webview. Module names follow §5.
 //! See DECISIONS.md 0001.
 
+pub mod binding;
 pub mod breaker;
 pub mod codex;
 pub mod db;

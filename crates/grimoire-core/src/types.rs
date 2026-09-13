@@ -62,19 +62,23 @@ impl Engine {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export)]
 pub enum Isolation {
+    #[default]
     None,
     Worktree,
     Copy,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export)]
 pub enum Autonomy {
+    /// The default, and deliberately the most cautious rung (§6.4). A binding that forgets to
+    /// say gets the one that asks before acting, never the one that acts freely.
+    #[default]
     Propose,
     Bounded,
     Free,
