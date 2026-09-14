@@ -16,12 +16,13 @@ code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
 ## State
 
-Phase 7 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
-appears, edit it and the change arrives without a restart, break it and it says what is wrong
-rather than vanishing. Give one a commission and it queues; summon it and the oldest starts,
-running a real agent CLI in a pseudo-terminal with the binding's writ as its briefing. What it
-costs is recorded, and what it stopped halfway through is still there, correctly marked, after a
-restart. Five bindings ship and are placed on first run.
+Phase 7 of the ten in §10; the archivist and the packaged build remain. Familiars are files:
+drop a `.binding.md` in `~/.grimoire/bindings` and one appears, edit it and the change arrives
+without a restart, break it and it says what is wrong rather than vanishing. Give one a
+commission and it queues; summon it and the oldest starts, running a real agent CLI in a
+pseudo-terminal with the binding's writ as its briefing. What it costs is recorded, and what it
+stopped halfway through is still there, correctly marked, after a restart. Five bindings ship
+and are placed on first run.
 
 **The floor is what it opens on.** A plan of the tower, inked on vellum, drawn top-down with
 every familiar on it at once: dormant ones resting at the hearth, working ones at their own
