@@ -363,6 +363,17 @@ class Seals {
   }
 }
 
+/** Milliseconds a mock call should stall for, read from localStorage. Zero when unset. */
+async function held(key: string): Promise<void> {
+  let ms = 0;
+  try {
+    ms = Number(localStorage.getItem(key)) || 0;
+  } catch {
+    ms = 0;
+  }
+  if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+}
+
 export function createMockBackend(): Backend {
   const live = new Map<string, FakeSummoning>();
   const wards = new Wards();
@@ -460,6 +471,11 @@ export function createMockBackend(): Backend {
       dispatchEvent(new Event("grimoire:quit"));
     },
     async attachSummoning(id, onEmission) {
+      // Held open on demand so a test can press Summon while the question is still in flight.
+      // That window is real — an import plus an IPC round trip — but it is a few milliseconds
+      // wide, which is not something a test can hit reliably by trying. Zero by default, so
+      // this costs nothing unless a test asks for it.
+      await held("grimoire.mock.attachDelay");
       const s = live.get(id);
       if (!s) return false;
       s.attach(onEmission);

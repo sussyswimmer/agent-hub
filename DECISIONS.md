@@ -542,3 +542,33 @@ produces the former is "skips that run" — that occurrence, spent.
 **Consequence.** `last_run` means "when it last came round", and `last_result` is what says
 whether that turn became a commission. A daily ward busy at nine is skipped and tries again
 tomorrow, which is what a person setting one up would expect.
+
+---
+
+## 0019 — A summon begun while the pane is still asking is not a re-attach
+
+**Status:** accepted · **Concerns:** §6.1, §12 · **Found in:** the Phase 7 verification pass
+
+**Context.** `Terminal.tsx` asks the backend on mount whether this familiar is already running,
+because the pane is unmounted whenever you look at another familiar and a summoning outlives it
+(DECISIONS 0010). That question is in flight for as long as a dynamic import and an IPC round
+trip take. Press Summon inside that window and the answer comes back `true` — not because
+anything was already running, but because the summon that has just started is what it found.
+
+The pane then wrote "— reattached; what came before is not shown —" over a terminal that had
+just started, and installed a second `onData` handler on the same xterm. Both handlers call
+`sendInput`, so **every keystroke reached the engine twice**: typing `abc` sent `aabbcc`.
+
+**Decision.** A `summoning` ref, set synchronously at the top of `summon()` before anything is
+awaited and cleared when the effect mounts, and checked alongside `found` and `abandoned`. The
+guard has to be a ref rather than the `status` state: `setStatus` is not synchronous, and the
+race is decided in the microtask between the click and the first `await`.
+
+**How it was found, and why it needed a new test.** Two Playwright tests failed in a full-suite
+run and passed on every rerun of that file alone, including twenty-four repeats at double the
+workers. A window a few milliseconds wide is not something a test hits by trying. `ipc.mock.ts`
+now reads `grimoire.mock.attachDelay` from `localStorage` and holds `attachSummoning` open for
+that long, which turns the race into a certainty; the test seeds it with `addInitScript`. The
+knob costs nothing when unset and exists only in the mock backend, which is test-only already.
+
+Calling this a flake and rerunning would have shipped doubled keystrokes to the owner's engine.

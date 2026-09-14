@@ -30,6 +30,11 @@ function typeInto(xterm: Xterm, id: string, b: Awaited<ReturnType<typeof backend
 export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
   const host = useRef<HTMLDivElement>(null);
   const term = useRef<Xterm | null>(null);
+  // Set the instant Summon is pressed, before anything is awaited. The mount effect asks the
+  // backend whether this familiar is already running, and that question is in flight for as
+  // long as an import and an IPC round trip take — long enough to press the button first. The
+  // answer then comes back "yes", because the summon that has just started is what it found.
+  const summoning = useRef(false);
   const [status, setStatus] = useState<Status>("dormant");
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,9 +106,14 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
     // so the pane says so rather than pretending the blank buffer is the whole story.
     let abandoned = false;
     let typed: { dispose: () => void } | undefined;
+    summoning.current = false;
     void (async () => {
       try {
         const b = await backend();
+        // Most of the window is this import, so check once it has landed: when Summon was
+        // pressed first, the question is no longer worth asking and the outlet stays where
+        // `summon` put it.
+        if (abandoned || summoning.current) return;
         const found = await b.attachSummoning(familiar.id, (e) => {
           if (e.kind === "output") {
             xterm.write(e.bytes);
@@ -114,7 +124,14 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
             setNote(e.code === null ? "the summoning ended" : `the summoning ended (${e.code})`);
           }
         });
-        if (!found || abandoned) return;
+        // And again, for a click that landed while the question itself was in flight: a summon
+        // begun while this was running is not a summoning to re-attach to. Taking it as one
+        // wrote "reattached" over a terminal that had just started and left two `onData`
+        // handlers on the same xterm — every keystroke sent to the engine twice.
+        //
+        // The outlet has already been swapped by the time we get here, which is harmless: it
+        // writes to the same terminal, and the exit it reports is the same exit.
+        if (!found || abandoned || summoning.current) return;
         typed = typeInto(xterm, familiar.id, b);
         xterm.write(`${DIM}— reattached; what came before is not shown —${RESET}\r\n`);
         setStatus("live");
@@ -136,6 +153,7 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
   async function summon() {
     const xterm = term.current;
     if (!xterm) return;
+    summoning.current = true;
     setStatus("summoning");
     setError(null);
     setNote(null);

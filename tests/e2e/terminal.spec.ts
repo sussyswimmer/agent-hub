@@ -113,3 +113,32 @@ test("a familiar you walk away from is still live when you come back", async ({ 
   await page.getByTestId("terminal-toggle").click();
   await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "ended");
 });
+
+test("pressing Summon before the backend has answered does not re-attach to it", async ({ page }) => {
+  // The race the `summoning` ref in Terminal.tsx exists for. The pane asks the backend, on
+  // mount, whether this familiar is already running. Press Summon while that question is in
+  // flight and the answer comes back "yes" — because the summon that has just started is what
+  // it found. The pane then wrote "reattached" over a terminal that had just started, and left
+  // two `onData` handlers on the same xterm, so every keystroke reached the engine twice.
+  //
+  // It surfaced as two intermittent failures in a full-suite run and passed on every rerun of
+  // this file alone, which is what a few milliseconds of window looks like from the outside.
+  // Holding the question open makes it a certainty rather than a matter of load.
+  await page.addInitScript(() => localStorage.setItem("grimoire.mock.attachDelay", "400"));
+  await page.goto("/");
+  await page.locator('[data-tab="terminal"]').click();
+  await expect(page.getByTestId("xterm-host")).toBeVisible();
+
+  await page.getByTestId("terminal-toggle").click();
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
+  await expect.poll(() => screen(page)).toContain("Grimoire mock terminal");
+
+  // Long enough for the held answer to land and do its damage.
+  await expect.poll(() => screen(page), { timeout: 3000 }).not.toContain("reattached");
+
+  // The half that a person would actually notice: one handler, so one copy of what is typed.
+  await page.locator(".xterm-helper-textarea").fill("");
+  await page.keyboard.type("abc");
+  await expect.poll(() => screen(page)).toContain("abc");
+  expect(await screen(page)).not.toContain("aabbcc");
+});

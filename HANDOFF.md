@@ -154,6 +154,7 @@ Every one of these passed every test suite in the repo at the time:
 | 6 | Green | "Extend" bought four seconds — unbinding without moving the budget re-bound on the next tick (DECISIONS 0015) |
 | 7 | Green | A skipped ward wrote to the database twelve times a minute (DECISIONS 0018) |
 | — | Green | A fresh clone would not compile at all: no `icons` script existed |
+| — | Two intermittent failures, green on every rerun | Pressing Summon inside the pane's own mount question doubled every keystroke to the engine (DECISIONS 0019) |
 
 The pattern is consistent enough to plan around: the test suites protect against regressions in
 things you already understood, and find nothing about things you did not.
@@ -185,6 +186,11 @@ things you already understood, and find nothing about things you did not.
 - Two Playwright specs in `shell.spec.ts` were failing on a `locator("main")` strict-mode
   violation at one point; `FamiliarPane` became a `<section>` to fix it. If you see it again, it
   is a second `<main>` creeping back in.
+- **A Playwright test that fails only in a full run is not a flake until you have proved it is
+  one.** The two that did exactly that turned out to be a real race that sent every keystroke to
+  the engine twice. `src/lib/ipc.mock.ts` has a `held()` helper reading delay knobs from
+  `localStorage` for precisely this: widen the window until the race is a certainty, then write
+  the test against it. DECISIONS 0019.
 
 ---
 
