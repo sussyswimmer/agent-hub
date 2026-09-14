@@ -411,3 +411,71 @@ starting, an engine taking a turn, a commission ending. There is no event to sub
 "the engine is working now", so the window asks every 2.5 seconds and stores the answer only
 when it differs. A seal being raised or answered also refreshes it immediately, because that one
 does have an event.
+
+---
+
+## 0014 — The runaway guard has no way of knowing what `on_exceed` says
+
+**Date.** 2026-09-14. **Replaces.** Nothing; this is the first statement of it.
+
+`breaker::guard::check` takes tool calls, tokens, a model and a cap. It does not take
+`on_exceed`, and there is no path by which it could read one.
+
+**Why.** §6.5 says the guard fires "regardless of `on_exceed`", and a rule stated that way is
+one somebody will eventually soften — a plausible-looking `if on_exceed == Steer` is two lines
+and reads like a kindness. The surest way to keep it true is for the function to have no way of
+asking. A test says so in as many words, so that adding the parameter breaks something with a
+comment explaining why.
+
+The separation is not arbitrary. A budget is the owner's judgement about how much a piece of
+work is worth, and `on_exceed` is their judgement about what to do when it runs out. The guard
+is neither: it is the answer to "something has gone wrong and nobody is watching", and a binding
+saying `steer` is an instruction about *budgets*, not permission to spin for ever.
+
+**Consequence.** A fresh install has a spend cap, because the run nobody is watching is exactly
+the one that happens before anybody has opened the workbench. A cap of zero turns that half off;
+nothing turns the tool-call half off.
+
+---
+
+## 0015 — Extending a commission's aether moves the line
+
+**Date.** 2026-09-14. **Replaces.** Unbinding on its own.
+
+Sealing the request §6.5's `bind` raises records an extension against that commission, and the
+heartbeat judges it against a budget grown by one more of whatever the binding set.
+
+**Why.** The first version simply unbound the familiar and forgot what the breaker had done.
+That bought about four seconds. The next tick read the same overspend — nothing about the
+reading had changed — bound it again, and put a second identical request in the queue. Found in
+the running application, with both rows in the `seals` table and a familiar that was refused a
+read immediately after its owner had said yes.
+
+"Extend" has to mean the budget is larger, or the word is a lie and the button is a snooze that
+does not snooze.
+
+**Consequence.** Each yes is worth one more budget: a familiar bound at thirty minutes and
+extended once runs to sixty. The warning at 80% is re-armed with it, so the familiar is warned
+on the way to the new line rather than walking into it in silence.
+
+---
+
+## 0016 — The Zod enums are checked against the generated types
+
+**Date.** 2026-09-14. **Replaces.** Hand-maintained lists in `src/lib/schemas.ts`.
+
+Every enum at the IPC boundary is declared as a `const` array with `satisfies readonly T[]`,
+where `T` is the ts-rs-generated union.
+
+**Why.** §5 wants both sides to validate, so the shapes are written twice — once as a Rust type
+generated into TypeScript, once as a Zod schema. A Zod enum is a list of strings with no
+relationship to the type it mirrors, so the two drift the moment a variant is added in Rust.
+
+**And they drift silently**, which is the part that matters. The failure is a parse error inside
+a `catch`, so nothing is logged and nothing looks broken. Phase 6 added two seal kinds; the rail
+went on reading "none waiting" beside a familiar whose own row said it was waiting on a seal,
+because `sealsPending()` was throwing on a `kind` Zod had never heard of. Two parts of the same
+rail disagreeing on screen, with no error anywhere.
+
+**Consequence.** Adding a variant in Rust, regenerating, and forgetting `schemas.ts` now fails
+`bun run typecheck`. It caught the missing `Seals.tsx` labels in the same pass.

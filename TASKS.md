@@ -283,20 +283,80 @@ Legend: `[x]` done and verified · `[~]` done but not verifiable in this environ
 
 ---
 
+## Phase 6 — Aether and the breaker
+
+- [x] Three meters per commission, read from the engine's transcript and the clock (§6.5)
+- [x] 80% steers once, and says which of the three budgets is the tight one
+- [x] `on_exceed` at the line: `steer` re-warns every 10%, `bind` stops the tool calls and asks
+      to extend, `banish` walks the stop ladder
+- [x] The runaway guard, which has no `on_exceed` parameter and cannot be given one
+- [x] A five-second heartbeat, and a ten-minute stall raised for the owner rather than acted on
+- [x] The meters on screen, the rule brass at 80%, and the floor's arcs on the same reading
+
+**Acceptance** — every one driven in the real binary, against a real engine in a real pty
+
+- [x] **A commission trips at 100% and does what `on_exceed` says.** Tally, given
+      `minutes: 1, on_exceed: banish`: steered at 83% ("Prioritise finishing over exploring"),
+      banished at the line, the commission marked `banished`, the summoning row closed
+      `exit_reason: banished`. Both are in the ledger.
+- [x] **`banish` leaves no orphaned process.** `ps` after the trip: none.
+- [x] **`bind` stops the tool calls and asks.** The request appears in the queue as "Tally · out
+      of aether · extend this commission's aether", and a `free` familiar reading inside its own
+      workspace is refused while it stands.
+- [x] **Sealing it lets the familiar go on, and keeps it going.** Allowed immediately, and still
+      allowed twelve seconds and two ticks later — which is the bug below.
+- [x] **The runaway guard fires at 200 tool calls even with `on_exceed: steer`.** Fired at 201,
+      with `steer` in the binding: *"201 tool calls in one commission. That is past the runaway
+      guard, which is not a budget and does not answer to `on_exceed`."*
+- [x] **A stalled agent is surfaced within 10 minutes and is not killed silently.** Clock started
+      01:18:42, raised 01:28:42 — "Stalled — steer, or banish?", with "Nothing has been done to
+      it" in the reason. Afterwards: commission `awaiting_seal`, summoning still open, engine
+      still on the process table. Raised once; five more ticks added nothing.
+- [x] **The floor's arc matches the pane's meters.** They are the same object — one map in the
+      store, refreshed on one tick, read by both.
+
+**Three bugs the running application found**
+
+- **Extending bought four seconds.** Sealing the request unbound the familiar and left the budget
+  where it was, so the next tick read the same overspend, bound it again, and queued a second
+  identical request. Both rows were in the table. Extending now moves the line. DECISIONS.md 0015.
+- **The rail disagreed with itself.** A seal raised by the breaker wrote its row without telling
+  the window, so the count read "none waiting" beside a familiar whose own row said it was
+  waiting on a seal.
+- **And the reason it stayed broken after that was fixed:** the Zod enum at the IPC boundary had
+  never heard of the two new seal kinds, so `sealsPending()` was throwing inside a `catch` —
+  no error anywhere, just a number that would not move. Those enums are checked against the
+  generated types now. DECISIONS.md 0016.
+
+**Caveats, stated rather than ticked over**
+
+- **The trip was driven on minutes, not tokens.** §10's example is `tokens: 2000`, and tokens
+  come from the engine's own transcript — which needs the engine to take a turn, which this
+  container's login screen still blocks (see Phase 1). Minutes are wall-clock and exercise the
+  identical path: the same `read`, the same `decide`, the same act. The token half of `read` is
+  covered by tests, including that cache tokens count towards the budget.
+- **`$X`, the spend cap, has no workbench UI.** It is a setting with a default of $10 and there
+  is no workbench view yet to change it in. The guard reads it; nothing writes it.
+- **macOS notifications on a breaker trip are not done** (§6.5's "notify"). Notification Center.
+  The ledger, the seal queue and the rail all carry it.
+
+---
+
 ## Later phases
 
 Phases 4–9 are unstarted. Three things are worth carrying forward, all discovered early:
 
-Phases 4 and 5 are done; their reports are above. Carried forward:
+Phases 4, 5 and 6 are done; their reports are above. Carried forward:
 
 - **A dead hook should withdraw its request.** The socket closing is detectable and currently
   is not acted on, so a killed hook leaves a row in the queue until it times out. Belongs with
   the stall detection in Phase 6, which is already about noticing that nothing is happening.
-- **Aether arcs are drawn from whatever budget data exists.** They become meaningful in Phase 6,
-  when the breaker is the thing setting them. The shape, the colour thresholds and the wiring
-  are in and verified; the numbers behind them are not yet a breaker's numbers.
-- **`stalled` and `bound` have no producer yet.** Phase 6. They render, driven from the dev
-  override panel, so the drawing is known good before the thing that causes them exists.
+- **The workbench does not exist.** §6.5 puts the runaway guard's spend cap there, and §6.1 puts
+  the engine binary's path there. Both are settings with sensible defaults and no view. Phase 7
+  is the menu bar; the workbench should land near it.
+- **`stalled` and `bound` now have producers**, but the floor still reads them from the roster
+  overlay rather than from the breaker directly, so a bound familiar shows as `awaiting-seal`
+  (it has a request waiting, which is true) rather than `bound`. Worth a look in Phase 7.
 
 ---
 
@@ -318,6 +378,8 @@ cannot check, and none of it is claimed as done anywhere in this repository.
 | Retina rendering of the floor at 2× | 5 | No Retina display |
 | The floor's real frame rate (§8.6, §10) | 5 | No GPU. `Xvfb` reports `libEGL: DRI3 error` and falls back to software, so any number measured here is the rasteriser's, not the budget's. |
 | `prefers-reduced-motion` in the real binary | 5 | Nothing here sets the GTK setting the webview reads. The media-query path is covered in Playwright. |
+| Notifications when the breaker trips (§6.5) | 6 | Notification Center. The ledger, the queue and the rail all carry it. |
+| A budget tripped on *tokens* rather than minutes | 6 | Tokens come from the engine's transcript, which needs a turn this container's login screen blocks. Same code path either way. |
 
 Everything else — the PTY, the breaker, the ward arithmetic, path canonicalisation and the
 symlink escape case, binding validation, the whole interface through the mock IPC backend — is

@@ -16,7 +16,7 @@ code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
 ## State
 
-Phase 5 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
+Phase 6 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
 appears, edit it and the change arrives without a restart, break it and it says what is wrong
 rather than vanishing. Give one a commission and it queues; summon it and the oldest starts,
 running a real agent CLI in a pseudo-terminal with the binding's writ as its briefing. What it
@@ -31,6 +31,14 @@ door; banishing walks it out. Hover a mark for what it is doing and what it has 
 to open its workspace with the floor still in sight above. Every mark on it is drawn in code —
 there is not one image file in this repository — and there is a Roster toggle for when you would
 rather have the list.
+
+**Nothing runs away.** Every commission is metered on tokens, turns and minutes. At 80% of
+whichever budget is tightest the familiar is told to prioritise finishing, and the rule under
+the meters turns brass. At the line the binding decides: keep going under protest, stop and ask
+to be extended, or be stopped. Separately from all of that — and deliberately deaf to what the
+binding says about it — a commission past two hundred tool calls or past the spend cap is
+stopped regardless. A familiar that has gone quiet for ten minutes is raised for you to look at,
+and never killed on your behalf.
 
 **The seal is real.** A familiar stops before every tool call and, when its binding does not
 already allow what it is about to do, waits on your answer — genuinely waits, blocked on a local
