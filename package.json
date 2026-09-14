@@ -13,6 +13,8 @@
     "bindings": "cargo test -p grimoire-core export_bindings",
     "bindings:check": "bun run bindings && git diff --exit-code -- src/lib/generated",
     "fonts": "bun run scripts/fonts.ts",
+    "icons": "bun run scripts/icons.ts",
+    "doctor": "bun run scripts/doctor.ts",
     "licences": "bun run scripts/licences.ts",
     "tauri": "tauri",
     "dist": "tauri build"

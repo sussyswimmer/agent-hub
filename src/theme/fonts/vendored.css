@@ -1,0 +1,8 @@
+/* Written by `bun run fonts`. Committed so the build never points at a file that is not there.
+
+   Everything §7.3 asks for that could be vendored is declared in ../fonts.css directly. This
+   file holds only the faces whose presence depends on where `bun run fonts` was run — today
+   that is Junicode, which ships its webfonts in GitHub release archives and so is absent from
+   any checkout made without github.com access. Run `bun run fonts` on a machine that has it
+   and the rule appears below; run it on one that does not and this file returns to a comment.
+   See DECISIONS.md 0003. */

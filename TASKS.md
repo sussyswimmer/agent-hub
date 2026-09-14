@@ -399,13 +399,10 @@ Legend: `[x]` done and verified · `[~]` done but not verifiable in this environ
 
 ## Later phases
 
-Phases 4–9 are unstarted. Three things are worth carrying forward, all discovered early:
-
 Phases 4 through 7 are done; their reports are above. Carried forward:
 
-- **A dead hook should withdraw its request.** The socket closing is detectable and currently
-  is not acted on, so a killed hook leaves a row in the queue until it times out. Belongs with
-  the stall detection in Phase 6, which is already about noticing that nothing is happening.
+- **The ward panel is per-familiar, with no global list.** §6.7 does not ask for one, but with
+  five familiars there is nowhere to see every schedule at once.
 - **The workbench does not exist.** §6.5 puts the runaway guard's spend cap there, §6.1 puts the
   engine binary's path there, and §11 puts transcript deletion there. All are settings with
   sensible defaults and no view. It is the largest thing left before Phase 9.
@@ -428,6 +425,8 @@ cannot check, and none of it is claimed as done anywhere in this repository.
 | macOS notifications | 4, 7 | Notification Center |
 | Menu-bar residency, closing to the tray | 7 | `NSStatusItem` |
 | Keychain storage for API keys (§11) | 4 | macOS keychain. Nothing may fall back to a file. |
+| The floor's real frame rate | 5 | Measured on a software rasteriser, which is not a measurement |
+| That the `.app` builds at all | 9 | No macOS toolchain here. The Rust is plain POSIX and the config is aimed at macOS, but neither is proof. |
 | `.dmg`, signing, notarisation | 9 | `tauri build --target aarch64-apple-darwin` on a Mac |
 | VoiceOver on the floor (§8.4) | 5 | VoiceOver |
 | Retina rendering of the floor at 2× | 5 | No Retina display |

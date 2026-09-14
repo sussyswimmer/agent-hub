@@ -3,11 +3,14 @@
 //
 //   bun run fonts
 //
-// EB Garamond and Iosevka come from @fontsource (OFL-1.1, ships woff2 + LICENSE).
+// EB Garamond and Iosevka come from @fontsource (OFL-1.1, ships woff2 + LICENSE) and are
+// committed, so a clean clone already has them and running this is optional.
 // Junicode 2 ships its webfonts only in GitHub release archives. Where those are reachable
 // this fetches them; where they are not (a sandbox with no github.com egress) it says so and
-// leaves the face absent, and the @font-face stack falls through to EB Garamond. Re-run this
-// on a machine with github.com access and Junicode appears with no code change.
+// leaves the face absent, and the display stack falls through to EB Garamond. Either way the
+// last thing this writes is src/theme/fonts/vendored.css, holding the Junicode @font-face when
+// the woff2 is there and nothing when it is not — a rule pointing at a missing file is a build
+// error, so the file and the rule have to appear together.
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -83,10 +86,40 @@ async function fetchJunicode(): Promise<number> {
   return 0;
 }
 
+const PREAMBLE = `/* Written by \`bun run fonts\`. Committed so the build never points at a file that is not there.
+
+   Everything §7.3 asks for that could be vendored is declared in ../fonts.css directly. This
+   file holds only the faces whose presence depends on where \`bun run fonts\` was run — today
+   that is Junicode, which ships its webfonts in GitHub release archives and so is absent from
+   any checkout made without github.com access. Run \`bun run fonts\` on a machine that has it
+   and the rule appears below; run it on one that does not and this file returns to a comment.
+   See DECISIONS.md 0003. */
+`;
+
+const JUNICODE_FACE = `
+@font-face {
+  font-family: "Junicode";
+  src: url("./junicode-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+`;
+
+/**
+ * Rewrites the generated stylesheet so it declares exactly the optional faces that are on disk.
+ * Called on every run, the failing ones included: a stale rule left behind after its woff2 has
+ * gone breaks the build just as surely as a missing rule leaves the face unused.
+ */
+function writeVendoredCss(present: boolean): void {
+  writeFileSync(join(OUT, "vendored.css"), present ? PREAMBLE + JUNICODE_FACE : PREAMBLE);
+}
+
 mkdirSync(OUT, { recursive: true });
 const garamond = await fromFontsource("eb-garamond", "eb-garamond");
 const iosevka = await fromFontsource("iosevka", "iosevka");
 const junicode = await fetchJunicode();
+writeVendoredCss(existsSync(join(OUT, "junicode-400-normal.woff2")));
 rmSync(TMP, { recursive: true, force: true });
 
 console.log(`eb-garamond  ${garamond} files`);
@@ -96,7 +129,8 @@ if (junicode === 0) {
   console.log(
     "\nJunicode was not reachable. Display type falls back to EB Garamond until you re-run\n" +
       "`bun run fonts` somewhere with github.com access, or drop Junicode.woff2 into\n" +
-      "src/theme/fonts/junicode-400-normal.woff2 yourself. See DECISIONS.md 0003.",
+      "src/theme/fonts/junicode-400-normal.woff2 yourself and re-run this to declare it.\n" +
+      "See DECISIONS.md 0003.",
   );
 }
 if (garamond === 0 || iosevka === 0) process.exitCode = 1;

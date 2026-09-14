@@ -59,17 +59,42 @@ check and why.
 
 ## Running it
 
-Requires Rust stable, [Bun](https://bun.sh), and the Tauri v2 system dependencies.
+On a Mac, from nothing. You need Rust stable, [Bun](https://bun.sh), and the Xcode command line
+tools — Tauri builds against the system webview, and `xcode-select --install` is what puts the
+headers there.
 
 ```
+git clone <this repository> grimoire && cd grimoire
+git checkout claude/sharp-euler-l2gy92
 bun install
-bun run fonts        # vendor the woff2 faces into src/theme/fonts
-bun run dev          # the interface alone, in a browser
-bun run tauri dev    # the application
+bun run tauri dev
 ```
 
-`VITE_IPC_MOCK=1 bun run dev` serves the interface against an in-memory backend, which is how
-the Playwright suite runs without building the Rust side.
+The first build takes a few minutes; after that it is seconds. `bun run doctor` says what this
+machine is missing and what to do about each thing, and is the first thing to try when something
+does not start.
+
+**The first run** creates `~/.grimoire`, places the five seed bindings in
+`~/.grimoire/bindings`, and opens on the floor with all five dormant at the hearth. Nothing runs
+until you summon it.
+
+**Summoning needs `claude` on your `PATH`.** Without it the Summon button is disabled with the
+reason on hover rather than failing when pressed — that is the design (§6.1), not a fault. The
+engine's own first-run screens, the theme picker and then the login, appear inside the first
+summoning's terminal and are answered there, like any other terminal program. Grimoire
+deliberately does not pre-answer them; `crates/grimoire-core/tests/engine.rs` says why.
+
+Two things you do not need:
+
+- `bun run fonts` is **optional**. EB Garamond and Iosevka are committed with their licences. It
+  is worth running once on a machine that can reach github.com, because that is where Junicode —
+  the display face §7.3 actually asks for — lives, and it could not be fetched from the machine
+  this was built on. See `DECISIONS.md` 0003.
+- `bun run icons` is **automatic**. The application mark is drawn in code, not committed, and
+  `bun run tauri dev` and `bun run dist` both draw it before anything compiles.
+
+`VITE_IPC_MOCK=1 bun run dev` serves the interface alone, in a browser, against an in-memory
+backend — no Rust build. That is how the Playwright suite runs.
 
 ## Checking it
 
@@ -92,9 +117,29 @@ cargo test -p grimoire-core --test engine -- --ignored --nocapture
 ## Building a release
 
 ```
-bun run icons        # draws the application mark; see DECISIONS.md 0005
 bun run dist
 ```
+
+Which draws the application mark on the way past — see `DECISIONS.md` 0005 for what it draws and
+why there is no `.png` in this repository to draw it from.
+
+## What to distrust
+
+Grimoire is built for macOS and was built on headless Linux. Everything below is written, is
+reviewed, and has never been seen working on the platform it is for. `TASKS.md` has the full
+table and the reason for each; these are the ones most likely to surprise you in the first hour.
+
+| Likely to bite first | Why it was never seen here |
+| --- | --- |
+| The menu bar, and closing the window instead of quitting | No session bus in the build container, so the tray never appeared at all |
+| Notifications — ward runs, seal requests | Notification Center |
+| Native window chrome, traffic lights over the overlay title bar | The macOS window server |
+| Dragging the window to resize a live terminal | `Xvfb` has no window manager. The pty resize is tested directly instead |
+| A full model turn through the interactive terminal | The container's engine could never log in |
+| The floor's real frame rate | Measured on a software rasteriser, which is not a measurement |
+
+Nothing in that list is claimed as done anywhere in this repository. If one of them is broken,
+it is broken for a reason that is written down.
 
 ## Everything you can see is drawn in code
 

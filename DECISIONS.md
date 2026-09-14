@@ -65,12 +65,25 @@ woff2 in its tree. Converting the TTF locally is also out: `fonttools` and `brot
 
 **Decision.** `scripts/fonts.ts` tries three candidate URLs for Junicode and, when all three
 fail, carries on and prints why. `--font-display` lists `"Junicode"` first with
-`"EB Garamond"` immediately behind it, so the moment the file appears in `src/theme/fonts/` the
-display sizes pick it up with no code change. **No unrelated face is substituted** — §1 forbids
-it and a near-miss serif would be worse than the honest fallback.
+`"EB Garamond"` immediately behind it. **No unrelated face is substituted** — §1 forbids it and
+a near-miss serif would be worse than the honest fallback.
 
 **Consequence.** Display type is currently EB Garamond, one face rather than two. On a machine
 that can reach GitHub, run `bun run fonts` and the difference appears by itself.
+
+**Amended, and the original was wrong.** This entry said the file appearing in
+`src/theme/fonts/` would be enough and the display sizes would "pick it up with no code change."
+They would not have. `fonts.css` deliberately declared no `@font-face` for Junicode — a `url()`
+to a file that is not there is a Vite build error — so the fetch and the rule were two separate
+things and only one of them was automated. The owner would have run `bun run fonts` on their own
+machine, read `junicode  1 files`, and gone on reading EB Garamond with nothing to tell them why.
+
+The fix is to make the file and the rule one event. `src/theme/fonts/vendored.css` is generated
+and committed; `bun run fonts` rewrites it on every run, carrying the Junicode `@font-face` when
+the woff2 was placed and only a comment when it was not, and `fonts.css` `@import`s it
+unconditionally. `src/lib/__tests__/fonts.test.ts` asserts both halves: that every `url()` in
+the theme resolves to a file that exists, and that a Junicode woff2 on disk implies a rule
+declaring it. The second one fails if you drop the file in by hand and skip the script.
 
 ---
 

@@ -1,11 +1,14 @@
 /* Self-hosted, no CDN (§7.3). Vendored by `bun run fonts`.
 
-   There is deliberately no @font-face for Junicode. It ships its webfonts only inside GitHub
-   release archives and could not be fetched here, and a rule pointing at a file that is not
-   there costs a 404 and a font-decode error on every single page load. The display stack in
-   tokens.css still names "Junicode" first, so it falls through to EB Garamond cleanly now and
-   picks Junicode up the moment `bun run fonts` can place the file and this rule returns.
-   See DECISIONS.md 0003. */
+   EB Garamond and Iosevka are committed, so the rules below always resolve. Junicode is not:
+   it ships its webfonts only inside GitHub release archives, which this machine could not
+   reach, and a rule pointing at a file that is not there costs a 404 and a font-decode error
+   on every page load. Its @font-face therefore lives in ./fonts/vendored.css, which
+   `bun run fonts` rewrites to match what it actually placed — so the file appearing and the
+   rule appearing are one event, not two. The display stack in tokens.css names "Junicode"
+   first and falls through to EB Garamond until then. See DECISIONS.md 0003. */
+
+@import "./fonts/vendored.css";
 
 @font-face {
   font-family: "EB Garamond";

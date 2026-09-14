@@ -4,7 +4,9 @@
  * §1 of CLAUDE.md forbids vendored art. Nothing here is vendored: the mark is the same
  * deterministic sigil the roster draws, rasterised by the small signed-distance routines
  * below, and the output lands in a gitignored folder so no image file ever enters the repo.
- * Run `bun run icons` before `bun run dist`.
+ * Tauri embeds these at compile time through `generate_context!()`, so they must exist before
+ * any Rust build — `bun run dev` included. `beforeDevCommand` and `beforeBuildCommand` in
+ * tauri.conf.json both run this first; `bun run icons` re-draws them by hand.
  */
 import { deflateSync } from "node:zlib";
 import { mkdirSync, writeFileSync } from "node:fs";
