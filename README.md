@@ -60,6 +60,13 @@ check and why.
 
 ## Running it
 
+### Download for macOS
+
+[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v0.1.0-macos-preview/Grimoire_0.1.0_aarch64.dmg)
+
+This preview build is unsigned and not notarized, so macOS may ask you to approve it in Privacy
+& Security the first time you open it. [See all releases](https://github.com/sussyswimmer/agent-hub/releases).
+
 On a Mac, from nothing. You need Rust stable, [Bun](https://bun.sh), and the Xcode command line
 tools — Tauri builds against the system webview, and `xcode-select --install` is what puts the
 headers there.
