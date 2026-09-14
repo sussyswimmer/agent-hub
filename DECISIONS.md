@@ -479,3 +479,53 @@ rail disagreeing on screen, with no error anywhere.
 
 **Consequence.** Adding a variant in Rust, regenerating, and forgetting `schemas.ts` now fails
 `bun run typecheck`. It caught the missing `Seals.tsx` labels in the same pass.
+
+**Amended 2026-09-14: `satisfies` alone was only half of it.** It checks that every string in
+the list *is* a valid variant, and says nothing about whether every variant is in the list —
+which is the direction that actually happens. Phase 7 added `ward_fired` in Rust, regenerated,
+and typechecked cleanly with Zod still unable to parse it: the same bug as the one this entry is
+about, under the guard that was supposed to prevent it. A `Covers<T, U>` type now asserts the
+other direction and names what is missing, and every guarded enum carries both.
+
+---
+
+## 0017 — Wards are scheduled on the heartbeat, not on `tokio-cron-scheduler`
+
+**Date.** 2026-09-14. **Replaces.** §5's named crate for this job.
+
+§6.7's standing wards are driven from the heartbeat thread built in Phase 6, using the `cron`
+crate to parse and evaluate the expressions. §5 names `tokio-cron-scheduler`.
+
+**Why.** That crate wants a tokio runtime, and nothing long-running in this application is async:
+the heartbeat, the seal's listener and the pty pump are all plain threads. Adding a runtime for
+one feature would mean two concurrency models in a codebase that currently has one, and a second
+scheduler to start, stop and reason about beside a thread that already ticks, already holds the
+database, the roster and the summonings, and already runs with the window closed.
+
+A ward's resolution is minutes. A five-second tick is more than the job needs.
+
+**Consequence.** `ward::due` is a pure function of `(schedule, last came round, now)`, so every
+rule about wards is testable without waiting for a clock — missed windows, weekly schedules, a
+clock adjusted backwards. The whole of §6.7's timing behaviour is checked in microseconds.
+
+---
+
+## 0018 — A skipped turn is a turn
+
+**Date.** 2026-09-14. **Replaces.** `last_run` moving only when a ward fires.
+
+When a ward comes round and its familiar is busy, the occurrence is spent: `last_run` moves, and
+the ward is asked again at its next scheduled time.
+
+**Why.** The first version reasoned that a skipped ward had not run, so the clock should not
+move and it should be asked again shortly. It had not run — but it had *come round*, and being
+due again immediately meant due on every heartbeat. A busy familiar in the running application
+produced **thirty-three skips in two and a half minutes**, one per tick, each a database write.
+
+Nothing queued, which is the rule §6.7 states outright and the one that matters. But "a daily
+ward that has skipped 30 times" means thirty days, not thirty seconds, and the reading that
+produces the former is "skips that run" — that occurrence, spent.
+
+**Consequence.** `last_run` means "when it last came round", and `last_result` is what says
+whether that turn became a commission. A daily ward busy at nine is skipped and tries again
+tomorrow, which is what a person setting one up would expect.

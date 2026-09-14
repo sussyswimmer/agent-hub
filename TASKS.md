@@ -342,21 +342,76 @@ Legend: `[x]` done and verified · `[~]` done but not verifiable in this environ
 
 ---
 
+## Phase 7 — Standing wards and the menu bar
+
+- [x] `ward::due`, a pure function of schedule, last turn and now — so every timing rule is
+      testable without waiting for a clock
+- [x] Five-field crontab expressions, read in the machine's own time zone
+- [x] The prompt sent verbatim, every run (§6.7)
+- [x] Skip if busy, without queueing; a missed window is one run and not a backlog
+- [x] Wards stored, listed, stood down and dismissed, with a panel on the familiar
+- [x] A menu-bar item; closing the window hides it; quit is explicit and warns first
+
+**Acceptance** — in the running binary under `Xvfb`
+
+- [x] **A ward set two minutes out fires with the window closed.** Set at 02:06:58 for minute 8,
+      window closed at 02:07:18, fired 02:08:02 with the window still gone and the process still
+      up. The commission was in the database before the window came back.
+- [x] **The prompt sent is byte-identical to the stored prompt.** Ward and commission both read
+      `plan the week. keep tuesday clear.` — and the Rust test drives the same property through
+      leading spaces, a blank line and a trailing tab, which is what trimming would eat.
+- [x] **A ward whose familiar is busy records `skipped: busy` and does not queue.** Came round at
+      02:10:01 while Astrolabe was working: `skipped — Astrolabe was busy`, and the commission
+      count did not move. Held over thirty-three further turns.
+- [x] **Closing the window does not quit, and does not stop the work.** Closed with Vellum live:
+      app up, engine on the process table, summoning row still open.
+- [x] **Quitting stops everything properly.** `stopped on quit id=vellum how=Interrupt`, the row
+      closed `quit`, no orphaned engine.
+- [x] **Reopening shows the floor already right.** The Roster/Floor preference survived, the
+      roster came back in its current state, and nothing was replayed.
+
+**A bug the running application found**
+
+- **A skipped ward was asked again on every heartbeat.** Leaving the clock alone on a skip
+  reasoned that a skipped ward had not run — true, but it had come round, and being due again
+  immediately meant due every five seconds. Thirty-three skips in two and a half minutes, each a
+  write. Nothing ever queued, which is the rule §6.7 states outright, but that is not what
+  "skipped 30 times" means. A turn is now spent whether or not it became a commission.
+  DECISIONS.md 0018.
+
+**Caveats, stated rather than ticked over**
+
+- **The menu bar could not be shown here.** There is no session bus in this container —
+  `libayatana-appindicator` cannot reach `dbus-launch` — so the tray icon never appears and its
+  menu cannot be clicked. The application says so and carries on, which is the behaviour it was
+  written to have; what could not be exercised is the tray → "Quit Grimoire" → warning chain.
+  The warning itself, its wording and both its answers are covered in Playwright, and closing
+  the window was driven with a real `WM_DELETE_WINDOW`.
+- **This is a Linux tray, not a macOS menu bar.** Tauri's tray is cross-platform, but §6.7 means
+  `NSStatusItem`, and a menu-bar item that lives beside the clock is a different thing from an
+  icon in a panel that does not exist here.
+- **Notifications were not exercised.** Same reason: no notification daemon. §6.7 wants one per
+  ward run and per seal request, and §6.5 one on a breaker trip.
+- **The ward panel is per-familiar.** §6.7 does not ask for a global list, but a study with
+  wards on five familiars has them in five places. Worth revisiting with the workbench.
+
+---
+
 ## Later phases
 
 Phases 4–9 are unstarted. Three things are worth carrying forward, all discovered early:
 
-Phases 4, 5 and 6 are done; their reports are above. Carried forward:
+Phases 4 through 7 are done; their reports are above. Carried forward:
 
 - **A dead hook should withdraw its request.** The socket closing is detectable and currently
   is not acted on, so a killed hook leaves a row in the queue until it times out. Belongs with
   the stall detection in Phase 6, which is already about noticing that nothing is happening.
-- **The workbench does not exist.** §6.5 puts the runaway guard's spend cap there, and §6.1 puts
-  the engine binary's path there. Both are settings with sensible defaults and no view. Phase 7
-  is the menu bar; the workbench should land near it.
-- **`stalled` and `bound` now have producers**, but the floor still reads them from the roster
-  overlay rather than from the breaker directly, so a bound familiar shows as `awaiting-seal`
-  (it has a request waiting, which is true) rather than `bound`. Worth a look in Phase 7.
+- **The workbench does not exist.** §6.5 puts the runaway guard's spend cap there, §6.1 puts the
+  engine binary's path there, and §11 puts transcript deletion there. All are settings with
+  sensible defaults and no view. It is the largest thing left before Phase 9.
+- **Phase 8 is the archivist**, and its whole point is that it cannot dispatch. §6.8 is blunt
+  about why: "a coordinating agent with dispatch rights is the single most expensive failure
+  mode in this class of app." The test §10 asks for is one that tries and fails.
 
 ---
 
@@ -379,6 +434,8 @@ cannot check, and none of it is claimed as done anywhere in this repository.
 | The floor's real frame rate (§8.6, §10) | 5 | No GPU. `Xvfb` reports `libEGL: DRI3 error` and falls back to software, so any number measured here is the rasteriser's, not the budget's. |
 | `prefers-reduced-motion` in the real binary | 5 | Nothing here sets the GTK setting the webview reads. The media-query path is covered in Playwright. |
 | Notifications when the breaker trips (§6.5) | 6 | Notification Center. The ledger, the queue and the rail all carry it. |
+| The menu bar as `NSStatusItem` (§6.7) | 7 | No session bus here, so no tray at all — and a Linux panel icon is not a macOS menu-bar item either. Closing-is-not-quitting was driven with a real `WM_DELETE_WINDOW`. |
+| Notifications on a ward run or a seal request (§6.7) | 7 | No notification daemon. |
 | A budget tripped on *tokens* rather than minutes | 6 | Tokens come from the engine's transcript, which needs a turn this container's login screen blocks. Same code path either way. |
 
 Everything else — the PTY, the breaker, the ward arithmetic, path canonicalisation and the

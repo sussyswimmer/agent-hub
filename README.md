@@ -16,7 +16,7 @@ code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
 ## State
 
-Phase 6 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
+Phase 7 of twelve. Familiars are files: drop a `.binding.md` in `~/.grimoire/bindings` and one
 appears, edit it and the change arrives without a restart, break it and it says what is wrong
 rather than vanishing. Give one a commission and it queues; summon it and the oldest starts,
 running a real agent CLI in a pseudo-terminal with the binding's writ as its briefing. What it
@@ -31,6 +31,12 @@ door; banishing walks it out. Hover a mark for what it is doing and what it has 
 to open its workspace with the floor still in sight above. Every mark on it is drawn in code —
 there is not one image file in this repository — and there is a Roster toggle for when you would
 rather have the list.
+
+**Some of it happens without you.** A standing ward is a schedule, a prompt and a familiar: a
+morning brief, a weekly tidy, a nightly check. It fires with the window closed, because closing
+the window does not quit — Grimoire sits in the menu bar and the scheduler goes on ticking. The
+prompt it sends next month is byte-for-byte the one you read when you wrote it, and a ward whose
+familiar is already busy skips that turn rather than queueing behind it.
 
 **Nothing runs away.** Every commission is metered on tokens, turns and minutes. At 80% of
 whichever budget is tightest the familiar is told to prioritise finishing, and the rule under

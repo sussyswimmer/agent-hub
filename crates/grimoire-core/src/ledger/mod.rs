@@ -39,6 +39,8 @@ pub enum EventKind {
     BreakerBanish,
     /// Quiet for ten minutes, raised for the owner rather than acted on (§6.5).
     Stalled,
+    /// A standing ward came round — commissioned, or skipped and why (§6.7).
+    WardFired,
     Misfired,
 }
 
@@ -59,6 +61,7 @@ impl EventKind {
             EventKind::BreakerBind => "bound",
             EventKind::BreakerBanish => "banished by the breaker",
             EventKind::Stalled => "stalled",
+            EventKind::WardFired => "a standing ward came round",
             EventKind::Misfired => "misfired",
         }
     }
