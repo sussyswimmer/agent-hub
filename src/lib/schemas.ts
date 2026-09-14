@@ -1,9 +1,31 @@
 // Zod at the IPC boundary (§5: both sides validate). Shapes mirror src/lib/generated.
+//
+// **The enums below are checked against the generated types.** A Zod enum is a list of strings
+// with no relationship to the TypeScript type it is supposed to mirror, so the two drift the
+// moment a variant is added in Rust — and drift silently, because the failure is a parse error
+// inside a `catch`. Phase 6 added two seal kinds and four ledger kinds; the rail went on
+// reading "none waiting" beside a familiar whose own row said it was waiting on a seal, because
+// `sealsPending()` was throwing on a `kind` Zod had never heard of.
+//
+// `satisfies` makes that a compile error instead. Adding a variant in Rust, regenerating, and
+// forgetting this file now fails `bun run typecheck`.
 import { z } from "zod";
 
-export const order = z.enum(["quill", "lantern", "crucible", "compass", "ledger"]);
-export const engine = z.enum(["claude", "codex", "gemini", "qwen", "custom"]);
-export const sigilState = z.enum(["dormant", "idle", "working", "awaiting-seal", "bound", "stalled", "banished", "misfired"]);
+import type { Engine } from "./generated/Engine";
+import type { EventKind } from "./generated/EventKind";
+import type { Order } from "./generated/Order";
+import type { SealKind } from "./generated/SealKind";
+import type { SigilState } from "./generated/SigilState";
+
+const ORDERS = ["quill", "lantern", "crucible", "compass", "ledger"] as const satisfies readonly Order[];
+const ENGINES = ["claude", "codex", "gemini", "qwen", "custom"] as const satisfies readonly Engine[];
+const SIGIL_STATES = [
+  "dormant", "idle", "working", "awaiting-seal", "bound", "stalled", "banished", "misfired",
+] as const satisfies readonly SigilState[];
+
+export const order = z.enum(ORDERS);
+export const engine = z.enum(ENGINES);
+export const sigilState = z.enum(SIGIL_STATES);
 
 export const familiarSummary = z.object({
   id: z.string(),
@@ -114,7 +136,7 @@ export const ledgerSummary = z.object({
 });
 
 /** Mirrors `EventKind` in crates/grimoire-core/src/ledger/mod.rs. */
-export const eventKind = z.enum([
+const EVENT_KINDS = [
   "summoned",
   "banished",
   "commission_queued",
@@ -124,8 +146,14 @@ export const eventKind = z.enum([
   "seal_raised",
   "seal_resolved",
   "breaker_tripped",
+  "breaker_steer",
+  "breaker_bind",
+  "breaker_banish",
+  "stalled",
   "misfired",
-]);
+] as const satisfies readonly EventKind[];
+
+export const eventKind = z.enum(EVENT_KINDS);
 
 export const ledgerEvent = z.object({
   id: z.number(),
@@ -145,7 +173,11 @@ export const codexView = z.object({
 
 // ── The seal (§6.4) ────────────────────────────────────────────────────────────────────
 
-export const sealKind = z.enum(["write", "shell", "network", "destructive", "send", "reliquary"]);
+const SEAL_KINDS = [
+  "write", "shell", "network", "destructive", "send", "reliquary", "extend", "stalled",
+] as const satisfies readonly SealKind[];
+
+export const sealKind = z.enum(SEAL_KINDS);
 export const resolution = z.enum(["sealed", "sealed_always", "refused", "timed_out"]);
 
 export const seal = z.object({

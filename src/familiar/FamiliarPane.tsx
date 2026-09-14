@@ -68,7 +68,9 @@ export function FamiliarPane({
   /** True when the floor is put away, so its switch has to live somewhere (§8.7). */
   showToggle?: boolean;
 }) {
-  const { tab, setTab, aether, commissionsChanged } = useStore();
+  const { tab, setTab, commissionsChanged } = useStore();
+  // Out of the one map the floor reads too, so the bar and the arc cannot disagree (§10).
+  const aether = useStore((st) => st.aether.get(familiar.id) ?? null);
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [placeError, setPlaceError] = useState<string | null>(null);
 

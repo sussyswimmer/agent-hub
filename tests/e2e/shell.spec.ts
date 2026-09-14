@@ -137,7 +137,10 @@ test("a turning ring rotates about its own centre and stays inside its row", asy
 
 test("selecting a familiar switches the pane and its aether meters", async ({ page }) => {
   await page.goto("/");
+  // Anvil has nothing running, and says so rather than showing a row of zeroes.
+  await page.locator('[data-familiar="anvil"]').click();
   await expect(page.getByTestId("aether")).toContainText("no commission running");
+
   await page.locator('[data-familiar="sconce"]').click();
   await expect(page.getByTestId("pane-header")).toContainText("Sconce");
   const aether = page.getByTestId("aether");

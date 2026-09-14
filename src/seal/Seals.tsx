@@ -25,6 +25,10 @@ const TONE: Record<SealKind, string> = {
   destructive: "text-oxblood-text",
   send: "text-oxblood-text",
   reliquary: "text-brass-text",
+  // The breaker's two. Brass, because both are the aether running out rather than a familiar
+  // reaching for something it should not have (§6.5).
+  extend: "text-brass-text",
+  stalled: "text-brass-text",
 };
 
 const KIND_LABEL: Record<SealKind, string> = {
@@ -34,6 +38,8 @@ const KIND_LABEL: Record<SealKind, string> = {
   destructive: "destructive",
   send: "sends outward",
   reliquary: "shared memory",
+  extend: "out of aether",
+  stalled: "stalled",
 };
 
 function waiting(raised: number): string {

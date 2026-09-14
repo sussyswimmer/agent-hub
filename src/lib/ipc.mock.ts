@@ -21,8 +21,12 @@ const roster: FamiliarSummary[] = [
 ];
 
 const aether: Record<string, Aether> = {
+  // Sconce sits past 80% of its minutes, which is where §6.5 turns the rule brass — the case
+  // worth having on screen by default, because it is the one with a consequence.
   sconce: { tokens: 148_000, tokens_max: 250_000, turns: 11, turns_max: 40, seconds: 1_680, seconds_max: 1_800 },
   astrolabe: { tokens: 32_400, tokens_max: 120_000, turns: 4, turns_max: 25, seconds: 300, seconds_max: 900 },
+  // Over the line, so the oxblood end of the scale is reachable without waiting for a run.
+  vellum: { tokens: 260_000, tokens_max: 250_000, turns: 30, turns_max: 40, seconds: 600, seconds_max: 1_800 },
 };
 
 /**

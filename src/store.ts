@@ -10,7 +10,16 @@ interface State {
   familiars: FamiliarSummary[];
   selected: string | null;
   tab: Tab;
-  aether: Aether | null;
+  /**
+   * The three meters, for every familiar, read on one tick.
+   *
+   * One map rather than one reading for whoever is selected, because §10 asks that the floor's
+   * aether arc match the pane's meters "to within one frame" — and the surest way for two
+   * views to agree about a number is for there to be one number. The floor needs all of them
+   * anyway; the pane takes its own out of the same map.
+   */
+  aether: Map<string, Aether>;
+  refreshAether: () => Promise<void>;
   error: string | null;
   /** Whether the bindings-changed subscription is already in place. */
   watching: boolean;
@@ -69,7 +78,7 @@ export const useStore = create<State>((set, get) => ({
   familiars: [],
   selected: null,
   tab: "commission",
-  aether: null,
+  aether: new Map(),
   error: null,
   watching: false,
   view: "familiar",
@@ -93,7 +102,7 @@ export const useStore = create<State>((set, get) => ({
           ? null
           : (familiars[0]?.id ?? null);
       set({ ready: true, kind: be.kind, home, familiars, selected });
-      if (selected) set({ aether: await be.aetherFor(selected) });
+      void get().refreshAether();
 
       // §4: an edit to a binding reaches the rail without a restart. Subscribed once, on the
       // first load, and left for the life of the window. The seal's count is watched the same
@@ -120,11 +129,24 @@ export const useStore = create<State>((set, get) => ({
         // §8.3's states are mostly invisible to the filesystem: a summoning starting, an engine
         // taking a turn, a commission ending. This is the tick that notices.
         setInterval(() => {
-          if (!document.hidden) void get().refreshRoster();
+          if (document.hidden) return;
+          void get().refreshRoster();
+          void get().refreshAether();
         }, 2500);
       }
     } catch (e) {
       set({ ready: true, error: e instanceof Error ? e.message : String(e) });
+    }
+  },
+
+  refreshAether: async () => {
+    try {
+      const be = await backend();
+      const rows = get().familiars;
+      const pairs = await Promise.all(rows.map((f) => be.aetherFor(f.id).then((a) => [f.id, a] as const)));
+      set({ aether: new Map(pairs.filter((p): p is [string, Aether] => p[1] !== null)) });
+    } catch {
+      // Meters are a reading, not the truth. A failed one leaves the last up.
     }
   },
 
@@ -152,12 +174,10 @@ export const useStore = create<State>((set, get) => ({
     // The tab deliberately survives the switch. The app is for watching a bench of familiars
     // at once, so flicking between two terminals is the common move; being thrown back to
     // the commission tab every time would fight it.
-    set({ selected: id, aether: null });
-    void backend()
-      .then((be) => be.aetherFor(id))
-      .then((a) => {
-        if (get().selected === id) set({ aether: a });
-      });
+    set({ selected: id });
+    // Read now rather than waiting up to the next tick: choosing a familiar is a request to
+    // look at it, and a bar that is blank for two seconds reads as a bar with nothing in it.
+    void get().refreshAether();
   },
 
   setTab: (tab) => set({ tab }),
@@ -185,6 +205,12 @@ export const useStore = create<State>((set, get) => ({
 
   noteCommissionsChanged: () => set((s) => ({ commissionsChanged: s.commissionsChanged + 1 })),
 }));
+
+/** The selected familiar's meters, out of the one map everything else reads. */
+export function selectedAether(): Aether | null {
+  const { aether, selected } = useStore.getState();
+  return selected ? (aether.get(selected) ?? null) : null;
+}
 
 export function selectedFamiliar(): FamiliarSummary | null {
   const { familiars, selected } = useStore.getState();

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { backend } from "@/lib/ipc";
 import { useStore } from "@/store";
-import type { Aether, FamiliarSummary } from "@/lib/types";
+import type { FamiliarSummary } from "@/lib/types";
 
 import { FloorMirror } from "./a11y";
 import { type ActorInput, type Actors, createActors } from "./actors";
@@ -16,9 +16,6 @@ import { palette } from "./bake";
 import { type Interaction, attachInteraction } from "./interaction";
 import { MarginaliaCard } from "./marginalia";
 import { type Stage, createStage } from "./stage";
-
-/** How often the meters are re-read while the floor is open. Cheap, and only while visible. */
-const AETHER_POLL_MS = 4000;
 
 function reducedMotion(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -38,7 +35,9 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
   const interaction = useRef<Interaction | null>(null);
   const [ready, setReady] = useState(false);
   const [hovered, setHovered] = useState<Hovered | null>(null);
-  const [aether, setAether] = useState<Map<string, Aether>>(new Map());
+  // One map, held by the store and refreshed on its tick. The floor used to fetch its own,
+  // which meant the arc and the pane's meters were two readings taken at different moments.
+  const aether = useStore((s) => s.aether);
   const [override, setOverride] = useState<Record<string, FamiliarSummary["state"]>>({});
   const readout = useRef<HTMLDivElement>(null);
 
@@ -214,28 +213,6 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [ready]);
-
-  // The meters. Read for every familiar, because the arcs are drawn for every familiar.
-  useEffect(() => {
-    let live = true;
-    const read = () => {
-      void backend()
-        .then((b) => Promise.all(familiars.map((f) => b.aetherFor(f.id).then((a) => [f.id, a] as const))))
-        .then((pairs) => {
-          if (!live) return;
-          setAether(new Map(pairs.filter((p): p is [string, Aether] => p[1] !== null)));
-        })
-        .catch(() => {});
-    };
-    read();
-    const timer = setInterval(() => {
-      if (!document.hidden) read();
-    }, AETHER_POLL_MS);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-  }, [familiars, commissionsChanged]);
 
   return (
     // `min-w-0` is load-bearing, not tidiness. A flex child's default `min-width: auto` refuses

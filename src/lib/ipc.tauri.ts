@@ -19,7 +19,7 @@ export function createTauriBackend(): Backend {
     kind: "tauri",
     homeInfo: () => call("home_info", S.homeInfo),
     listFamiliars: () => call("list_familiars", S.familiarSummary.array()),
-    aetherFor: async () => null,
+    aetherFor: (id) => call("aether_for", S.aether.nullable(), { id }),
     intakeFor: (id) => call("intake_for", S.intakeField.array(), { id }),
     async onBindingsChanged(fn) {
       const { listen } = await import("@tauri-apps/api/event");
