@@ -19,7 +19,7 @@ request for type. Each licence text sits beside its files.
 | EB Garamond | OFL-1.1 | `src/theme/fonts/eb-garamond.LICENSE.txt` |
 | Iosevka | OFL-1.1 | `src/theme/fonts/iosevka.LICENSE.txt` |
 
-## Rust crates (520)
+## Rust crates (528)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -82,6 +82,7 @@ request for type. Each licence text sits beside its files.
 | `cpufeatures` | 0.2.17 | MIT OR Apache-2.0 |
 | `cpufeatures` | 0.3.1 | MIT OR Apache-2.0 |
 | `crc32fast` | 1.5.2 | MIT OR Apache-2.0 |
+| `cron` | 0.17.0 | MIT OR Apache-2.0 |
 | `crossbeam-channel` | 0.5.17 | MIT OR Apache-2.0 |
 | `crossbeam-utils` | 0.8.23 | MIT OR Apache-2.0 |
 | `crypto-common` | 0.1.7 | MIT OR Apache-2.0 |
@@ -288,9 +289,13 @@ request for type. Each licence text sits beside its files.
 | `parking_lot_core` | 0.9.12 | MIT OR Apache-2.0 |
 | `percent-encoding` | 2.3.2 | MIT OR Apache-2.0 |
 | `phf` | 0.13.1 | MIT |
+| `phf` | 0.11.3 | MIT |
 | `phf_generator` | 0.13.1 | MIT |
+| `phf_generator` | 0.11.3 | MIT |
 | `phf_macros` | 0.13.1 | MIT |
+| `phf_macros` | 0.11.3 | MIT |
 | `phf_shared` | 0.13.1 | MIT |
+| `phf_shared` | 0.11.3 | MIT |
 | `pin-project-lite` | 0.2.17 | Apache-2.0 OR MIT |
 | `piper` | 0.2.5 | MIT OR Apache-2.0 |
 | `plist` | 1.10.1 | MIT |
@@ -316,9 +321,11 @@ request for type. Each licence text sits beside its files.
 | `r-efi` | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
 | `rand` | 0.9.5 | MIT OR Apache-2.0 |
 | `rand` | 0.10.2 | MIT OR Apache-2.0 |
+| `rand` | 0.8.8 | MIT OR Apache-2.0 |
 | `rand_chacha` | 0.9.0 | MIT OR Apache-2.0 |
 | `rand_core` | 0.10.1 | MIT OR Apache-2.0 |
 | `rand_core` | 0.9.5 | MIT OR Apache-2.0 |
+| `rand_core` | 0.6.4 | MIT OR Apache-2.0 |
 | `raw-window-handle` | 0.6.2 | MIT OR Apache-2.0 OR Zlib |
 | `redox_syscall` | 0.5.18 | MIT |
 | `redox_users` | 0.5.2 | MIT |
@@ -519,6 +526,7 @@ request for type. Each licence text sits beside its files.
 | `windows-version` | 0.1.7 | MIT OR Apache-2.0 |
 | `winnow` | 1.0.4 | MIT |
 | `winnow` | 0.5.40 | MIT |
+| `winnow` | 0.7.15 | MIT |
 | `winreg` | 0.10.1 | MIT |
 | `wit-bindgen` | 0.57.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | `writeable` | 0.6.4 | Unicode-3.0 |
