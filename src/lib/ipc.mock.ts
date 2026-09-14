@@ -409,6 +409,10 @@ export function createMockBackend(): Backend {
     async workbenchSetEnginePath(engine, path) {
       enginePaths.set(engine, path.trim());
     },
+    async workbenchOpenEngineLogin(engine) {
+      if (engine !== "claude" && engine !== "codex") throw new Error("This provider does not have a subscription sign-in flow yet.");
+      return `Mock ${engine} sign-in opened in a terminal.`;
+    },
     async workbenchSetSpendCap(usd) {
       if (!Number.isFinite(usd) || usd <= 0) throw new Error("The runaway spend cap must be greater than zero.");
       spendCap = usd;

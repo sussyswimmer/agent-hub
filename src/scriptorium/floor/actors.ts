@@ -8,7 +8,7 @@
 // The sigil geometry comes from `ui/sigil-geometry`, the same module the rail's SVG reads, so a
 // familiar's mark is the same mark in both places rather than two drawings that happen to agree.
 
-import { Container, Graphics, Text } from "pixi.js";
+import { Container, Graphics, Rectangle, Sprite, Text, Texture } from "pixi.js";
 
 import {
   type Mark,
@@ -21,6 +21,7 @@ import {
   sigilGeometry,
 } from "@/ui/sigil-geometry";
 import type { Order, SigilState } from "@/lib/types";
+import familiarSheet from "@/assets/higgsfield/familiar-sheet.png";
 
 import { arcAt, type Palette } from "./bake";
 import {
@@ -41,6 +42,16 @@ const WALK_MS = 1100;
 
 /** The gap left in the ring when a familiar is banished or misfired (§7.4). */
 const BREAK_DEGREES = 34;
+
+/** The lower row of the Higgsfield sheet: five original familiars, with generated captions cropped away. */
+const FAMILIAR_FRAMES: Record<Order, Rectangle> = {
+  quill: new Rectangle(52, 405, 454, 700),
+  lantern: new Rectangle(522, 366, 444, 740),
+  crucible: new Rectangle(1006, 394, 460, 710),
+  compass: new Rectangle(1494, 352, 500, 755),
+  ledger: new Rectangle(2022, 375, 514, 730),
+};
+const familiarSheetTexture = Texture.from(familiarSheet);
 
 /** What the floor needs to know about one familiar. Everything else is the room's business. */
 export interface ActorInput {
@@ -77,6 +88,7 @@ interface Actor {
   ring: Container;
   ringMark: Graphics;
   body: Graphics;
+  portrait: Sprite;
   arc: Graphics;
   dot: Graphics;
   plate: Text;
@@ -177,7 +189,10 @@ export function createActors(options: ActorsOptions): Actors {
       a.ringMark.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: 4, color: p.brass, cap: "round" });
     }
 
-    drawPixelFamiliar(a, colour);
+    // The generated familiar is the actor now; the geometric sigil, state ring and aether arc
+    // remain vector work so their interaction and state changes stay exact.
+    a.body.visible = false;
+    a.portrait.visible = true;
   }
 
   function drawMark(g: Graphics, mark: Mark, colour: number) {
@@ -271,6 +286,11 @@ export function createActors(options: ActorsOptions): Actors {
     const ring = new Container();
     const ringMark = new Graphics();
     const body = new Graphics();
+    const portrait = new Sprite(new Texture({ source: familiarSheetTexture.source, frame: FAMILIAR_FRAMES[input.order] }));
+    portrait.anchor.set(0.5, 0.72);
+    portrait.position.set(0, 5);
+    portrait.width = 112;
+    portrait.height = 150;
     const arc = new Graphics();
     const dot = new Graphics();
     ring.addChild(ringMark);
@@ -285,7 +305,7 @@ export function createActors(options: ActorsOptions): Actors {
     // The sigil is drawn in its own 100-unit frame and scaled to the 44 §8.3 asks for, so the
     // geometry module never has to know how big the floor draws things.
     const marks = new Container();
-    marks.addChild(ring, body, arc, dot);
+    marks.addChild(portrait, body, ring, arc, dot);
     marks.scale.set(SIGIL_SIZE / 100);
     container.addChild(marks);
 
@@ -300,6 +320,7 @@ export function createActors(options: ActorsOptions): Actors {
       ring,
       ringMark,
       body,
+      portrait,
       arc,
       dot,
       plate,
@@ -459,12 +480,16 @@ export function createActors(options: ActorsOptions): Actors {
         if (reducedMotion) {
           a.body.position.set(0, 0);
           a.body.scale.set(1);
+          a.portrait.position.set(0, 5);
+          a.portrait.scale.set(1);
         } else {
           const moving = a.legs.length > 0;
           const speed = moving ? 11 : a.input.state === "working" ? 7 : 4;
           const wave = Math.sin(Date.now() / 1000 * speed + a.rhythm);
           a.body.position.set(moving ? wave * 2 : 0, moving ? Math.abs(wave) * -5 : wave * -1.4);
           a.body.scale.set(1, moving ? 1 + Math.abs(wave) * 0.08 : 1);
+          a.portrait.position.set(moving ? wave * 2 : 0, 5 + (moving ? Math.abs(wave) * -5 : wave * -1.4));
+          a.portrait.scale.set(1, moving ? 1 + Math.abs(wave) * 0.08 : 1);
         }
 
         a.container.position.set(a.at.x, a.at.y);

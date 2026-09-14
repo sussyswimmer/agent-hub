@@ -1,6 +1,9 @@
+import { useState } from "react";
+
 import { Rule, Sigil } from "@/ui";
 import { useStore } from "@/store";
 import type { FamiliarSummary } from "@/lib/types";
+import { backend } from "@/lib/ipc";
 
 function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary; selected: boolean; onSelect: () => void }) {
   const broken = familiar.error !== null;
@@ -46,7 +49,23 @@ function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary
 }
 
 export function Roster({ seals = 0 }: { seals?: number }) {
-  const { familiars, selected, select, ready, view, setView } = useStore();
+  const { familiars, selected, select, ready, view, setView, load } = useStore();
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  async function restoreStarterCircle() {
+    setRestoring(true);
+    setRestoreError(null);
+    try {
+      await (await backend()).workbenchRestoreBindings();
+      await load();
+    } catch (reason) {
+      setRestoreError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setRestoring(false);
+    }
+  }
+
   return (
     <nav style={{ width: "var(--rail)" }}
       className="flex h-full shrink-0 flex-col bg-panel" aria-label="Roster" data-testid="roster">
@@ -62,10 +81,19 @@ export function Roster({ seals = 0 }: { seals?: number }) {
           />
         ))}
         {ready && familiars.length === 0 && (
-          <p className="px-3 py-4 text-xs text-bone-dim">
-            No familiars bound yet. Drop a <span className="mono">.binding.md</span> in{" "}
-            <span className="mono">~/.grimoire/bindings</span>.
-          </p>
+          <div className="m-3 rounded-[18px] border border-brass/30 bg-void/70 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.25)]">
+            <p className="display text-base text-bone">The circle is empty.</p>
+            <p className="mt-1 text-xs text-bone-dim">Place the five starter agents, or add a <span className="mono">.binding.md</span> yourself.</p>
+            <button
+              type="button"
+              disabled={restoring}
+              onClick={() => void restoreStarterCircle()}
+              className="mt-3 w-full rounded-full border border-brass/50 bg-brass/10 px-3 py-1.5 text-xs text-brass-text transition hover:bg-brass/20 disabled:opacity-50"
+            >
+              {restoring ? "Restoring..." : "Restore starter agents"}
+            </button>
+            {restoreError && <p role="alert" className="mt-2 text-xs text-oxblood-text">{restoreError}</p>}
+          </div>
         )}
       </div>
       <Rule />

@@ -21,6 +21,8 @@ export function createTauriBackend(): Backend {
     workbenchRead: () => call("workbench_read", S.workbenchSettings),
     workbenchSetEnginePath: (engine, path) =>
       invoke("workbench_set_engine_path", { engine, path }).then(() => undefined),
+    workbenchOpenEngineLogin: (engine) =>
+      invoke("workbench_open_engine_login", { engine }).then((message) => String(message)),
     workbenchSetSpendCap: (usd) =>
       invoke("workbench_set_spend_cap", { usd }).then(() => undefined),
     workbenchDeleteTranscript: (name) =>

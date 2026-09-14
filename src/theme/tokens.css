@@ -177,3 +177,130 @@ select {
     display: block;
   }
 }
+
+/* The floor has a DOM recovery scene for machines where a GPU renderer cannot start. It is
+   intentionally an atmospheric place, not a grey error state: an empty tower is still a tower. */
+.floor-recovery {
+  isolation: isolate;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(8, 7, 16, 0.5), rgba(12, 15, 25, 0.26)),
+    url("../assets/higgsfield/tower-floor.png") center / cover no-repeat,
+    #10101a;
+}
+
+.floor-canvas--higgs {
+  background:
+    radial-gradient(circle at 50% 50%, transparent 35%, rgba(7, 5, 14, 0.68) 100%),
+    url("../assets/higgsfield/tower-floor.png") center / cover no-repeat,
+    var(--ink-void);
+}
+
+.floor-canvas--higgs canvas {
+  mix-blend-mode: screen;
+}
+
+.connection-deck {
+  position: relative;
+  display: grid;
+  gap: 1.5rem;
+  overflow: hidden;
+  padding: clamp(1.4rem, 3vw, 2.75rem);
+  border: 1px solid color-mix(in srgb, var(--brass) 32%, var(--ink-rule));
+  border-radius: 26px 26px 8px 26px;
+  background:
+    linear-gradient(95deg, rgba(17, 15, 25, 0.94) 26%, rgba(17, 15, 25, 0.68) 68%, rgba(13, 31, 39, 0.52)),
+    url("../assets/higgsfield/tower-floor.png") center 45% / cover no-repeat;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.28);
+}
+.connection-deck::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 35%, rgba(109, 238, 222, 0.08), transparent 74%); animation: connection-glow 8s ease-in-out infinite; }
+.connection-deck__story, .connection-deck__providers { position: relative; z-index: 1; }
+.connection-deck__story { max-width: 38rem; }
+.connection-deck__story h2 { margin: 0.4rem 0 0; font: 400 clamp(2rem, 4vw, 3.7rem) / 0.94 var(--font-display); letter-spacing: -0.035em; }
+.connection-deck__story > p:last-child { max-width: 34rem; margin: 0.85rem 0 0; color: var(--bone-dim); }
+.connection-deck__providers { display: grid; gap: 0.7rem; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 42rem; }
+.connection-deck__provider { min-height: 11rem; padding: 1rem; border: 1px solid rgba(201, 191, 164, 0.14); border-radius: 14px 14px 4px 14px; background: rgba(10, 9, 16, 0.56); backdrop-filter: blur(8px); }
+.connection-deck__provider[data-provider="codex"] { border-color: rgba(78, 122, 107, 0.55); }
+.connection-deck__provider[data-provider="claude"] { border-color: rgba(176, 141, 63, 0.55); }
+.connection-deck__provider h3 { margin: 0.15rem 0; font-size: 1.45rem; }
+.connection-deck__provider p { margin: 0; color: var(--bone-dim); font-size: 0.86rem; line-height: 1.35; }
+.connection-deck__provider button { margin-top: 1rem; border: 1px solid color-mix(in srgb, var(--brass) 55%, transparent); border-radius: 999px; padding: 0.42rem 0.8rem; color: var(--brass-text); font-size: 0.85rem; transition: background 180ms var(--ease), transform 180ms var(--ease); }
+.connection-deck__provider button:hover:not(:disabled) { transform: translateY(-2px); background: rgba(176, 141, 63, 0.14); }
+.connection-deck__provider button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.floor-recovery::before,
+.floor-recovery::after {
+  content: "";
+  position: absolute;
+  width: min(78vw, 58rem);
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--bone) 16%, transparent);
+  border-radius: 46% 54% 49% 51% / 49% 45% 55% 51%;
+  animation: floor-drift 16s var(--ease) infinite alternate;
+}
+
+.floor-recovery::before { transform: rotate(-18deg); }
+.floor-recovery::after { width: min(55vw, 39rem); transform: rotate(32deg); animation-delay: -6s; }
+
+.floor-recovery__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.2;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.6) 0.6px, transparent 0.8px);
+  background-size: 7px 7px;
+  mix-blend-mode: soft-light;
+}
+
+.floor-recovery__constellation {
+  position: absolute;
+  width: 12rem;
+  height: 7rem;
+  border-top: 1px solid color-mix(in srgb, var(--brass) 40%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--brass) 20%, transparent);
+  transform: skewY(-24deg) rotate(-15deg);
+  opacity: 0.7;
+}
+.floor-recovery__constellation::before,
+.floor-recovery__constellation::after { content: ""; position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--brass); box-shadow: 5.5rem 2.4rem 0 var(--verdigris), 9rem 5.5rem 0 var(--bone); }
+.floor-recovery__constellation--one { top: 13%; left: 8%; animation: constellation-wink 5s ease-in-out infinite; }
+.floor-recovery__constellation--two { right: 10%; bottom: 18%; transform: skewY(24deg) rotate(165deg); animation: constellation-wink 6s ease-in-out -2s infinite; }
+
+.floor-recovery__orbit { position: absolute; border: 1px dashed color-mix(in srgb, var(--brass) 45%, transparent); border-radius: 50%; pointer-events: none; }
+.floor-recovery__orbit--outer { width: min(70vw, 48rem); height: min(30vw, 19rem); transform: rotate(-16deg); animation: orbit-breathe 7s ease-in-out infinite; }
+.floor-recovery__orbit--inner { width: min(44vw, 30rem); height: min(18vw, 12rem); transform: rotate(27deg); animation: orbit-breathe 7s ease-in-out -3.5s infinite reverse; }
+
+.floor-recovery__party { position: relative; z-index: 1; width: min(82vw, 44rem); height: min(31vw, 15rem); }
+.floor-recovery__familiar { --tone: var(--bone); position: absolute; left: calc(8% + var(--i) * 20%); bottom: calc(1rem + (var(--i) % 2) * 1.6rem); display: grid; width: clamp(72px, 10vw, 128px); height: clamp(105px, 14vw, 160px); place-items: end center; color: var(--tone); background-image: url("../assets/higgsfield/familiar-sheet.png"); background-size: 550% auto; background-position-y: 49%; background-repeat: no-repeat; filter: drop-shadow(0 12px 9px rgba(0, 0, 0, 0.5)); animation: familiar-bob 2.6s ease-in-out calc(var(--i) * -0.31s) infinite; }
+.floor-recovery__familiar[data-order="quill"] { --tone: var(--brass); }
+.floor-recovery__familiar[data-order="lantern"] { --tone: var(--verdigris); }
+.floor-recovery__familiar[data-order="crucible"] { --tone: var(--oxblood-text); }
+.floor-recovery__familiar[data-order="compass"] { --tone: var(--slate-text); }
+.floor-recovery__familiar[data-order="quill"] { background-position-x: 0%; }
+.floor-recovery__familiar[data-order="lantern"] { background-position-x: 25%; }
+.floor-recovery__familiar[data-order="crucible"] { background-position-x: 50%; }
+.floor-recovery__familiar[data-order="compass"] { background-position-x: 75%; }
+.floor-recovery__familiar[data-order="ledger"] { background-position-x: 100%; }
+.floor-recovery__head, .floor-recovery__body { display: none; }
+.floor-recovery__familiar span { position: absolute; bottom: -1.55rem; margin-top: 0.45rem; font: 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.78; text-shadow: 0 2px 5px var(--ink-void); }
+
+.floor-recovery__copy { position: relative; z-index: 2; width: min(33rem, calc(100% - 2.5rem)); margin-top: min(28vw, 12rem); text-align: center; animation: floor-arrive 700ms var(--ease) both; }
+.floor-recovery__eyebrow { margin: 0; color: var(--brass-text); font-size: 0.7rem; letter-spacing: 0.16em; }
+.floor-recovery__copy h2 { margin: 0.45rem 0 0; font: 400 clamp(2rem, 5vw, 4.5rem) / 0.96 var(--font-display); letter-spacing: -0.03em; }
+.floor-recovery__copy p:not(.floor-recovery__eyebrow) { max-width: 32rem; margin: 0.85rem auto 0; color: var(--bone-dim); }
+.floor-recovery__copy button { margin-top: 1.25rem; padding: 0.7rem 1.25rem; border: 1px solid color-mix(in srgb, var(--brass) 70%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--brass) 13%, transparent); color: var(--brass-text); box-shadow: 0 10px 30px color-mix(in srgb, var(--brass) 14%, transparent); transition: transform 180ms var(--ease), background 180ms var(--ease); }
+.floor-recovery__copy button:hover { transform: translateY(-2px); background: color-mix(in srgb, var(--brass) 25%, transparent); }
+
+@keyframes floor-drift { to { border-radius: 55% 45% 58% 42% / 40% 55% 45% 60%; transform: rotate(14deg) scale(1.08); } }
+@keyframes constellation-wink { 50% { opacity: 0.22; transform: translateY(-8px) skewY(-24deg) rotate(-15deg); } }
+@keyframes orbit-breathe { 50% { opacity: 0.32; transform: scale(1.05) rotate(12deg); } }
+@keyframes familiar-bob { 50% { transform: translateY(-11px); } }
+@keyframes floor-arrive { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes connection-glow { 50% { opacity: 0.35; transform: translateX(8%); } }
+
+@media (max-width: 640px) {
+  .connection-deck__providers { grid-template-columns: 1fr; }
+}

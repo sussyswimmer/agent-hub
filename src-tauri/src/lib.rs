@@ -142,6 +142,7 @@ pub fn run() {
             commands::home_info,
             commands::workbench_read,
             commands::workbench_set_engine_path,
+            commands::workbench_open_engine_login,
             commands::workbench_set_spend_cap,
             commands::workbench_delete_transcript,
             commands::workbench_restore_bindings,

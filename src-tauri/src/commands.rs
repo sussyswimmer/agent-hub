@@ -147,6 +147,44 @@ pub fn workbench_set_engine_path(
     Ok(engine_setting(&state, engine))
 }
 
+/// Launch an engine's own interactive OAuth flow in macOS Terminal. Grimoire only starts the
+/// CLI: it never receives, persists, or proxies a provider password, token, or subscription.
+#[tauri::command]
+pub fn workbench_open_engine_login(state: State<'_, AppState>, engine: Engine) -> R<String> {
+    if !cfg!(target_os = "macos") {
+        return Err("Subscription sign-in opens in macOS Terminal. Build this app on a Mac to connect a provider.".into());
+    }
+    let setting = engine_setting(&state, engine);
+    let binary = setting
+        .resolved
+        .ok_or_else(|| setting.error.unwrap_or_else(|| "Configure this engine's CLI path first.".into()))?;
+    let arguments: &[&str] = match engine {
+        // Claude presents its supported account choices when started without an authenticated session.
+        Engine::Claude => &[],
+        // Codex makes its account flow explicit, then opens the provider-controlled browser page.
+        Engine::Codex => &["login"],
+        _ => return Err("Subscription sign-in is currently available for Claude and Codex. Configure other compatible CLIs below.".into()),
+    };
+    let invocation = std::iter::once(shell_quote(&binary))
+        .chain(arguments.iter().map(|argument| shell_quote(argument)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let terminal_command = format!("{invocation}; printf '\\n\\nReturn to Grimoire after sign-in is complete.\\n'; exec $SHELL -l");
+    let apple_script = format!(
+        "tell application \"Terminal\" to activate\ntell application \"Terminal\" to do script \"{}\"",
+        terminal_command.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    std::process::Command::new("osascript")
+        .args(["-e", &apple_script])
+        .spawn()
+        .map_err(|error| format!("Could not open Terminal for sign-in: {error}"))?;
+    Ok(format!("Terminal opened for {} sign-in. Complete the provider's browser flow there, then return here.", engine_name(engine)))
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\\''"))
+}
+
 #[tauri::command]
 pub fn workbench_set_spend_cap(state: State<'_, AppState>, usd: f64) -> R<()> {
     if !usd.is_finite() || usd <= 0.0 {

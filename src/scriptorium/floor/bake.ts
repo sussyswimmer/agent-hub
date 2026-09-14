@@ -250,7 +250,9 @@ export function bake(renderer: Renderer, scale: number): Baked {
   const g = new Graphics();
 
   // The floor inside the wall, a shade off the void so the room reads as a room.
-  g.circle(CENTRE.x, CENTRE.y, WALL_INNER).fill({ color: p.void });
+  // The generated observatory shows through the plan like lamplight below tracing paper; the
+  // vector floor still owns interaction geometry, but it no longer flattens the world behind it.
+  g.circle(CENTRE.x, CENTRE.y, WALL_INNER).fill({ color: p.void, alpha: 0.28 });
   g.circle(CENTRE.x, CENTRE.y, WALL_INNER).stroke({ width: 1.2, color: p.ink, alpha: 0.25 });
 
   drawWall(g, p);

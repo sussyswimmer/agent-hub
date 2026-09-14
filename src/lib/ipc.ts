@@ -38,6 +38,8 @@ export interface Backend {
   homeInfo(): Promise<HomeInfo>;
   workbenchRead(): Promise<WorkbenchSettings>;
   workbenchSetEnginePath(engine: Engine, path: string): Promise<void>;
+  /** Opens the engine's own macOS sign-in flow. Credentials never pass through Grimoire. */
+  workbenchOpenEngineLogin(engine: Engine): Promise<string>;
   workbenchSetSpendCap(usd: number): Promise<void>;
   workbenchDeleteTranscript(name: string): Promise<void>;
   workbenchRestoreBindings(): Promise<string[]>;

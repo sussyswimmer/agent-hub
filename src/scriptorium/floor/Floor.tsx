@@ -34,6 +34,8 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
   const actors = useRef<Actors | null>(null);
   const interaction = useRef<Interaction | null>(null);
   const [ready, setReady] = useState(false);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const [hovered, setHovered] = useState<Hovered | null>(null);
   // One map, held by the store and refreshed on its tick. The floor used to fetch its own,
   // which meant the arc and the pane's meters were two readings taken at different moments.
@@ -43,6 +45,7 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
 
   const select = useStore((s) => s.select);
   const setView = useStore((s) => s.setView);
+  const reload = useStore((s) => s.load);
   const commissionsChanged = useStore((s) => s.commissionsChanged);
 
   // The roster as the floor sees it, with any dev override applied (§10 asks that `bound` and
@@ -126,7 +129,15 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
       });
 
       setReady(true);
-    })();
+    })().catch((reason: unknown) => {
+      // A GPU or WebGL failure must not turn the entire application into an endless opening
+      // screen. The DOM recovery scene gives the reader their agents and a repair path even on
+      // a machine that cannot initialise Pixi.
+      if (live) {
+        console.error("could not initialise the floor", reason);
+        setStageError(reason instanceof Error ? reason.message : "The floor renderer did not start.");
+      }
+    });
 
     return () => {
       live = false;
@@ -171,6 +182,16 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
     stage.current?.resize(element.clientWidth, element.clientHeight);
     return () => observer.disconnect();
   }, [ready]);
+
+  const restoreStarterCircle = useCallback(async () => {
+    setRestoring(true);
+    try {
+      await (await backend()).workbenchRestoreBindings();
+      await reload();
+    } finally {
+      setRestoring(false);
+    }
+  }, [reload]);
 
   /**
    * Put the ticker's own numbers where they can be read.
@@ -226,8 +247,15 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
         role="application"
         aria-label="The floor of the tower. Tab moves between familiars; Escape returns to the roster."
         data-testid="floor-canvas"
-        className="block h-full w-full max-w-full overflow-hidden outline-none"
+        className="floor-canvas--higgs block h-full w-full max-w-full overflow-hidden outline-none"
       />
+      {(stageError || familiars.length === 0) && (
+        <FloorRecovery
+          failed={stageError !== null}
+          restoring={restoring}
+          onRestore={() => void restoreStarterCircle()}
+        />
+      )}
       {hovered && (
         <MarginaliaCard
           familiar={hovered.familiar}
@@ -241,6 +269,45 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
       <FloorMirror familiars={shown} aether={aether} />
       {import.meta.env.DEV && <StateOverride familiars={familiars} value={override} onChange={setOverride} />}
     </div>
+  );
+}
+
+function FloorRecovery({ failed, restoring, onRestore }: { failed: boolean; restoring: boolean; onRestore: () => void }) {
+  return (
+    <section className="floor-recovery" aria-live="polite">
+      <div className="floor-recovery__grain" aria-hidden="true" />
+      <div className="floor-recovery__constellation floor-recovery__constellation--one" aria-hidden="true" />
+      <div className="floor-recovery__constellation floor-recovery__constellation--two" aria-hidden="true" />
+      <div className="floor-recovery__orbit floor-recovery__orbit--outer" aria-hidden="true" />
+      <div className="floor-recovery__orbit floor-recovery__orbit--inner" aria-hidden="true" />
+      <div className="floor-recovery__party" aria-hidden="true">
+        {[
+          ["quill", "Scribe"],
+          ["lantern", "Scout"],
+          ["crucible", "Maker"],
+          ["compass", "Guide"],
+          ["ledger", "Keeper"],
+        ].map(([order, name], index) => (
+          <div className="floor-recovery__familiar" data-order={order} style={{ "--i": index } as React.CSSProperties} key={order}>
+            <i className="floor-recovery__head" />
+            <i className="floor-recovery__body" />
+            <span>{name}</span>
+          </div>
+        ))}
+      </div>
+      <div className="floor-recovery__copy">
+        <p className="mono floor-recovery__eyebrow">GRIMOIRE / FIRST LIGHT</p>
+        <h2>{failed ? "The tower lost its lens." : "The tower is waiting for its circle."}</h2>
+        <p>
+          {failed
+            ? "Your Mac can still restore the familiar roster while the animated floor takes its safer route."
+            : "Five starter familiars are ready to be placed around the hearth."}
+        </p>
+        <button type="button" onClick={onRestore} disabled={restoring}>
+          {restoring ? "Calling the circle..." : "Restore starter circle"}
+        </button>
+      </div>
+    </section>
   );
 }
 

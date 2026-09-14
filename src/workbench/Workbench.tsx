@@ -67,6 +67,33 @@ export function Workbench() {
       </header>
       <Rule />
       <div className="rule-scroll min-h-0 flex-1 overflow-y-auto p-4">
+        <section className="connection-deck mx-auto mb-5 max-w-5xl">
+          <div className="connection-deck__story">
+            <p className="mono text-xs tracking-[0.18em] text-brass-text">THE CONDUIT ROOM</p>
+            <h2 className="display">Bring your own subscription.</h2>
+            <p>Grimoire never asks for an API key or password. It opens the provider&apos;s own CLI sign-in, so ChatGPT and Claude subscriptions stay with their respective providers.</p>
+          </div>
+          <div className="connection-deck__providers">
+            {(["codex", "claude"] as const).map((engine) => {
+              const row = settings?.engines.find((candidate) => candidate.engine === engine);
+              const available = Boolean(row?.resolved);
+              return (
+                <article className="connection-deck__provider" data-provider={engine} key={engine}>
+                  <p className="mono text-xs text-bone-dim">{engine === "codex" ? "CHATGPT ACCOUNT" : "CLAUDE ACCOUNT"}</p>
+                  <h3 className="display">{ENGINE_LABEL[engine]}</h3>
+                  <p>{engine === "codex" ? "Use the ChatGPT subscription already linked to Codex." : "Use your Claude Pro or Max subscription through Claude Code."}</p>
+                  <button
+                    type="button"
+                    disabled={!available || busy !== null}
+                    onClick={() => void act(`connect-${engine}`, () => (async () => (await backend()).workbenchOpenEngineLogin(engine))())}
+                  >
+                    {busy === `connect-${engine}` ? "Opening..." : available ? "Open sign-in" : "Set CLI path below"}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
         <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)]">
           <Panel title="Engine instruments" className="min-w-0">
             <div className="divide-y divide-rule">
