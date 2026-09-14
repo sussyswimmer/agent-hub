@@ -412,6 +412,64 @@ Phases 4 through 7 are done; their reports are above. Carried forward:
 
 ---
 
+## Making it runnable — the owner asked when they could test it
+
+The answer should have been "today". It was not, and none of the reasons were in the code.
+
+**A fresh clone would not have compiled.** §1 forbids vendored art, so `src-tauri/icons/` is
+gitignored and `scripts/icons.ts` draws the mark instead — but there was no `icons` entry in
+`package.json` and nothing invoked it, while Tauri embeds those files at compile time through
+`generate_context!()`. The README even told the reader to run `bun run icons`, which failed with
+"script not found". It is a script now, and chained into `beforeDevCommand` and
+`beforeBuildCommand`, so it is not a step anyone has to remember.
+
+Verified by being a clean clone: cloned the pushed branch into a scratch directory, where the
+icons are genuinely absent, and followed the new README. The log reads
+
+```
+Running BeforeDevCommand (`bun run icons && bun run dev`)
+Drew 6 files into src-tauri/icons/ (gitignored; §1 forbids vendored art).
+```
+
+then it compiled, opened, created its `~/.grimoire`, placed the five seeds, and drew the roster
+with all five dormant. It opened on Roster rather than the floor, which is stale `localStorage`
+in this container's shared webview data directory from earlier sessions — `src/store.ts` defaults
+to the floor unless `"0"` is stored. On a new machine it will open on the floor; that is read
+from the code, not seen here.
+
+**Junicode arrived and did nothing.** `scripts/fonts.ts` fetches it where github.com is
+reachable, but `fonts.css` declared no `@font-face` for it. The owner would have run
+`bun run fonts`, read `junicode  1 files`, and gone on reading EB Garamond with nothing to say
+why. DECISIONS.md 0003 claimed the file appearing was enough; it was not, and the entry is
+amended to say so. `src/theme/fonts/vendored.css` is generated and committed now, rewritten on
+every run to match what was placed, and a test walks both stylesheets asserting every `url()`
+resolves and that a woff2 on disk implies a rule declaring it.
+
+**`bun run doctor`** checks Rust, Bun, the Xcode command line tools, dependencies, the drawn
+mark, the vendored faces, `claude` on `PATH` and whether `~/.grimoire` exists. On the clean
+clone before `bun install` it said `✗ Dependencies  Run \`bun install\` in the repository root.`
+and exited 1; with `claude` off `PATH` it says so without treating it as fatal.
+
+**A bug the suite found by failing twice and then refusing to fail again.** Two Playwright tests
+failed in a full run and passed on every rerun of that file alone — twenty-four repeats at double
+the workers, all green. Pressing Summon inside the window where the pane is still asking the
+backend whether this familiar is already running made the answer come back "yes", because the
+summon that had just started was what it found. The pane wrote "reattached" over a terminal that
+had just started and left two `onData` handlers on the same xterm: **every keystroke reached the
+engine twice**, `abc` sending `aabbcc`. Fixed with a ref set before the first `await`, and pinned
+by a test that widens the race with a delay knob in the mock rather than hoping load reproduces
+it. DECISIONS.md 0019.
+
+Calling that a flake would have shipped doubled keystrokes to the owner's engine.
+
+**HANDOFF.md** is new: what is built, what is missing in priority order, what has never run on a
+Mac, and what to do first. The README gained a "What to distrust" section pointing here.
+
+At the end of this pass: 238 Rust tests, 37 unit tests, 122 Playwright tests, clippy clean,
+`bun run licences` leaving no diff, and `git ls-files` showing no image file.
+
+---
+
 ## Blocked here — needs the Mac
 
 This container is headless Linux. Each of the following is real work that this environment
