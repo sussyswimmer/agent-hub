@@ -7,9 +7,22 @@
 // reading "none waiting" beside a familiar whose own row said it was waiting on a seal, because
 // `sealsPending()` was throwing on a `kind` Zod had never heard of.
 //
-// `satisfies` makes that a compile error instead. Adding a variant in Rust, regenerating, and
-// forgetting this file now fails `bun run typecheck`.
+// `satisfies` alone is not enough, and finding that out cost a second bug in the same shape.
+// It checks that every string in the list *is* a valid variant — it says nothing about whether
+// every variant is in the list, which is the direction that actually happens: a variant added
+// in Rust, regenerated, and never added here. `Covers` below asserts the other direction, and
+// names what is missing when it fails.
 import { z } from "zod";
+
+/**
+ * Fails to compile when `T` does not list every variant of `U`, and says which are missing.
+ *
+ * The error reads `Type '{ missing: "ward_fired" }' does not satisfy the constraint 'true'`,
+ * which points straight at the line to add.
+ */
+type Covers<T extends readonly string[], U extends string> =
+  [Exclude<U, T[number]>] extends [never] ? true : { missing: Exclude<U, T[number]> };
+type Exhaustive<T extends true> = T;
 
 import type { Engine } from "./generated/Engine";
 import type { EventKind } from "./generated/EventKind";
@@ -21,10 +34,13 @@ import type { SigilState } from "./generated/SigilState";
 import type { Status } from "./generated/Status";
 
 const ORDERS = ["quill", "lantern", "crucible", "compass", "ledger"] as const satisfies readonly Order[];
+type _CoversOrder = Exhaustive<Covers<typeof ORDERS, Order>>;
 const ENGINES = ["claude", "codex", "gemini", "qwen", "custom"] as const satisfies readonly Engine[];
+type _CoversEngine = Exhaustive<Covers<typeof ENGINES, Engine>>;
 const SIGIL_STATES = [
   "dormant", "idle", "working", "awaiting-seal", "bound", "stalled", "banished", "misfired",
 ] as const satisfies readonly SigilState[];
+type _CoversSigilState = Exhaustive<Covers<typeof SIGIL_STATES, SigilState>>;
 
 export const order = z.enum(ORDERS);
 export const engine = z.enum(ENGINES);
@@ -74,6 +90,7 @@ export const emission = z.discriminatedUnion("kind", [
 
 /** Mirrors `IntakeField` in crates/grimoire-core/src/binding/schema.rs (§6.2). */
 const INTAKE_KINDS = ["text", "select", "multiline"] as const satisfies readonly IntakeKind[];
+type _CoversIntakeKind = Exhaustive<Covers<typeof INTAKE_KINDS, IntakeKind>>;
 export const intakeKind = z.enum(INTAKE_KINDS);
 export const intakeField = z.object({
   id: z.string(),
@@ -95,6 +112,7 @@ const COMMISSION_STATUSES = [
   "banished",
   "misfired",
 ] as const satisfies readonly Status[];
+type _CoversStatus = Exhaustive<Covers<typeof COMMISSION_STATUSES, Status>>;
 
 export const commissionStatus = z.enum(COMMISSION_STATUSES);
 
@@ -156,8 +174,10 @@ const EVENT_KINDS = [
   "breaker_bind",
   "breaker_banish",
   "stalled",
+  "ward_fired",
   "misfired",
 ] as const satisfies readonly EventKind[];
+type _CoversEventKind = Exhaustive<Covers<typeof EVENT_KINDS, EventKind>>;
 
 export const eventKind = z.enum(EVENT_KINDS);
 
@@ -182,13 +202,28 @@ export const codexView = z.object({
 const SEAL_KINDS = [
   "write", "shell", "network", "destructive", "send", "reliquary", "extend", "stalled",
 ] as const satisfies readonly SealKind[];
+type _CoversSealKind = Exhaustive<Covers<typeof SEAL_KINDS, SealKind>>;
 
 export const sealKind = z.enum(SEAL_KINDS);
 const RESOLUTIONS = [
   "sealed", "sealed_always", "refused", "timed_out", "withdrawn",
 ] as const satisfies readonly Resolution[];
+type _CoversResolution = Exhaustive<Covers<typeof RESOLUTIONS, Resolution>>;
 
 export const resolution = z.enum(RESOLUTIONS);
+
+/** A standing ward (§6.7). `next_run` is worked out for the panel, not stored. */
+export const ward = z.object({
+  id: z.string(),
+  familiar_id: z.string(),
+  cron: z.string(),
+  prompt: z.string(),
+  intake: z.unknown(),
+  enabled: z.boolean(),
+  last_run: z.number().nullable(),
+  last_result: z.string().nullable(),
+  next_run: z.number().nullable(),
+});
 
 export const seal = z.object({
   id: z.string(),

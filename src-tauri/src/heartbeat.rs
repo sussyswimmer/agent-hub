@@ -18,6 +18,7 @@ use std::time::Duration;
 use grimoire_core::breaker::{self, Act, Spend};
 use grimoire_core::seal::server::Server as SealServer;
 use grimoire_core::summon::usage;
+use grimoire_core::ward::{self, Skip, WardRun};
 use grimoire_core::{Db, commission, ledger};
 
 use crate::summonings::Summonings;
@@ -60,6 +61,11 @@ impl Heart {
 
     /// One pass over every live commission. Public so a test can drive it without waiting.
     pub fn tick(&self) {
+        // §6.7's wards, on the same thread. It already ticks, already holds the database, the
+        // roster and the summonings, and a ward's resolution is minutes — a second scheduler
+        // would be a second thing to start, stop and reason about for no gain.
+        self.wards();
+
         let cap = self
             .db
             .setting(SPEND_CAP_SETTING)
@@ -109,6 +115,75 @@ impl Heart {
             // it is finished, and saying both about the same summoning helps nobody.
             self.check_stall(&beat, &name, spend);
         }
+    }
+
+    /// Fire whichever standing wards have come round (§6.7).
+    ///
+    /// **Skip, do not queue.** A ward whose familiar is already working records what happened
+    /// and leaves its clock alone, so it is asked again next tick rather than stacking up. §6.7
+    /// names the failure: a daily ward that has skipped thirty times must not stampede when the
+    /// familiar finally frees up.
+    fn wards(&self) {
+        let Ok(wards) = ward::store::enabled(&self.db) else { return };
+        let now = grimoire_core::db::now();
+
+        for w in wards {
+            match ward::due(&w.cron, w.last_run, now) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(e) => {
+                    // A schedule is checked when the ward is made, so this is a row edited
+                    // under the application. Say so once and leave it alone.
+                    tracing::warn!(ward = %w.id, error = %e, "a ward's schedule cannot be read");
+                    continue;
+                }
+            }
+
+            let name = self
+                .roster
+                .get(&w.familiar_id)
+                .and_then(|b| b.front.map(|f| f.name))
+                .unwrap_or_else(|| w.familiar_id.clone());
+
+            let outcome = if self.roster.get(&w.familiar_id).is_none() {
+                WardRun::Skipped(Skip::Missing)
+            } else if self.busy(&w.familiar_id) {
+                WardRun::Skipped(Skip::Busy)
+            } else {
+                match ward::store::commission(&self.db, &w) {
+                    Ok(id) => WardRun::Commissioned(id),
+                    Err(e) => {
+                        tracing::warn!(ward = %w.id, error = %e, "a ward could not be commissioned");
+                        continue;
+                    }
+                }
+            };
+
+            let said = match &outcome {
+                WardRun::Commissioned(_) => "commissioned".to_string(),
+                WardRun::Skipped(skip) => skip.describe(&name),
+            };
+            let _ = ward::store::record(&self.db, &w.id, &outcome, &said);
+            let _ = ledger::append(
+                &self.db,
+                ledger::EventKind::WardFired,
+                Some(&w.familiar_id),
+                match &outcome {
+                    WardRun::Commissioned(id) => Some(id.as_str()),
+                    WardRun::Skipped(_) => None,
+                },
+                serde_json::json!({ "ward": w.id, "result": said }),
+            );
+            tracing::info!(ward = %w.id, familiar = %w.familiar_id, %said, "a standing ward came round");
+        }
+    }
+
+    /// Whether a familiar has a commission in hand — the same test the queue uses (§6.2), so
+    /// "busy" means one thing in the application rather than two that happen to agree.
+    fn busy(&self, familiar_id: &str) -> bool {
+        commission::for_familiar(&self.db, familiar_id)
+            .map(|rows| rows.iter().any(|c| c.status.occupies_familiar()))
+            .unwrap_or(true)
     }
 
     fn binding_for(&self, familiar_id: &str) -> Option<grimoire_core::binding::schema::BindingFrontmatter> {

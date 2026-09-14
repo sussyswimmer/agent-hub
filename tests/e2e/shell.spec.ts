@@ -27,8 +27,8 @@ test("the scriptorium draws the §7.5 layout: 240px rail, roster, pane, seals, a
   );
   expect(shouted).toEqual([]);
 
-  // Four tabs, aether pinned below the panel.
-  await expect(page.getByRole("tab")).toHaveCount(4);
+  // §7.5's four, plus the standing wards Phase 7 added. Aether pinned below the panel.
+  await expect(page.getByRole("tab")).toHaveCount(5);
   for (const t of ["commission", "terminal", "outputs", "codex"]) {
     await expect(page.locator(`[data-tab="${t}"]`)).toBeVisible();
   }

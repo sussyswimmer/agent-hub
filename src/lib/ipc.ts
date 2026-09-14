@@ -1,6 +1,7 @@
 // The one boundary between the UI and Rust. Real Tauri inside the app, an in-memory stand-in
 // in a plain browser, so the whole shell is testable headless.
 import type {
+  Ward,
   Aether,
   CodexView,
   Commission,
@@ -50,6 +51,10 @@ export interface Backend {
   /** Walk the stop ladder. Resolves to which rung it took. */
   banish(id: string): Promise<string>;
   liveSummonings(): Promise<string[]>;
+  /** Quit was asked for from the menu bar. Returns an unsubscribe (§6.7). */
+  onQuitRequested(fn: () => void): Promise<() => void>;
+  /** Quit for real, having warned. */
+  quit(): Promise<void>;
   /**
    * Point a freshly-mounted terminal at a summoning that is already running, and say whether
    * there was one. Output written while nothing was attached is gone: a pty is a stream.
@@ -60,6 +65,13 @@ export interface Backend {
   commissionCreate(id: string, prompt: string, intake: Record<string, string>): Promise<Commission>;
   /** Every commission for one familiar, newest first. */
   commissionsFor(id: string): Promise<Commission[]>;
+  /** Every standing ward on one familiar (§6.7). */
+  wardsFor(id: string): Promise<Ward[]>;
+  /** Set one up. The schedule is checked now, not once a minute for ever. */
+  wardCreate(id: string, cron: string, prompt: string, intake: Record<string, string>): Promise<Ward>;
+  wardSetEnabled(id: string, enabled: boolean): Promise<void>;
+  wardDelete(id: string): Promise<void>;
+
   /** The ledger's roll-ups (§6.9). */
   ledgerSummary(): Promise<LedgerSummary>;
   ledgerEvents(limit?: number): Promise<Event[]>;

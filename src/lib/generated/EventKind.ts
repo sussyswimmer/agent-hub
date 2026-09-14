@@ -3,4 +3,4 @@
 /**
  * What kind of thing happened (§6.9).
  */
-export type EventKind = "summoned" | "banished" | "commission_queued" | "commission_started" | "commission_ended" | "usage" | "seal_raised" | "seal_resolved" | "breaker_tripped" | "breaker_steer" | "breaker_bind" | "breaker_banish" | "stalled" | "misfired";
+export type EventKind = "summoned" | "banished" | "commission_queued" | "commission_started" | "commission_ended" | "usage" | "seal_raised" | "seal_resolved" | "breaker_tripped" | "breaker_steer" | "breaker_bind" | "breaker_banish" | "stalled" | "ward_fired" | "misfired";

@@ -12,10 +12,11 @@ import { Codex } from "./Codex";
 import { Intake } from "./Intake";
 import { Queue } from "./Queue";
 import { Terminal } from "./Terminal";
+import { Wards } from "./Wards";
 
-const TABS: Tab[] = ["commission", "terminal", "outputs", "codex"];
+const TABS: Tab[] = ["commission", "terminal", "outputs", "codex", "wards"];
 
-const COMING: Record<Exclude<Tab, "terminal" | "commission" | "codex">, string> = {
+const COMING: Record<Exclude<Tab, "terminal" | "commission" | "codex" | "wards">, string> = {
   outputs: "Outputs arrive in a later phase.",
 };
 
@@ -169,9 +170,11 @@ export function FamiliarPane({
           </>
         ) : tab === "codex" ? (
           <Codex key={familiar.id} familiar={familiar} />
+        ) : tab === "wards" ? (
+          <Wards key={familiar.id} familiarId={familiar.id} />
         ) : (
           <p className="measure text-base text-bone-dim">
-            {COMING[tab as Exclude<Tab, "terminal" | "commission" | "codex">]}
+            {COMING[tab as Exclude<Tab, "terminal" | "commission" | "codex" | "wards">]}
           </p>
         )}
       </section>

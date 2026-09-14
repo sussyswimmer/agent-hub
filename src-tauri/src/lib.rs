@@ -125,6 +125,13 @@ pub fn run() {
                 }
                 .start();
 
+                // §6.7: "The app lives in the menu bar. Closing the window does not quit."
+                if let Err(e) = menu_bar(app.handle()) {
+                    // A study with no menu bar is still a study. Say so and carry on rather
+                    // than refusing to start over an icon.
+                    tracing::warn!(error = %e, "the menu bar could not be set up");
+                }
+
                 tracing::info!(home = %paths.home.display(), "grimoire ready");
                 let _ = DB.set(db.clone());
                 app.manage(AppState { paths, db, roster, summonings, seal, _watcher: watcher });
@@ -142,11 +149,16 @@ pub fn run() {
             commands::banish,
             commands::live_summonings,
             commands::attach_summoning,
+            commands::quit,
             commands::commission_create,
             commands::commissions_for,
             commands::ledger_summary,
             commands::ledger_events,
             commands::codex_for,
+            commands::wards_for,
+            commands::ward_create,
+            commands::ward_set_enabled,
+            commands::ward_delete,
             commands::seals_pending,
             commands::seal_decide,
         ])
@@ -161,11 +173,73 @@ pub fn run() {
     // the child a SIGHUP it is free to ignore, and any grandchild it started never sees even
     // that. Found by quitting the running application and reading the log, where the stop that
     // was supposed to have happened had left no trace at all.
-    app.run(move |_handle, event| {
-        if matches!(event, RunEvent::Exit) {
-            summonings.banish_all(DB.get());
+    app.run(move |handle, event| {
+        match event {
+            RunEvent::Exit => summonings.banish_all(DB.get()),
+            // §6.7: "Closing the window does not quit." The scheduler goes on ticking and the
+            // familiars go on working — which is the point of a standing ward. Quit is explicit,
+            // from the menu bar.
+            RunEvent::WindowEvent { label, event: tauri::WindowEvent::CloseRequested { api, .. }, .. } => {
+                if label == "main"
+                    && let Some(window) = handle.get_webview_window("main")
+                {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+            _ => {}
         }
     });
+}
+
+/// The menu-bar item, and the rule that closing the window is not quitting (§6.7).
+///
+/// Quit is explicit, from here, and it warns when familiars are still working — the window is
+/// the only place that warning can be read, so quitting from the tray opens the window and asks
+/// rather than stopping a dozen summonings on a single click.
+fn menu_bar(app: &tauri::AppHandle) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::TrayIconBuilder;
+
+    let open = MenuItem::with_id(app, "open", "Open the scriptorium", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Grimoire", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &quit])?;
+
+    TrayIconBuilder::with_id("grimoire")
+        .icon(app.default_window_icon().cloned().ok_or(tauri::Error::InvalidIcon(
+            std::io::Error::other("no window icon to reuse"),
+        ))?)
+        .tooltip("Grimoire")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "open" => show(app),
+            "quit" => {
+                // Never straight to `exit`. The window is asked whether this is really wanted,
+                // because live familiars are the one thing quitting throws away.
+                show(app);
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.emit("quit-requested", ());
+                }
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                show(tray.app_handle());
+            }
+        })
+        .build(app)?;
+
+    Ok(())
+}
+
+fn show(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
 }
 
 /// Stop every summoning when the process is asked to quit from outside.

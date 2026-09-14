@@ -10,6 +10,7 @@ import type {
   LedgerSummary,
   Resolution,
   Seal,
+  Ward,
 } from "./types";
 
 const roster: FamiliarSummary[] = [
@@ -136,6 +137,57 @@ function crowd(): FamiliarSummary[] {
     });
   }
   return [...roster, ...made];
+}
+
+/**
+ * A stand-in for the wards table (§6.7).
+ *
+ * The scheduler itself is Rust and is tested there against a real clock; what this has to carry
+ * is everything the panel does — a schedule that is refused before it is stored, an enabled
+ * switch, a last result in words, and the prompt kept exactly as written.
+ */
+class Wards {
+  private rows: Ward[] = [];
+  private seq = 0;
+
+  for(familiarId: string): Ward[] {
+    return this.rows.filter((w) => w.familiar_id === familiarId).map((w) => structuredClone(w));
+  }
+
+  create(familiarId: string, cron: string, prompt: string, intake: Record<string, string>): Ward {
+    // The real `ward::store::create` refuses a schedule it cannot read rather than storing one
+    // that fails silently once a minute for ever.
+    const fields = cron.trim().split(/\s+/).filter(Boolean).length;
+    if (fields !== 5) {
+      throw new Error(
+        `\`${cron.trim()}\` has ${fields} fields. A ward's schedule is the usual five: minute, ` +
+          "hour, day of month, month, day of week. `0 9 * * 1` is nine every Monday.",
+      );
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const row: Ward = {
+      id: `w${String(++this.seq).padStart(4, "0")}`,
+      familiar_id: familiarId,
+      cron: cron.trim(),
+      prompt,
+      intake,
+      enabled: true,
+      last_run: now,
+      last_result: null,
+      next_run: now + 3600,
+    };
+    this.rows.push(row);
+    return structuredClone(row);
+  }
+
+  setEnabled(id: string, enabled: boolean) {
+    const row = this.rows.find((w) => w.id === id);
+    if (row) row.enabled = enabled;
+  }
+
+  delete(id: string) {
+    this.rows = this.rows.filter((w) => w.id !== id);
+  }
 }
 
 /** Mirrors the intake in seeds/*.binding.md, so the form has something real to render. */
@@ -313,6 +365,7 @@ class Seals {
 
 export function createMockBackend(): Backend {
   const live = new Map<string, FakeSummoning>();
+  const wards = new Wards();
   const commissions = new Commissions();
   const seals = new Seals();
   const events: Event[] = [];
@@ -397,6 +450,15 @@ export function createMockBackend(): Backend {
     async liveSummonings() {
       return [...live.keys()];
     },
+    async onQuitRequested(fn) {
+      // No menu bar in a browser, so a test asks for it the way the tray would.
+      const handler = () => fn();
+      addEventListener("grimoire:quit-requested", handler);
+      return () => removeEventListener("grimoire:quit-requested", handler);
+    },
+    async quit() {
+      dispatchEvent(new Event("grimoire:quit"));
+    },
     async attachSummoning(id, onEmission) {
       const s = live.get(id);
       if (!s) return false;
@@ -412,6 +474,21 @@ export function createMockBackend(): Backend {
     async commissionsFor(id) {
       return commissions.for(id);
     },
+    async wardsFor(id) {
+      return wards.for(id);
+    },
+    async wardCreate(id, cron, prompt, intake) {
+      const row = wards.create(id, cron, prompt, intake);
+      events.push(event(events.length + 1, id, null, "ward_fired"));
+      return row;
+    },
+    async wardSetEnabled(id, enabled) {
+      wards.setEnabled(id, enabled);
+    },
+    async wardDelete(id) {
+      wards.delete(id);
+    },
+
     async ledgerSummary() {
       return commissions.summary();
     },

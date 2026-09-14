@@ -6,6 +6,7 @@ use grimoire_core::ledger::{Event, LedgerSummary};
 use grimoire_core::commission::Status as CommissionStatus;
 use grimoire_core::seal::{Resolution, Seal as GrimoireSeal};
 use grimoire_core::types::{Aether, SigilState};
+use grimoire_core::ward::Ward;
 use grimoire_core::types::FamiliarSummary;
 use tauri::State;
 use tauri::ipc::Channel;
@@ -224,6 +225,13 @@ pub fn summon(state: State<'_, AppState>, req: SummonArgs, channel: Channel<Emis
     state.summonings.summon(&state.db, req, workbench_binary(&state), cwd, &seal, channel)
 }
 
+/// Quit, having asked. §6.7's warning is answered in the window; this is the answer.
+#[tauri::command]
+pub fn quit(app: tauri::AppHandle) {
+    // `exit` runs `RunEvent::Exit`, which is where every summoning gets its stop ladder (§6.1).
+    app.exit(0);
+}
+
 /// Re-attach a terminal to a summoning that is already running.
 ///
 /// Answers whether there was one. The window rebuilds its picture of what is live from here on
@@ -232,6 +240,51 @@ pub fn summon(state: State<'_, AppState>, req: SummonArgs, channel: Channel<Emis
 #[tauri::command]
 pub fn attach_summoning(state: State<'_, AppState>, id: String, channel: Channel<Emission>) -> R<bool> {
     state.summonings.attach(&id, channel)
+}
+
+// ── Standing wards (§6.7) ──────────────────────────────────────────────────────────────
+
+/// Every ward on one familiar, newest last, each with when it next comes round.
+#[tauri::command]
+pub fn wards_for(state: State<'_, AppState>, id: String) -> R<Vec<Ward>> {
+    grimoire_core::ward::store::for_familiar(&state.db, &id).map_err(|e| e.to_string())
+}
+
+/// Set a ward up. The schedule is checked now rather than failing silently once a minute.
+#[tauri::command]
+pub fn ward_create(
+    state: State<'_, AppState>,
+    id: String,
+    cron: String,
+    prompt: String,
+    intake: serde_json::Value,
+) -> R<Ward> {
+    let binding = state.roster.get(&id).ok_or_else(|| format!("There is no familiar called {id}."))?;
+    ensure_familiar(&state, &binding)?;
+
+    // §4's one substitution, applied once and stored — a ward fires at three in the morning with
+    // nobody at the keyboard, so the answers have to be settled when it is written.
+    let answers: std::collections::BTreeMap<String, String> = intake
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())))
+                .collect()
+        })
+        .unwrap_or_default();
+    let (filled, _) = grimoire_core::commission::prompt::fill(&prompt, &answers);
+
+    grimoire_core::ward::store::create(&state.db, &id, &cron, &filled, &intake).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn ward_set_enabled(state: State<'_, AppState>, id: String, enabled: bool) -> R<()> {
+    grimoire_core::ward::store::set_enabled(&state.db, &id, enabled).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn ward_delete(state: State<'_, AppState>, id: String) -> R<()> {
+    grimoire_core::ward::store::delete(&state.db, &id).map_err(|e| e.to_string())
 }
 
 // ── The seal (§6.4) ────────────────────────────────────────────────────────────────────

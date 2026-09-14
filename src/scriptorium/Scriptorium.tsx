@@ -8,6 +8,7 @@ import { Seals } from "@/seal/Seals";
 
 import { Roster } from "./Roster";
 import { Floor } from "./floor/Floor";
+import { Quit } from "./Quit";
 
 /**
  * §8.7: the floor is never the only route to anything, so it is a view you can put away. The
@@ -104,6 +105,7 @@ export function Scriptorium() {
           )}
         </main>
       )}
+      <Quit />
       {error && (
         <div role="alert" className="fixed bottom-3 right-3 max-w-md bg-panel px-3 py-2 text-base text-oxblood-text" data-testid="error">
           {error}

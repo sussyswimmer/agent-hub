@@ -42,6 +42,11 @@ export function createTauriBackend(): Backend {
       invoke("resize_summoning", { id, cols, rows }).then(() => undefined),
     banish: (id) => call("banish", S.rung, { id }),
     liveSummonings: () => call("live_summonings", S.summoningIds),
+    async onQuitRequested(fn) {
+      const { listen } = await import("@tauri-apps/api/event");
+      return listen("quit-requested", () => fn());
+    },
+    quit: () => invoke("quit").then(() => undefined),
     async attachSummoning(id, onEmission) {
       const channel = new Channel<RawEmission>();
       channel.onmessage = (m) => onEmission(decode(m));
@@ -50,6 +55,11 @@ export function createTauriBackend(): Backend {
 
     commissionCreate: (id, prompt, intake) => call("commission_create", S.commission, { id, prompt, intake }),
     commissionsFor: (id) => call("commissions_for", S.commission.array(), { id }),
+    wardsFor: (id) => call("wards_for", S.ward.array(), { id }),
+    wardCreate: (id, cron, prompt, intake) => call("ward_create", S.ward, { id, cron, prompt, intake }),
+    wardSetEnabled: (id, enabled) => invoke("ward_set_enabled", { id, enabled }).then(() => undefined),
+    wardDelete: (id) => invoke("ward_delete", { id }).then(() => undefined),
+
     ledgerSummary: () => call("ledger_summary", S.ledgerSummary),
     ledgerEvents: (limit) => call("ledger_events", S.ledgerEvent.array(), { limit: limit ?? null }),
     codexFor: (id) => call("codex_for", S.codexView, { id }),

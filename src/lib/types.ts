@@ -20,6 +20,7 @@ export type { FamiliarSummary } from "./generated/FamiliarSummary";
 export type { Isolation } from "./generated/Isolation";
 export type { Order } from "./generated/Order";
 export type { SigilState } from "./generated/SigilState";
+export type { Ward } from "./generated/Ward";
 
 export interface HomeInfo {
   home: string;
@@ -29,7 +30,7 @@ export interface HomeInfo {
 }
 
 /** Which tab of the familiar pane is showing (§7.5). */
-export type Tab = "commission" | "terminal" | "outputs" | "codex";
+export type Tab = "commission" | "terminal" | "outputs" | "codex" | "wards";
 
 /** What the interface shows of a familiar's codex (§6.6). */
 export interface CodexView {
