@@ -5,7 +5,7 @@ use grimoire_core::commission::Commission;
 use grimoire_core::ledger::{Event, LedgerSummary};
 use grimoire_core::commission::Status as CommissionStatus;
 use grimoire_core::seal::{Resolution, Seal as GrimoireSeal};
-use grimoire_core::types::SigilState;
+use grimoire_core::types::{Aether, SigilState};
 use grimoire_core::types::FamiliarSummary;
 use tauri::State;
 use tauri::ipc::Channel;
@@ -88,6 +88,30 @@ pub fn list_familiars(state: State<'_, AppState>) -> R<Vec<FamiliarSummary>> {
         };
     }
     Ok(rows)
+}
+
+/// The three meters for whatever this familiar is working on now (§6.5).
+///
+/// `None` when nothing is running, which is what the bar means by "no commission running" —
+/// deliberately not a row of zeroes, which would read as a commission that has done nothing.
+///
+/// Tokens and turns come from the engine's own transcript (DECISIONS.md 0008); the minutes are
+/// wall-clock since the commission started. The maxima come from the binding, so a familiar
+/// with no budget shows a figure and no bar rather than a bar that is always empty.
+#[tauri::command]
+pub fn aether_for(state: State<'_, AppState>, id: String) -> R<Option<Aether>> {
+    let Some(live) = state.summonings.aether_source(&id) else { return Ok(None) };
+    let used = grimoire_core::summon::usage::for_session(&live.engine_session).unwrap_or_default();
+    let budget = state.roster.get(&id).and_then(|b| b.front).map(|f| f.aether).unwrap_or_default();
+
+    Ok(Some(Aether {
+        tokens: used.tokens.total(),
+        tokens_max: budget.tokens.filter(|t| *t > 0),
+        turns: used.turns,
+        turns_max: budget.turns.filter(|t| *t > 0),
+        seconds: live.elapsed.as_secs() as i64,
+        seconds_max: budget.minutes.filter(|m| *m > 0).map(|m| m * 60),
+    }))
 }
 
 /// The intake questions for one familiar, as its binding declares them (§6.2).
@@ -195,7 +219,42 @@ pub async fn seal_decide(
     id: String,
     resolution: Resolution,
 ) -> R<GrimoireSeal> {
-    state.seal.decide(&id, resolution).map_err(|e| e.to_string())
+    // §6.5's `bind` asks whether to extend. Answering yes has to actually let it go on —
+    // otherwise the request is a notification with buttons, and the familiar stays stopped
+    // however the owner answers.
+    let extending = grimoire_core::seal::get(&state.db, &id)
+        .ok()
+        .flatten()
+        .filter(|s| s.kind == grimoire_core::seal::SealKind::Extend);
+
+    let answered = state.seal.decide(&id, resolution).map_err(|e| e.to_string())?;
+
+    if let Some(seal) = extending {
+        match resolution {
+            Resolution::Sealed | Resolution::SealedAlways => {
+                // Move the line before letting go of the familiar. Unbinding on its own buys
+                // about four seconds: the next tick reads the same overspend and binds it
+                // again. Each yes is worth one more of whatever the binding set.
+                let key = crate::heartbeat::extensions_key(&seal.commission_id);
+                let so_far = state
+                    .db
+                    .setting(&key)
+                    .ok()
+                    .flatten()
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .unwrap_or(0);
+                let _ = state.db.set_setting(&key, &(so_far + 1).to_string());
+
+                state.seal.unbind(&seal.commission_id);
+                // And forget the warning it had already given, so the familiar is warned again
+                // on the way to the new line rather than walking into it in silence.
+                state.summonings.note_breaker(&seal.familiar_id, Default::default());
+            }
+            // Refused, or timed out into `bind`: it stays bound, which is what bound means.
+            _ => {}
+        }
+    }
+    Ok(answered)
 }
 
 /// Typed input, as bytes. The familiar is reading keys, not lines.

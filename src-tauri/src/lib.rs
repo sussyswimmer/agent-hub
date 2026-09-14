@@ -2,6 +2,7 @@
 //! (DECISIONS.md 0001).
 
 mod commands;
+mod heartbeat;
 mod roster;
 mod summonings;
 
@@ -115,6 +116,15 @@ pub fn run() {
                     .ok()
                 };
 
+                // §6.5: the heartbeat, ticking every five seconds for the life of the process.
+                crate::heartbeat::Heart {
+                    db: db.clone(),
+                    summonings: Arc::clone(&summonings),
+                    seal: Arc::clone(&seal),
+                    roster: Arc::clone(&roster),
+                }
+                .start();
+
                 tracing::info!(home = %paths.home.display(), "grimoire ready");
                 let _ = DB.set(db.clone());
                 app.manage(AppState { paths, db, roster, summonings, seal, _watcher: watcher });
@@ -125,6 +135,7 @@ pub fn run() {
             commands::home_info,
             commands::list_familiars,
             commands::intake_for,
+            commands::aether_for,
             commands::summon,
             commands::send_input,
             commands::resize_summoning,

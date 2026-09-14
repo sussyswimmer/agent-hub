@@ -30,6 +30,10 @@ pub enum SealKind {
     Destructive,
     Send,
     Reliquary,
+    /// The breaker has bound this commission and is asking whether to extend it (§6.5).
+    Extend,
+    /// Nothing has happened for ten minutes. Steer, or banish? (§6.5)
+    Stalled,
 }
 
 /// How a request ended (§6.4).

@@ -456,3 +456,86 @@ fn reading_is_never_interrupted() {
     }
     assert!(seal::pending(&s.db).expect("pending").is_empty());
 }
+
+// ── §6.5: what the seal has to do for the breaker ────────────────────────────────────────
+
+#[test]
+fn every_tool_call_is_counted_whether_or_not_it_is_allowed() {
+    // §6.5's runaway guard is about how *much* a familiar is doing. A commission stuck in a
+    // loop being refused two hundred times has still run away, and counting only what got
+    // through would miss exactly that case.
+    let study = study(Autonomy::Propose, Bounds::default());
+    assert_eq!(study.server.tool_calls(&study.commission_id), 0);
+
+    // A read, which `propose` allows and nobody is asked about.
+    hook(&study.socket, "Read", serde_json::json!({ "file_path": study.workspace.join("a").display().to_string() }));
+    assert_eq!(study.server.tool_calls(&study.commission_id), 1);
+
+    // And a write, which is refused — because the request times out with nobody to answer it.
+    // Refused or not, it happened, and the count says so.
+    let before = study.server.tool_calls(&study.commission_id);
+    std::thread::spawn({
+        let socket = study.socket.clone();
+        let path = study.workspace.join("b").display().to_string();
+        move || hook(&socket, "Write", serde_json::json!({ "file_path": path, "content": "x" }))
+    });
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while study.server.tool_calls(&study.commission_id) == before && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(study.server.tool_calls(&study.commission_id), before + 1);
+}
+
+#[test]
+fn a_bound_commission_gets_nothing_through_however_free_its_binding() {
+    // §6.5's `bind`: "stop accepting new tool calls". The familiar in this test is `free` and
+    // reading inside its own workspace — the most obviously allowed thing there is — and it
+    // still gets nothing, because bound is not a question about what is allowed.
+    let study = study(Autonomy::Free, Bounds::default());
+    let path = study.workspace.join("notes.md").display().to_string();
+
+    let allowed = hook(&study.socket, "Read", serde_json::json!({ "file_path": path }));
+    assert_eq!(decision(&allowed), "allow");
+
+    study.server.bind(&study.commission_id, "Token budget reached.");
+    let refused = hook(&study.socket, "Read", serde_json::json!({ "file_path": path }));
+    assert_eq!(decision(&refused), "deny");
+    let why = reason(&refused);
+    assert!(why.contains("bound"), "the familiar has to be told why: {why}");
+    assert!(why.contains("Token budget reached"), "and what caused it: {why}");
+
+    // Letting it go is what sealing the request to extend does.
+    study.server.unbind(&study.commission_id);
+    let again = hook(&study.socket, "Read", serde_json::json!({ "file_path": path }));
+    assert_eq!(decision(&again), "allow");
+}
+
+#[test]
+fn binding_outranks_the_never_exempt_list_rather_than_racing_it() {
+    // Both refuse, so the decision is the same either way — but the *reason* is not, and the
+    // reason is what the familiar acts on. A bound commission told "this path contains .env"
+    // would go and try a different path; told it is bound, it stops.
+    let study = study(Autonomy::Free, Bounds::default());
+    study.server.bind(&study.commission_id, "Turn budget reached.");
+    let refused = hook(
+        &study.socket,
+        "Write",
+        serde_json::json!({ "file_path": study.workspace.join(".env").display().to_string(), "content": "K=1" }),
+    );
+    assert_eq!(decision(&refused), "deny");
+    assert!(reason(&refused).contains("bound"), "{}", reason(&refused));
+}
+
+#[test]
+fn a_commission_that_has_ended_is_forgotten() {
+    // Both maps are keyed by commission and would otherwise grow for the life of the process.
+    let study = study(Autonomy::Free, Bounds::default());
+    hook(&study.socket, "Read", serde_json::json!({ "file_path": study.workspace.join("a").display().to_string() }));
+    study.server.bind(&study.commission_id, "reached");
+    assert!(study.server.is_bound(&study.commission_id));
+    assert!(study.server.tool_calls(&study.commission_id) > 0);
+
+    study.server.forget(&study.commission_id);
+    assert!(!study.server.is_bound(&study.commission_id));
+    assert_eq!(study.server.tool_calls(&study.commission_id), 0);
+}

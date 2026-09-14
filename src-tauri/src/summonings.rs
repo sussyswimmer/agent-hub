@@ -78,6 +78,33 @@ struct Live {
     /// The session id we gave the engine, which is how its transcript is found (§6.5).
     engine_session: String,
     model: String,
+    /// When a byte last came out of the pty. §6.5's stall detection is "no output *and* no token
+    /// movement", and this is the first half.
+    last_output: Arc<Mutex<std::time::Instant>>,
+    /// When the commission started, for the minutes meter.
+    started: std::time::Instant,
+    /// What the breaker has already done about this commission, so it does not do it twice.
+    breaker: Arc<Mutex<grimoire_core::breaker::Done>>,
+    /// Whether a stall has already been raised, so it is raised once and not every tick.
+    stalled: Arc<Mutex<bool>>,
+}
+
+/// Where one familiar's meters are read from.
+pub struct AetherSource {
+    pub engine_session: String,
+    pub elapsed: std::time::Duration,
+}
+
+/// One live summoning, as the heartbeat needs to see it.
+pub struct Beat {
+    pub familiar_id: String,
+    pub commission_id: String,
+    pub engine_session: String,
+    pub model: String,
+    pub started: std::time::Instant,
+    pub quiet_for: std::time::Duration,
+    pub done: grimoire_core::breaker::Done,
+    pub stall_raised: bool,
 }
 
 #[derive(Default)]
@@ -151,6 +178,7 @@ impl Summonings {
 
         let outlet: Outlet = Arc::new(Mutex::new(Some(channel)));
         let out = Arc::clone(&outlet);
+        let last_output = Arc::new(Mutex::new(std::time::Instant::now()));
         let session = PtySession::spawn(
             Spawn {
                 program: resolved.path().to_path_buf(),
@@ -161,9 +189,15 @@ impl Summonings {
             },
             // Send failures are ignored on purpose: the only way this fails is the window
             // having gone, and a closed window is not a reason to tear down the familiar.
-            Arc::new(move |bytes| {
-                emit(&out, Emission::Output { bytes });
-            }),
+            {
+                let seen = Arc::clone(&last_output);
+                Arc::new(move |bytes| {
+                    if let Ok(mut at) = seen.lock() {
+                        *at = std::time::Instant::now();
+                    }
+                    emit(&out, Emission::Output { bytes });
+                })
+            },
         )
         .map_err(|e| e.to_string())?;
 
@@ -221,6 +255,10 @@ impl Summonings {
                 commission_id: commission_id.clone(),
                 engine_session: engine_session.clone(),
                 model: model.clone(),
+                last_output: Arc::clone(&last_output),
+                started: std::time::Instant::now(),
+                breaker: Arc::default(),
+                stalled: Arc::default(),
             },
         );
 
@@ -297,6 +335,66 @@ impl Summonings {
 
     pub fn write(&self, id: &str, bytes: &[u8]) -> Result<(), String> {
         self.with(id, |s| s.write(bytes).map_err(|e| e.to_string()))
+    }
+
+    /// What the meters need: whose transcript to read, and how long it has been going.
+    pub fn aether_source(&self, familiar_id: &str) -> Option<AetherSource> {
+        let live = self.live.lock().ok()?;
+        let l = live.get(familiar_id)?;
+        // A summoning with no commission has nothing to meter: §6.5 budgets a commission, not a
+        // familiar, and a terminal someone is simply typing into is not spending a budget.
+        l.commission_id.as_ref()?;
+        Some(AetherSource { engine_session: l.engine_session.clone(), elapsed: l.started.elapsed() })
+    }
+
+    /// Every live summoning that is running a commission, as the heartbeat needs to see it.
+    ///
+    /// A snapshot rather than a borrow: the heartbeat reads transcripts and may take seconds,
+    /// and holding the registry's lock across that would block every summon, banish and
+    /// keystroke in the application for as long as it took.
+    pub fn beats(&self) -> Vec<Beat> {
+        let Ok(live) = self.live.lock() else { return Vec::new() };
+        live.iter()
+            .filter_map(|(familiar_id, l)| {
+                let commission_id = l.commission_id.clone()?;
+                let quiet_for = l
+                    .last_output
+                    .lock()
+                    .ok()
+                    .map(|at| at.elapsed())
+                    .unwrap_or_default();
+                Some(Beat {
+                    familiar_id: familiar_id.clone(),
+                    commission_id,
+                    engine_session: l.engine_session.clone(),
+                    model: l.model.clone(),
+                    started: l.started,
+                    quiet_for,
+                    done: l.breaker.lock().map(|d| *d).unwrap_or_default(),
+                    stall_raised: l.stalled.lock().map(|s| *s).unwrap_or(false),
+                })
+            })
+            .collect()
+    }
+
+    /// Remember what the breaker did, so the next tick does not do it again.
+    pub fn note_breaker(&self, familiar_id: &str, done: grimoire_core::breaker::Done) {
+        if let Ok(live) = self.live.lock()
+            && let Some(l) = live.get(familiar_id)
+            && let Ok(mut d) = l.breaker.lock()
+        {
+            *d = done;
+        }
+    }
+
+    /// Remember that a stall has been raised, so it is raised once rather than every five seconds.
+    pub fn note_stalled(&self, familiar_id: &str, stalled: bool) {
+        if let Ok(live) = self.live.lock()
+            && let Some(l) = live.get(familiar_id)
+            && let Ok(mut s) = l.stalled.lock()
+        {
+            *s = stalled;
+        }
     }
 
     /// The commission this familiar is currently working on, if any.

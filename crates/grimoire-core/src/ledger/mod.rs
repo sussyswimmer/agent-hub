@@ -31,6 +31,14 @@ pub enum EventKind {
     SealRaised,
     SealResolved,
     BreakerTripped,
+    /// The breaker spoke to a familiar and let it carry on (§6.5).
+    BreakerSteer,
+    /// The breaker stopped its tool calls and asked whether to extend (§6.5).
+    BreakerBind,
+    /// The breaker ended the summoning — a budget, or the runaway guard (§6.5).
+    BreakerBanish,
+    /// Quiet for ten minutes, raised for the owner rather than acted on (§6.5).
+    Stalled,
     Misfired,
 }
 
@@ -47,6 +55,10 @@ impl EventKind {
             EventKind::SealRaised => "seal raised",
             EventKind::SealResolved => "seal resolved",
             EventKind::BreakerTripped => "breaker tripped",
+            EventKind::BreakerSteer => "steered",
+            EventKind::BreakerBind => "bound",
+            EventKind::BreakerBanish => "banished by the breaker",
+            EventKind::Stalled => "stalled",
             EventKind::Misfired => "misfired",
         }
     }

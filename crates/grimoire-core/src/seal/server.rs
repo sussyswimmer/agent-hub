@@ -53,6 +53,17 @@ pub struct Server {
     waiting: Arc<Mutex<HashMap<String, Waiting>>>,
     socket: PathBuf,
     on_change: Mutex<Option<OnChange>>,
+    /// Tool calls seen per commission, for §6.5's runaway guard.
+    ///
+    /// Counted here because here is the only place that sees them. Grimoire does not run the
+    /// familiar's tools and cannot see them in the terminal — every one of them arrives as a
+    /// question on this socket, and that is the whole census.
+    tool_calls: Mutex<HashMap<String, i64>>,
+    /// Commissions the breaker has bound, whose tool calls are refused until the owner extends.
+    ///
+    /// §6.5's `bind` says "stop accepting new tool calls, let the current turn finish". The
+    /// turn finishing is the engine's business; stopping the tool calls is this.
+    bound: Mutex<HashMap<String, String>>,
 }
 
 impl Server {
@@ -80,6 +91,8 @@ impl Server {
             waiting: Arc::default(),
             socket: socket.to_path_buf(),
             on_change: Mutex::new(None),
+            tool_calls: Mutex::default(),
+            bound: Mutex::default(),
         });
 
         let accepting = Arc::clone(&server);
@@ -105,6 +118,50 @@ impl Server {
 
     pub fn socket(&self) -> &Path {
         &self.socket
+    }
+
+    /// Raise a request that did not come from a hook, and tell the window.
+    ///
+    /// The breaker raises its own (§6.5: `bind` asks whether to extend, a stall asks steer or
+    /// banish). Calling `seal::raise` directly writes the row but leaves the window none the
+    /// wiser — the rail went on reading "none waiting" beside a familiar whose own row said it
+    /// was waiting on a seal, until the next sweep a minute later. Seen in the running
+    /// application; the row and the count disagreed on screen.
+    pub fn raise(&self, request: crate::seal::Raise<'_>) -> crate::error::Result<String> {
+        let id = crate::seal::raise(&self.db, request)?;
+        self.changed();
+        Ok(id)
+    }
+
+    /// How many tool calls this commission has asked for. §6.5's runaway guard reads this.
+    pub fn tool_calls(&self, commission_id: &str) -> i64 {
+        self.tool_calls.lock().ok().and_then(|c| c.get(commission_id).copied()).unwrap_or(0)
+    }
+
+    /// Bind a commission: nothing further of its gets through until it is let go.
+    pub fn bind(&self, commission_id: &str, reason: impl Into<String>) {
+        if let Ok(mut bound) = self.bound.lock() {
+            bound.insert(commission_id.to_string(), reason.into());
+        }
+    }
+
+    /// Let a bound commission go on, which is what sealing the request to extend does.
+    pub fn unbind(&self, commission_id: &str) {
+        if let Ok(mut bound) = self.bound.lock() {
+            bound.remove(commission_id);
+        }
+    }
+
+    pub fn is_bound(&self, commission_id: &str) -> bool {
+        self.bound.lock().ok().is_some_and(|b| b.contains_key(commission_id))
+    }
+
+    /// Forget a commission that has ended, so neither map grows for the life of the process.
+    pub fn forget(&self, commission_id: &str) {
+        if let Ok(mut c) = self.tool_calls.lock() {
+            c.remove(commission_id);
+        }
+        self.unbind(commission_id);
     }
 
     /// Be told when the queue moves. Set once, at startup.
@@ -164,6 +221,25 @@ impl Server {
                  Refused.",
             );
         };
+
+        // Count it before judging it. §6.5's runaway guard is about how *much* a familiar is
+        // doing, not about whether any one thing was allowed — a commission refused two hundred
+        // times over has still run away, and counting only what got through would miss exactly
+        // the case where something is stuck in a loop being told no.
+        if let Some(commission_id) = summoned.commission_id.as_deref() {
+            if let Ok(mut counts) = self.tool_calls.lock() {
+                *counts.entry(commission_id.to_string()).or_insert(0) += 1;
+            }
+            // §6.5's `bind`: nothing further gets through until the owner extends. Checked
+            // before autonomy, because a bound commission is bound whatever its binding allows.
+            if let Ok(bound) = self.bound.lock()
+                && let Some(why) = bound.get(commission_id)
+            {
+                return Response::deny(format!(
+                    "{why} This commission is bound and nothing further will run until your owner                      answers. Stop and wait."
+                ));
+            }
+        }
 
         let ctx = security::Context {
             autonomy: summoned.autonomy,
