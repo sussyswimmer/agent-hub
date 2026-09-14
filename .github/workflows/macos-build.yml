@@ -36,12 +36,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: grimoire-macos-app
-          path: src-tauri/target/release/bundle/macos/*.app
+          path: target/release/bundle/macos/*.app
           if-no-files-found: error
 
       - name: Upload disk image
         uses: actions/upload-artifact@v4
         with:
           name: grimoire-macos-dmg
-          path: src-tauri/target/release/bundle/dmg/*.dmg
+          path: target/release/bundle/dmg/*.dmg
           if-no-files-found: error
