@@ -242,6 +242,7 @@ impl Summonings {
                     autonomy: seal.autonomy,
                     bounds: seal.bounds.clone(),
                     workspace: cwd.clone(),
+                    archivist: seal.archivist,
                 },
             );
         }
@@ -501,6 +502,7 @@ pub struct Seal {
     pub bounds: grimoire_core::binding::schema::Bounds,
     pub socket: std::path::PathBuf,
     pub settings_dir: std::path::PathBuf,
+    pub archivist: bool,
 }
 
 /// Write the settings file that installs the seal's hook for one summoning.

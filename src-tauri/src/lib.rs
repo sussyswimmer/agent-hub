@@ -140,6 +140,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::home_info,
+            commands::workbench_read,
+            commands::workbench_set_engine_path,
+            commands::workbench_set_spend_cap,
+            commands::workbench_delete_transcript,
+            commands::workbench_restore_bindings,
             commands::list_familiars,
             commands::intake_for,
             commands::aether_for,

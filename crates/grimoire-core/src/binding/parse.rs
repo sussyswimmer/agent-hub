@@ -104,6 +104,13 @@ pub fn parse(id: &str, path: &Path, text: &str) -> Binding {
         Err(e) => return broken(friendly_yaml_error(&e.to_string())),
     };
 
+    if front.archivist && front.autonomy == crate::types::Autonomy::Free {
+        return broken(
+            "An archivist cannot use `autonomy: free`. Set it to `propose` or `bounded`; every commission it proposes must reach the seal queue."
+                .into(),
+        );
+    }
+
     let mut warnings = unknown_keys(&yaml);
     warnings.extend(quibbles(&front));
 

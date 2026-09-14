@@ -30,6 +30,8 @@ pub enum SealKind {
     Destructive,
     Send,
     Reliquary,
+    /// A coordinating familiar proposes work for another familiar (§6.8).
+    Proposal,
     /// The breaker has bound this commission and is asking whether to extend it (§6.5).
     Extend,
     /// Nothing has happened for ten minutes. Steer, or banish? (§6.5)

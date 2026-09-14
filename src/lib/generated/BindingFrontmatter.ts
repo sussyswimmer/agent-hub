@@ -12,4 +12,4 @@ import type { Resume } from "./Resume";
 /**
  * The frontmatter of a binding, before any path expansion.
  */
-export type BindingFrontmatter = { name: string, order: Order, sigil: string | null, engine: Engine, model: string | null, workspace: string, isolation: Isolation, resume: Resume, autonomy: Autonomy, bounds: Bounds, aether: AetherBudget, codex: string | null, reliquary: Reliquary, intake: Array<IntakeField>, };
+export type BindingFrontmatter = { name: string, order: Order, sigil: string | null, engine: Engine, model: string | null, workspace: string, isolation: Isolation, resume: Resume, autonomy: Autonomy, bounds: Bounds, aether: AetherBudget, codex: string | null, reliquary: Reliquary, intake: Array<IntakeField>, archivist: boolean, };

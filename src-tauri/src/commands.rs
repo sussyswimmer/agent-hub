@@ -5,7 +5,7 @@ use grimoire_core::commission::Commission;
 use grimoire_core::ledger::{Event, LedgerSummary};
 use grimoire_core::commission::Status as CommissionStatus;
 use grimoire_core::seal::{Resolution, Seal as GrimoireSeal};
-use grimoire_core::types::{Aether, SigilState};
+use grimoire_core::types::{Aether, Engine, SigilState};
 use grimoire_core::ward::Ward;
 use grimoire_core::types::FamiliarSummary;
 use tauri::State;
@@ -24,6 +24,29 @@ pub struct HomeInfo {
     pub schema_version: i64,
 }
 
+#[derive(serde::Serialize)]
+pub struct EngineSetting {
+    pub engine: Engine,
+    pub configured: String,
+    pub resolved: Option<String>,
+    pub source: Option<&'static str>,
+    pub error: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+pub struct TranscriptInfo {
+    pub name: String,
+    pub bytes: u64,
+    pub modified: Option<i64>,
+}
+
+#[derive(serde::Serialize)]
+pub struct WorkbenchSettings {
+    pub engines: Vec<EngineSetting>,
+    pub spend_cap_usd: f64,
+    pub transcripts: Vec<TranscriptInfo>,
+}
+
 #[tauri::command]
 pub fn home_info(state: State<'_, AppState>) -> R<HomeInfo> {
     Ok(HomeInfo {
@@ -32,6 +55,130 @@ pub fn home_info(state: State<'_, AppState>) -> R<HomeInfo> {
         db_file: state.paths.db_file().display().to_string(),
         schema_version: grimoire_core::db::migrations::version(&state.db).map_err(|e| e.to_string())?,
     })
+}
+
+fn engine_name(engine: Engine) -> &'static str {
+    match engine {
+        Engine::Claude => "claude",
+        Engine::Codex => "codex",
+        Engine::Gemini => "gemini",
+        Engine::Qwen => "qwen",
+        Engine::Custom => "custom",
+    }
+}
+
+fn engine_setting(state: &State<'_, AppState>, engine: Engine) -> EngineSetting {
+    let key = format!("engine.{}.path", engine_name(engine));
+    let configured = state.db.setting(&key).ok().flatten().unwrap_or_default();
+    let result = grimoire_core::summon::binary::resolve(
+        engine,
+        Some(&configured),
+        std::env::var("PATH").ok().as_deref(),
+    );
+    match result {
+        Ok(found) => EngineSetting {
+            engine,
+            configured,
+            resolved: Some(found.path().display().to_string()),
+            source: Some(match found {
+                grimoire_core::summon::binary::Resolved::Workbench(_) => "workbench",
+                grimoire_core::summon::binary::Resolved::OnPath(_) => "PATH",
+            }),
+            error: None,
+        },
+        Err(error) => EngineSetting {
+            engine,
+            configured,
+            resolved: None,
+            source: None,
+            error: Some(error.0),
+        },
+    }
+}
+
+fn transcripts(state: &State<'_, AppState>) -> Vec<TranscriptInfo> {
+    let Ok(entries) = std::fs::read_dir(state.paths.transcripts()) else { return Vec::new() };
+    let mut rows: Vec<_> = entries
+        .flatten()
+        .filter_map(|entry| {
+            if !entry.file_type().ok()?.is_file() {
+                return None;
+            }
+            let metadata = entry.metadata().ok()?;
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(|at| at.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|elapsed| elapsed.as_secs() as i64);
+            Some(TranscriptInfo {
+                name: entry.file_name().to_string_lossy().into_owned(),
+                bytes: metadata.len(),
+                modified,
+            })
+        })
+        .collect();
+    rows.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.name.cmp(&b.name)));
+    rows
+}
+
+#[tauri::command]
+pub fn workbench_read(state: State<'_, AppState>) -> R<WorkbenchSettings> {
+    let engines = [Engine::Claude, Engine::Codex, Engine::Gemini, Engine::Qwen, Engine::Custom]
+        .into_iter()
+        .map(|engine| engine_setting(&state, engine))
+        .collect();
+    let spend_cap_usd = state
+        .db
+        .setting(crate::heartbeat::SPEND_CAP_SETTING)
+        .map_err(|e| e.to_string())?
+        .and_then(|value| value.parse::<f64>().ok())
+        .unwrap_or(10.0);
+    Ok(WorkbenchSettings { engines, spend_cap_usd, transcripts: transcripts(&state) })
+}
+
+#[tauri::command]
+pub fn workbench_set_engine_path(
+    state: State<'_, AppState>,
+    engine: Engine,
+    path: String,
+) -> R<EngineSetting> {
+    let key = format!("engine.{}.path", engine_name(engine));
+    state.db.set_setting(&key, path.trim()).map_err(|e| e.to_string())?;
+    Ok(engine_setting(&state, engine))
+}
+
+#[tauri::command]
+pub fn workbench_set_spend_cap(state: State<'_, AppState>, usd: f64) -> R<()> {
+    if !usd.is_finite() || usd <= 0.0 {
+        return Err("The runaway spend cap must be greater than zero.".into());
+    }
+    state
+        .db
+        .set_setting(crate::heartbeat::SPEND_CAP_SETTING, &usd.to_string())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn workbench_delete_transcript(state: State<'_, AppState>, name: String) -> R<()> {
+    use std::path::{Component, Path};
+
+    let mut components = Path::new(&name).components();
+    if !matches!(components.next(), Some(Component::Normal(_))) || components.next().is_some() {
+        return Err("That transcript name is not valid.".into());
+    }
+    let path = state.paths.transcripts().join(&name);
+    if !path.is_file() {
+        return Err(format!("There is no transcript called {name}."));
+    }
+    std::fs::remove_file(&path).map_err(|e| format!("{name} could not be deleted: {e}"))
+}
+
+#[tauri::command]
+pub fn workbench_restore_bindings(state: State<'_, AppState>) -> R<Vec<String>> {
+    let folder = state.paths.bindings();
+    let written = grimoire_core::binding::seed::place(&folder).map_err(|e| e.to_string())?;
+    state.roster.reload(&folder);
+    Ok(written)
 }
 
 /// The rail's rows, read from `~/.grimoire/bindings`. A binding that failed to validate is in
@@ -220,6 +367,7 @@ pub fn summon(state: State<'_, AppState>, req: SummonArgs, channel: Channel<Emis
         bounds: front.map(|f| f.bounds.clone()).unwrap_or_default(),
         socket: state.paths.seal_socket(),
         settings_dir: state.paths.summon_dir(),
+        archivist: front.is_some_and(|f| f.archivist),
     };
 
     state.summonings.summon(&state.db, req, workbench_binary(&state), cwd, &seal, channel)
@@ -302,6 +450,31 @@ pub async fn seal_decide(
     id: String,
     resolution: Resolution,
 ) -> R<GrimoireSeal> {
+    let proposal_seal = grimoire_core::seal::get(&state.db, &id)
+        .ok()
+        .flatten()
+        .filter(|seal| seal.kind == grimoire_core::seal::SealKind::Proposal);
+    if proposal_seal.is_some() && resolution == Resolution::SealedAlways {
+        return Err("Every archivist proposal needs its own seal.".into());
+    }
+    let proposal = if matches!(resolution, Resolution::Sealed | Resolution::SealedAlways) {
+        proposal_seal
+            .as_ref()
+            .and_then(|seal| seal.preview.as_deref())
+            .map(serde_json::from_str::<grimoire_core::archivist::Proposal>)
+            .transpose()
+            .map_err(|_| "That archivist proposal cannot be read, so it was not dispatched.".to_string())?
+    } else {
+        None
+    };
+
+    if let Some(proposal) = &proposal {
+        let binding = state.roster.get(&proposal.familiar_id).ok_or_else(|| {
+            format!("There is no familiar called {}. The proposal is still waiting.", proposal.familiar_id)
+        })?;
+        ensure_familiar(&state, &binding)?;
+    }
+
     // §6.5's `bind` asks whether to extend. Answering yes has to actually let it go on —
     // otherwise the request is a notification with buttons, and the familiar stays stopped
     // however the owner answers.
@@ -311,6 +484,16 @@ pub async fn seal_decide(
         .filter(|s| s.kind == grimoire_core::seal::SealKind::Extend);
 
     let answered = state.seal.decide(&id, resolution).map_err(|e| e.to_string())?;
+
+    if let Some(proposal) = proposal {
+        grimoire_core::commission::create(
+            &state.db,
+            &proposal.familiar_id,
+            &proposal.prompt,
+            &serde_json::json!({ "proposed_by": answered.familiar_id }),
+        )
+        .map_err(|e| format!("The proposal was sealed, but could not be queued: {e}"))?;
+    }
 
     if let Some(seal) = extending {
         match resolution {
@@ -473,6 +656,24 @@ fn engine_args(state: &State<'_, AppState>, binding: &grimoire_core::binding::Bi
          else in that folder is yours.",
         codex.display()
     ));
+    if front.archivist {
+        let roster = state.roster.rows();
+        let queue: Vec<_> = roster
+            .iter()
+            .flat_map(|familiar| {
+                grimoire_core::commission::for_familiar(&state.db, &familiar.id).unwrap_or_default()
+            })
+            .collect();
+        let ledger = grimoire_core::ledger::recent(&state.db, 100).unwrap_or_default();
+        let helper = std::env::current_exe()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|_| "grimoire".into());
+        prompt.push_str(&format!(
+            "\n\n# Archivist\n\nYou may read the roster, commission queue, and recent ledger below. You cannot summon familiars, edit bindings, or dispatch work. To propose one commission, ask to run exactly `{helper} archivist-propose <familiar-id> <json-quoted-prompt>`. The live seal verifies that this session is the archivist and sends each proposal to the owner. Running the helper directly does nothing.\n\nRoster and queue:\n{}\n\nRecent ledger:\n{}",
+            serde_json::to_string_pretty(&serde_json::json!({ "roster": roster, "commissions": queue })).unwrap_or_default(),
+            serde_json::to_string_pretty(&ledger).unwrap_or_default(),
+        ));
+    }
     args.push("--append-system-prompt".into());
     args.push(prompt);
 

@@ -126,13 +126,16 @@ pub struct BindingFrontmatter {
     pub reliquary: Reliquary,
     #[serde(default)]
     pub intake: Vec<IntakeField>,
+    /// The one coordinating familiar (§6.8). It may propose, never dispatch.
+    #[serde(default)]
+    pub archivist: bool,
 }
 
 /// Every key this schema knows. Used to tell an unknown key from a known one, because serde's
 /// own unknown-field error is fatal and §4 wants a warning.
 pub const KNOWN_KEYS: &[&str] = &[
     "name", "order", "sigil", "engine", "model", "workspace", "isolation", "resume", "autonomy",
-    "bounds", "aether", "codex", "reliquary", "intake",
+    "bounds", "aether", "codex", "reliquary", "intake", "archivist",
 ];
 
 pub const KNOWN_BOUNDS_KEYS: &[&str] = &["write", "deny", "network", "shell"];

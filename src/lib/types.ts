@@ -1,4 +1,6 @@
 // Generated from crates/grimoire-core/src/types.rs by ts-rs (`bun run bindings`).
+import type { Engine } from "./generated/Engine";
+
 export type { Aether } from "./generated/Aether";
 export type { Autonomy } from "./generated/Autonomy";
 export type { Commission } from "./generated/Commission";
@@ -27,6 +29,26 @@ export interface HomeInfo {
   bindings: string;
   db_file: string;
   schema_version: number;
+}
+
+export interface EngineSetting {
+  engine: Engine;
+  configured: string;
+  resolved: string | null;
+  source: "workbench" | "PATH" | null;
+  error: string | null;
+}
+
+export interface TranscriptInfo {
+  name: string;
+  bytes: number;
+  modified: number | null;
+}
+
+export interface WorkbenchSettings {
+  engines: EngineSetting[];
+  spend_cap_usd: number;
+  transcripts: TranscriptInfo[];
 }
 
 /** Which tab of the familiar pane is showing (§7.5). */

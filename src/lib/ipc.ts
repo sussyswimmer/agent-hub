@@ -13,6 +13,7 @@ import type {
   LedgerSummary,
   Resolution,
   Seal,
+  WorkbenchSettings,
 } from "./types";
 
 /** One message from a summoning's pty. Bytes, not text: see `Emission` in Rust. */
@@ -35,6 +36,11 @@ export interface SummonRequest {
 export interface Backend {
   readonly kind: "tauri" | "mock";
   homeInfo(): Promise<HomeInfo>;
+  workbenchRead(): Promise<WorkbenchSettings>;
+  workbenchSetEnginePath(engine: Engine, path: string): Promise<void>;
+  workbenchSetSpendCap(usd: number): Promise<void>;
+  workbenchDeleteTranscript(name: string): Promise<void>;
+  workbenchRestoreBindings(): Promise<string[]>;
   listFamiliars(): Promise<FamiliarSummary[]>;
   /** Phase 0 has no live commissions; the pane draws empty meters until Phase 3. */
   aetherFor(familiarId: string): Promise<Aether | null>;

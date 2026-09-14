@@ -56,10 +56,30 @@ pub fn resolve(
     }
 
     let path = path_var.unwrap_or_default();
-    for dir in path.split(':').filter(|s| !s.is_empty()) {
-        let candidate = Path::new(dir).join(name);
-        if is_executable(&candidate) {
-            return Ok(Resolved::OnPath(candidate));
+    for dir in std::env::split_paths(path) {
+        let direct = dir.join(name);
+        if is_executable(&direct) {
+            return Ok(Resolved::OnPath(direct));
+        }
+
+        // Windows resolves extensionless commands through PATHEXT. `claude` is commonly a
+        // `.cmd` shim installed by npm, so checking only the literal name makes a healthy
+        // installation look absent in both the roster and the workbench.
+        #[cfg(windows)]
+        if Path::new(name).extension().is_none() {
+            let extensions = std::env::var_os("PATHEXT")
+                .and_then(|v| v.into_string().ok())
+                .unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
+            for extension in extensions.split(';').filter(|s| !s.is_empty()) {
+                let candidate = dir.join(format!("{name}{}", extension.to_ascii_lowercase()));
+                if is_executable(&candidate) {
+                    return Ok(Resolved::OnPath(candidate));
+                }
+                let candidate = dir.join(format!("{name}{}", extension.to_ascii_uppercase()));
+                if is_executable(&candidate) {
+                    return Ok(Resolved::OnPath(candidate));
+                }
+            }
         }
     }
 

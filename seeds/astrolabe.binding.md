@@ -6,6 +6,7 @@ workspace: ~/work/planning
 isolation: none
 resume: session
 autonomy: propose
+archivist: true
 aether:
   tokens: 150000
   turns: 25

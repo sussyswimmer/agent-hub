@@ -69,6 +69,19 @@ export function Roster({ seals = 0 }: { seals?: number }) {
         )}
       </div>
       <Rule />
+      <button
+        type="button"
+        onClick={() => setView(view === "workbench" ? "familiar" : "workbench")}
+        aria-pressed={view === "workbench"}
+        data-testid="workbench-toggle"
+        style={{ borderLeft: `2px solid ${view === "workbench" ? "var(--brass)" : "transparent"}` }}
+        className={`w-full py-1.5 pl-2.5 pr-3 text-left text-base transition-colors duration-150 ${
+          view === "workbench" ? "bg-void text-bone" : "text-bone-dim hover:text-bone"
+        }`}
+      >
+        Workbench
+      </button>
+      <Rule />
       {/* §6.9's ledger is reached from the lectern on the floor in Phase 5; until then the rail
           is the only way in, so it lives here beside the seals. */}
       <button

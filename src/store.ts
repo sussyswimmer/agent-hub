@@ -3,6 +3,8 @@ import { create } from "zustand";
 import { backend } from "./lib/ipc";
 import type { Aether, FamiliarSummary, HomeInfo, Tab } from "./lib/types";
 
+type View = "familiar" | "ledger" | "seals" | "workbench";
+
 interface State {
   ready: boolean;
   kind: "tauri" | "mock" | null;
@@ -24,8 +26,8 @@ interface State {
   /** Whether the bindings-changed subscription is already in place. */
   watching: boolean;
   /** Which of the whole-window views is open, if any. */
-  view: "familiar" | "ledger" | "seals";
-  setView: (v: "familiar" | "ledger" | "seals") => void;
+  view: View;
+  setView: (v: View) => void;
   /**
    * Whether the right pane shows the floor (§8) or goes straight to the selected familiar.
    *

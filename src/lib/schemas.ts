@@ -67,6 +67,27 @@ export const homeInfo = z.object({
   schema_version: z.number(),
 });
 
+export const engineSetting = z.object({
+  engine,
+  configured: z.string(),
+  resolved: z.string().nullable(),
+  source: z.enum(["workbench", "PATH"]).nullable(),
+  error: z.string().nullable(),
+});
+
+export const transcriptInfo = z.object({
+  name: z.string(),
+  bytes: z.number().nonnegative(),
+  modified: z.number().nullable(),
+});
+
+export const workbenchSettings = z.object({
+  engines: z.array(engineSetting),
+  spend_cap_usd: z.number().positive(),
+  transcripts: z.array(transcriptInfo),
+});
+export const stringArray = z.array(z.string());
+
 export const aether = z.object({
   tokens: z.number(),
   tokens_max: z.number().nullable(),
@@ -200,7 +221,7 @@ export const codexView = z.object({
 // ── The seal (§6.4) ────────────────────────────────────────────────────────────────────
 
 const SEAL_KINDS = [
-  "write", "shell", "network", "destructive", "send", "reliquary", "extend", "stalled",
+  "write", "shell", "network", "destructive", "send", "reliquary", "proposal", "extend", "stalled",
 ] as const satisfies readonly SealKind[];
 type _CoversSealKind = Exhaustive<Covers<typeof SEAL_KINDS, SealKind>>;
 

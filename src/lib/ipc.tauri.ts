@@ -18,6 +18,14 @@ export function createTauriBackend(): Backend {
   return {
     kind: "tauri",
     homeInfo: () => call("home_info", S.homeInfo),
+    workbenchRead: () => call("workbench_read", S.workbenchSettings),
+    workbenchSetEnginePath: (engine, path) =>
+      invoke("workbench_set_engine_path", { engine, path }).then(() => undefined),
+    workbenchSetSpendCap: (usd) =>
+      invoke("workbench_set_spend_cap", { usd }).then(() => undefined),
+    workbenchDeleteTranscript: (name) =>
+      invoke("workbench_delete_transcript", { name }).then(() => undefined),
+    workbenchRestoreBindings: () => call("workbench_restore_bindings", S.stringArray),
     listFamiliars: () => call("list_familiars", S.familiarSummary.array()),
     aetherFor: (id) => call("aether_for", S.aether.nullable(), { id }),
     intakeFor: (id) => call("intake_for", S.intakeField.array(), { id }),

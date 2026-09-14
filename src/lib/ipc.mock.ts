@@ -10,6 +10,7 @@ import type {
   LedgerSummary,
   Resolution,
   Seal,
+  WorkbenchSettings,
   Ward,
 } from "./types";
 
@@ -380,10 +381,45 @@ export function createMockBackend(): Backend {
   const commissions = new Commissions();
   const seals = new Seals();
   const events: Event[] = [];
+  let spendCap = 10;
+  const enginePaths = new Map<string, string>();
+  let transcriptRows: WorkbenchSettings["transcripts"] = [
+    { name: "vellum-2026-09-14.log", bytes: 18432, modified: Math.floor(Date.now() / 1000) - 900 },
+    { name: "sconce-2026-09-13.log", bytes: 9216, modified: Math.floor(Date.now() / 1000) - 86400 },
+  ];
 
   return {
     kind: "mock",
     homeInfo: async () => ({ home: "~/.grimoire", bindings: "~/.grimoire/bindings", db_file: "~/.grimoire/grimoire.db", schema_version: 1 }),
+    workbenchRead: async () => ({
+      engines: (["claude", "codex", "gemini", "qwen", "custom"] as const).map((engine) => {
+        const configured = enginePaths.get(engine) ?? "";
+        const available = engine === "claude" || configured.length > 0;
+        return {
+          engine,
+          configured,
+          resolved: available ? (configured || `/usr/local/bin/${engine}`) : null,
+          source: available ? (configured ? "workbench" as const : "PATH" as const) : null,
+          error: available ? null : `\`${engine}\` is not on your PATH. Install it, or point the workbench at it directly.`,
+        };
+      }),
+      spend_cap_usd: spendCap,
+      transcripts: structuredClone(transcriptRows),
+    }),
+    async workbenchSetEnginePath(engine, path) {
+      enginePaths.set(engine, path.trim());
+    },
+    async workbenchSetSpendCap(usd) {
+      if (!Number.isFinite(usd) || usd <= 0) throw new Error("The runaway spend cap must be greater than zero.");
+      spendCap = usd;
+    },
+    async workbenchDeleteTranscript(name) {
+      if (!transcriptRows.some((row) => row.name === name)) throw new Error(`There is no transcript called ${name}.`);
+      transcriptRows = transcriptRows.filter((row) => row.name !== name);
+    },
+    async workbenchRestoreBindings() {
+      return [];
+    },
     listFamiliars: async () =>
       structuredClone(
         // The real backend overlays what is actually happening onto the binding's own row

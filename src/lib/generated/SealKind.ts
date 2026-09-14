@@ -3,4 +3,4 @@
 /**
  * §6.4's kinds, which decide what the request shows.
  */
-export type SealKind = "write" | "shell" | "network" | "destructive" | "send" | "reliquary" | "extend" | "stalled";
+export type SealKind = "write" | "shell" | "network" | "destructive" | "send" | "reliquary" | "proposal" | "extend" | "stalled";

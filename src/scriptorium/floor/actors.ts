@@ -100,6 +100,8 @@ interface Actor {
   spin: number;
   /** 0..1, so a summoned familiar fades in rather than appearing (§8.3). */
   opacity: number;
+  /** A stable offset so every familiar's small motions do not move in lockstep. */
+  rhythm: number;
 }
 
 export interface Actors {
@@ -175,13 +177,7 @@ export function createActors(options: ActorsOptions): Actors {
       a.ringMark.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: 4, color: p.brass, cap: "round" });
     }
 
-    a.body.clear();
-    for (const s of a.geometry.strokes) {
-      const [x1, y1] = polar(s.angle, s.inner);
-      const [x2, y2] = polar(s.angle, s.outer);
-      a.body.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: s.width, color: colour, cap: "round" });
-    }
-    for (const mark of glyphMarks(a.geometry.glyph)) drawMark(a.body, mark, colour);
+    drawPixelFamiliar(a, colour);
   }
 
   function drawMark(g: Graphics, mark: Mark, colour: number) {
@@ -191,6 +187,64 @@ export function createActors(options: ActorsOptions): Actors {
     for (const [x, y] of rest) g.lineTo(x, y);
     if (mark.close) g.closePath();
     g.stroke({ width: 3, color: colour, cap: "round", join: "round" });
+  }
+
+  /**
+   * An original tiny familiar, built from a deliberately chunky 6-unit grid rather than an
+   * imported sprite sheet. The name selects hair, skin and robe variations, so the room gains
+   * a cast of characters without an asset pipeline or a licensing dependency.
+   */
+  function drawPixelFamiliar(a: Actor, accent: number) {
+    const g = a.body;
+    const seed = hash(a.input.name);
+    const px = 6;
+    const skin = [0xf2c6a6, 0xd99673, 0x9b6246, 0x6c4234][seed % 4]!;
+    const hair = [0x24202a, 0x5f3834, 0xa35e45, 0xd3a347, 0x413449][(seed >>> 3) % 5]!;
+    const robe = [p.order[a.input.order] ?? accent, 0x6d7f9a, 0x8a6074, 0x507f78][(seed >>> 7) % 4]!;
+    const outline = 0x17131d;
+    const rect = (x: number, y: number, w: number, h: number, color: number, alpha = 1) =>
+      g.rect(x * px, y * px, w * px, h * px).fill({ color, alpha });
+
+    g.clear();
+    // A one-pixel ground shadow anchors the animation while the feet step above it.
+    rect(-4, 6, 8, 1, outline, 0.55);
+    // Robe and two alternating legs. The tick moves the whole character, while the asymmetric
+    // feet keep the silhouette readable at the tiny scale.
+    rect(-3, 0, 6, 5, outline);
+    rect(-2, 0, 4, 5, robe);
+    rect(-2, 5, 2, 2, outline);
+    rect(1, 5, 2, 2, outline);
+    rect(-3, 5, 2, 1, outline);
+    rect(2, 5, 2, 1, outline);
+    // Head, ears, hair cap, and a one-pixel face. The light eye gives every actor a gaze
+    // without borrowing a character design from the supplied references.
+    rect(-3, -6, 6, 6, outline);
+    rect(-2, -5, 4, 5, skin);
+    rect(-3, -4, 1, 2, skin);
+    rect(2, -4, 1, 2, skin);
+    rect(-3, -6, 6, 2, hair);
+    rect(-3, -4, 1, 2, hair);
+    if ((seed >>> 11) % 2 === 0) rect(2, -4, 1, 2, hair);
+    rect(-1, -3, 1, 1, outline);
+    rect(1, -3, 1, 1, outline);
+    rect(0, -1, 1, 1, 0xf5e9c8);
+    // An order-coloured shoulder clasp ties the character back to the familiar's sigil.
+    rect(2, 0, 1, 1, accent);
+    if (a.input.state === "working") {
+      rect(4, -1, 1, 1, p.brass);
+      rect(5, -2, 1, 1, p.brass, 0.75);
+    }
+    if (a.input.state === "bound") rect(-3, 2, 6, 1, p.brass);
+    if (a.input.state === "misfired") rect(-2, -2, 4, 1, p.panel);
+  }
+
+  function hash(text: string): number {
+    let value = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      value ^= text.charCodeAt(i);
+      value = Math.imul(value, 16777619);
+    }
+    return value >>> 0;
   }
 
   /**
@@ -258,6 +312,7 @@ export function createActors(options: ActorsOptions): Actors {
       walkLength: 1,
       spin: 0,
       opacity: input.state === "dormant" ? 0.4 : 1,
+      rhythm: (hash(input.id) % 628) / 100,
     };
     layer.addChild(container);
     return actor;
@@ -396,6 +451,20 @@ export function createActors(options: ActorsOptions): Actors {
         if (a.input.state === "awaiting-seal") {
           const phase = reducedMotion ? 1 : 0.45 + 0.55 * (0.5 + 0.5 * Math.cos((Date.now() / 1000) * Math.PI * 2));
           a.dot.circle(0, -RING_RADIUS, 8).fill({ color: p.brass, alpha: phase });
+        }
+
+        // Pixel figures are alive even when their rings are still: a quiet breathing loop at
+        // the desks, a firmer bounce while working, and a quick two-step gait while walking.
+        // All of it is pinned to the reduced-motion preference in the same place as the sigil.
+        if (reducedMotion) {
+          a.body.position.set(0, 0);
+          a.body.scale.set(1);
+        } else {
+          const moving = a.legs.length > 0;
+          const speed = moving ? 11 : a.input.state === "working" ? 7 : 4;
+          const wave = Math.sin(Date.now() / 1000 * speed + a.rhythm);
+          a.body.position.set(moving ? wave * 2 : 0, moving ? Math.abs(wave) * -5 : wave * -1.4);
+          a.body.scale.set(1, moving ? 1 + Math.abs(wave) * 0.08 : 1);
         }
 
         a.container.position.set(a.at.x, a.at.y);

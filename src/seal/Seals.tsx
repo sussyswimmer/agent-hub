@@ -25,6 +25,7 @@ const TONE: Record<SealKind, string> = {
   destructive: "text-oxblood-text",
   send: "text-oxblood-text",
   reliquary: "text-brass-text",
+  proposal: "text-slate-text",
   // The breaker's two. Brass, because both are the aether running out rather than a familiar
   // reaching for something it should not have (§6.5).
   extend: "text-brass-text",
@@ -38,6 +39,7 @@ const KIND_LABEL: Record<SealKind, string> = {
   destructive: "destructive",
   send: "sends outward",
   reliquary: "shared memory",
+  proposal: "proposed commission",
   extend: "out of aether",
   stalled: "stalled",
 };
@@ -97,16 +99,18 @@ function Request({
         >
           Seal
         </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onDecide(seal.id, "sealed_always")}
-          data-seal-button="sealed_always"
-          title="For the rest of this commission only, and only for this kind of action."
-          className="h-7 rounded-mark border border-rule px-3 text-base text-bone-dim transition-colors duration-150 hover:text-bone hover:bg-panel disabled:text-bone-dim"
-        >
-          Seal, and stop asking for this commission
-        </button>
+        {seal.kind !== "proposal" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onDecide(seal.id, "sealed_always")}
+            data-seal-button="sealed_always"
+            title="For the rest of this commission only, and only for this kind of action."
+            className="h-7 rounded-mark border border-rule px-3 text-base text-bone-dim transition-colors duration-150 hover:text-bone hover:bg-panel disabled:text-bone-dim"
+          >
+            Seal, and stop asking for this commission
+          </button>
+        )}
         <button
           type="button"
           disabled={busy}

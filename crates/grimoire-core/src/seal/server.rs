@@ -30,6 +30,7 @@ pub struct Summoned {
     pub autonomy: crate::types::Autonomy,
     pub bounds: crate::binding::schema::Bounds,
     pub workspace: PathBuf,
+    pub archivist: bool,
 }
 
 /// The live summonings, by the engine session id the hook reports.
@@ -54,6 +55,8 @@ struct Asking<'a> {
     content: Option<String>,
     /// The hook's own connection, watched only for its end.
     watch: Option<UnixStream>,
+    /// A proposal names the work in the owner's language, rather than exposing its helper shell.
+    action_label: Option<String>,
 }
 
 /// The application's side of the seal.
@@ -262,6 +265,41 @@ impl Server {
             }
         }
 
+        if let Action::Shell { command } = &action
+            && let Some(parsed) = crate::archivist::parse_command(command)
+        {
+            if !summoned.archivist {
+                return Response::deny(
+                    "This familiar is not the archivist, so it cannot propose commissions for anyone else.",
+                );
+            }
+            let Some(commission_id) = summoned.commission_id.clone() else {
+                return Response::deny(
+                    "There is no commission running, so this proposal has no work to be scoped to.",
+                );
+            };
+            let proposal = match parsed {
+                Ok(proposal) => proposal,
+                Err(reason) => return Response::deny(reason),
+            };
+            let preview = serde_json::to_string(&proposal).ok();
+            return self.ask(Asking {
+                summoned: &summoned,
+                commission_id: &commission_id,
+                kind: SealKind::Proposal,
+                action: &action,
+                reason: "The archivist may propose this commission, but only you can dispatch it.",
+                content: preview,
+                watch,
+                action_label: Some(format!(
+                    "{} proposes: send {} to {}",
+                    summoned.familiar_name,
+                    proposal.familiar_id,
+                    proposal.prompt
+                )),
+            });
+        }
+
         let ctx = security::Context {
             autonomy: summoned.autonomy,
             bounds: &summoned.bounds,
@@ -302,19 +340,21 @@ impl Server {
             reason: &reason,
             content,
             watch,
+            action_label: None,
         })
     }
 
     /// Raise the request and wait for the owner.
     fn ask(self: &Arc<Self>, asking: Asking<'_>) -> Response {
-        let Asking { summoned, commission_id, kind, action, reason, content, watch } = asking;
+        let Asking { summoned, commission_id, kind, action, reason, content, watch, action_label } = asking;
         let preview = content.or_else(|| preview_of(action));
+        let described = action_label.unwrap_or_else(|| action.describe());
         let seal_id = match crate::seal::raise(&self.db, crate::seal::Raise {
             commission_id,
             familiar_id: &summoned.familiar_id,
             familiar_name: &summoned.familiar_name,
             kind,
-            action: &action.describe(),
+            action: &described,
             reason,
             preview: preview.as_deref(),
         }) {

@@ -5,6 +5,7 @@ import { useStore } from "@/store";
 import { FamiliarPane } from "@/familiar/FamiliarPane";
 import { Ledger } from "@/ledger/Ledger";
 import { Seals } from "@/seal/Seals";
+import { Workbench } from "@/workbench/Workbench";
 
 import { Roster } from "./Roster";
 import { Floor } from "./floor/Floor";
@@ -59,6 +60,8 @@ export function Scriptorium() {
       <Rule vertical />
       {view === "seals" ? (
         <Seals />
+      ) : view === "workbench" ? (
+        <Workbench />
       ) : view === "ledger" ? (
         <main className="flex min-w-0 flex-1 flex-col bg-void">
           <header className="flex h-12 shrink-0 items-center px-4">

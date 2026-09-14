@@ -495,6 +495,30 @@ cannot check, and none of it is claimed as done anywhere in this repository.
 | Notifications on a ward run or a seal request (§6.7) | 7 | No notification daemon. |
 | A budget tripped on *tokens* rather than minutes | 6 | Tokens come from the engine's transcript, which needs a turn this container's login screen blocks. Same code path either way. |
 
+---
+
+## Continuation — Workbench and first-run repair
+
+- [x] Workbench route in the rail, preserving the study's existing visual language
+- [x] Engine binary overrides with resolved source and actionable failures
+- [x] Runaway guard spend-cap control, defaulting visibly to the existing $10 policy
+- [x] Local transcript inventory and one-click deletion by safe filename
+- [x] Restore missing shipped bindings without overwriting any existing binding
+- [x] Platform-correct `PATH` traversal, including Windows `PATHEXT` command shims
+- [ ] Mac-only checks remain blocked on a Mac: notifications, keychain, NSStatusItem, VoiceOver, Retina, `.app`, signing, and notarisation
+
+---
+
+## Continuation — Phase 8 archivist
+
+- [x] `archivist: true` binding capability, rejected when paired with `autonomy: free`
+- [x] Astrolabe designated as the shipped archivist
+- [x] Read-only roster, commission queue, and recent ledger snapshot in the archivist preamble
+- [x] Structured proposal command recognized only for the live designated archivist session
+- [x] Proposal seal kind with no commission-wide approval shortcut
+- [x] A sealed proposal queues work; refusal queues nothing
+- [x] The `archivist-propose` helper is a no-op and has no direct dispatch implementation
+
 Everything else — the PTY, the breaker, the ward arithmetic, path canonicalisation and the
 symlink escape case, binding validation, the whole interface through the mock IPC backend — is
 verifiable on Linux and is expected to be verified here.

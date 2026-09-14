@@ -16,7 +16,8 @@ use std::io::Write;
 /// the database, or take a lock. It has one job and a deadline.
 fn main() {
     let mut args = std::env::args().skip(1);
-    if args.next().as_deref() == Some("seal-hook") {
+    let mode = args.next();
+    if mode.as_deref() == Some("seal-hook") {
         let socket = args
             .next()
             .map(std::path::PathBuf::from)
@@ -31,6 +32,11 @@ fn main() {
         let mut out = std::io::stdout();
         let _ = writeln!(out, "{reply}");
         let _ = out.flush();
+        return;
+    }
+    // The live hook and the owner's seal resolution do all proposal work. This helper is
+    // intentionally incapable of dispatching when invoked outside that path.
+    if mode.as_deref() == Some("archivist-propose") {
         return;
     }
 
