@@ -62,32 +62,62 @@ pub fn list_familiars(state: State<'_, AppState>) -> R<Vec<FamiliarSummary>> {
             .and_then(|rows| rows.into_iter().find(|c| c.status.is_live() || c.ended.is_some()));
 
         let summoned = live.contains(&row.id);
-        let asking = waiting.iter().any(|s| s.familiar_id == row.id);
 
-        (row.state, row.status) = match (&commission, summoned, asking) {
-            // Anything waiting on you outranks everything else, because §8.4 makes it the one
-            // question the floor has to answer at a glance.
-            (_, _, true) => (SigilState::AwaitingSeal, "waiting on your seal".into()),
-            (Some(c), true, _) if c.status == CommissionStatus::Running => {
-                (SigilState::Working, "working".into())
-            }
-            (Some(c), true, _) if c.status == CommissionStatus::AwaitingSeal => {
-                (SigilState::AwaitingSeal, "waiting on your seal".into())
-            }
-            (_, true, _) => (SigilState::Idle, "summoned, idle".into()),
-            // Not summoned. How the last commission ended is the most recent true thing known
-            // about it, and §8.3 draws both of these at its desk rather than at the hearth.
-            (Some(c), false, _) if c.status == CommissionStatus::Misfired => (
-                SigilState::Misfired,
-                c.note.clone().unwrap_or_else(|| "the last commission misfired".into()),
-            ),
-            (Some(c), false, _) if c.status == CommissionStatus::Banished => {
-                (SigilState::Banished, "banished".into())
-            }
-            _ => (SigilState::Dormant, "dormant".into()),
-        };
+        // What kind of request is waiting, not merely whether one is.
+        //
+        // §7.4 gives `bound` a brass chord across the ring and §8.3 slows `stalled` to one
+        // revolution in thirty seconds, and neither ever reached the floor: every pending
+        // request read as `awaiting-seal`, so a familiar the breaker had bound stood in the
+        // ward circle looking like one asking permission to write a file. The seal already
+        // knows which it is — §6.5 raises `extend` when it binds and `stalled` when nothing has
+        // moved for ten minutes — so this reads the kind rather than inventing a second source.
+        let asking = waiting.iter().find(|s| s.familiar_id == row.id).map(|s| s.kind);
+
+        (row.state, row.status) = state_of(commission.as_ref(), summoned, asking);
     }
     Ok(rows)
+}
+
+
+/// What a familiar's row says it is doing, given the three live facts about it.
+///
+/// Pulled out of `list_familiars` so the table can be read in one place and tested without a
+/// window, a database or a running engine. Every arm here is a sentence the owner reads.
+pub fn state_of(
+    commission: Option<&Commission>,
+    summoned: bool,
+    asking: Option<grimoire_core::seal::SealKind>,
+) -> (SigilState, String) {
+    match (commission, summoned, asking) {
+        // §6.5's two. The familiar is at its own desk in both — it has not been sent to the
+        // ward circle, because neither is a question about an action it wants to take.
+        (_, _, Some(grimoire_core::seal::SealKind::Extend)) => {
+            (SigilState::Bound, "bound — out of aether".into())
+        }
+        (_, _, Some(grimoire_core::seal::SealKind::Stalled)) => {
+            (SigilState::Stalled, "stalled — steer, or banish?".into())
+        }
+        // Anything else waiting on you outranks everything else, because §8.4 makes it the
+        // one question the floor has to answer at a glance.
+        (_, _, Some(_)) => (SigilState::AwaitingSeal, "waiting on your seal".into()),
+        (Some(c), true, None) if c.status == CommissionStatus::Running => {
+            (SigilState::Working, "working".into())
+        }
+        (Some(c), true, None) if c.status == CommissionStatus::AwaitingSeal => {
+            (SigilState::AwaitingSeal, "waiting on your seal".into())
+        }
+        (_, true, None) => (SigilState::Idle, "summoned, idle".into()),
+        // Not summoned. How the last commission ended is the most recent true thing known
+        // about it, and §8.3 draws both of these at its desk rather than at the hearth.
+        (Some(c), false, None) if c.status == CommissionStatus::Misfired => (
+            SigilState::Misfired,
+            c.note.clone().unwrap_or_else(|| "the last commission misfired".into()),
+        ),
+        (Some(c), false, None) if c.status == CommissionStatus::Banished => {
+            (SigilState::Banished, "banished".into())
+        }
+        _ => (SigilState::Dormant, "dormant".into()),
+    }
 }
 
 /// The three meters for whatever this familiar is working on now (§6.5).
@@ -406,4 +436,85 @@ fn engine_args(state: &State<'_, AppState>, binding: &grimoire_core::binding::Bi
 /// The workbench's override for the engine binary, when one is set (§6.1).
 fn workbench_binary(state: &State<'_, AppState>) -> Option<String> {
     state.db.setting("engine.claude.path").ok().flatten()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use grimoire_core::seal::SealKind;
+
+    fn commission(status: CommissionStatus) -> Commission {
+        Commission {
+            id: "c1".into(),
+            familiar_id: "tally".into(),
+            summoning_id: None,
+            prompt: "work".into(),
+            intake: serde_json::json!({}),
+            status,
+            created: 0,
+            ended: None,
+            tokens: Default::default(),
+            turns: 0,
+            cost: Default::default(),
+            note: None,
+        }
+    }
+
+    #[test]
+    fn the_breakers_two_requests_are_their_own_states_rather_than_awaiting_seal() {
+        // The bug this exists for: every pending request read as `awaiting-seal`, so §7.4's
+        // brass chord and §8.3's slowed ring were drawn and never once driven — a familiar the
+        // breaker had bound stood in the ward circle looking like one asking to write a file.
+        let running = commission(CommissionStatus::Running);
+
+        let (state, status) = state_of(Some(&running), true, Some(SealKind::Extend));
+        assert_eq!(state, SigilState::Bound);
+        assert!(status.contains("aether"), "say why it is bound: {status}");
+
+        let (state, status) = state_of(Some(&running), true, Some(SealKind::Stalled));
+        assert_eq!(state, SigilState::Stalled);
+        assert!(status.contains("steer"), "§6.5's question, in the rail too: {status}");
+    }
+
+    #[test]
+    fn an_ordinary_request_still_sends_it_to_the_ward_circle() {
+        let running = commission(CommissionStatus::Running);
+        for kind in [SealKind::Write, SealKind::Shell, SealKind::Destructive, SealKind::Reliquary] {
+            let (state, _) = state_of(Some(&running), true, Some(kind));
+            assert_eq!(state, SigilState::AwaitingSeal, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn a_request_outranks_what_the_commission_says_it_is_doing() {
+        // §8.4 makes "is anything waiting on me?" the one question the floor answers at a
+        // glance, so a running commission does not hide the fact that it has stopped to ask.
+        let (state, _) = state_of(Some(&commission(CommissionStatus::Running)), true, Some(SealKind::Write));
+        assert_eq!(state, SigilState::AwaitingSeal);
+    }
+
+    #[test]
+    fn a_familiar_with_a_process_and_no_question_is_working_or_idle() {
+        let (state, _) = state_of(Some(&commission(CommissionStatus::Running)), true, None);
+        assert_eq!(state, SigilState::Working);
+        let (state, _) = state_of(None, true, None);
+        assert_eq!(state, SigilState::Idle);
+    }
+
+    #[test]
+    fn a_familiar_with_no_process_rests_at_the_hearth_unless_something_went_wrong() {
+        let (state, _) = state_of(None, false, None);
+        assert_eq!(state, SigilState::Dormant);
+
+        let (state, status) = state_of(Some(&commission(CommissionStatus::Misfired)), false, None);
+        assert_eq!(state, SigilState::Misfired);
+        assert!(!status.is_empty(), "a misfire always says something");
+
+        let (state, _) = state_of(Some(&commission(CommissionStatus::Banished)), false, None);
+        assert_eq!(state, SigilState::Banished);
+
+        // A commission that simply finished leaves the familiar dormant, not banished.
+        let (state, _) = state_of(Some(&commission(CommissionStatus::Done)), false, None);
+        assert_eq!(state, SigilState::Dormant);
+    }
 }

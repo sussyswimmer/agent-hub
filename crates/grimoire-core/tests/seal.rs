@@ -539,3 +539,91 @@ fn a_commission_that_has_ended_is_forgotten() {
     assert!(!study.server.is_bound(&study.commission_id));
     assert_eq!(study.server.tool_calls(&study.commission_id), 0);
 }
+
+#[test]
+fn a_request_whose_hook_has_gone_is_taken_back_rather_than_left_for_half_an_hour() {
+    // Nothing was reading the socket while a question waited, so a hook whose process died left
+    // its request in the queue for the full thirty minutes — and the owner was shown a question
+    // by a familiar that was no longer there to hear the answer. Found in Phase 4 by killing a
+    // blocked hook and watching the row sit there.
+    //
+    // This speaks the wire directly rather than going through `hook::run`, because the point is
+    // to hang up mid-question, which a well-behaved hook never does.
+    let study = study(Autonomy::Propose, Bounds::default());
+    let path = study.workspace.join("out.md").display().to_string();
+
+    let mut stream = std::os::unix::net::UnixStream::connect(&study.socket).expect("connect");
+    // One line, terminated: the server reads the wire a line at a time, and a request with no
+    // newline is a request that has not finished arriving.
+    let request = format!("{}\n", payload("Write", serde_json::json!({ "file_path": path, "content": "x" })));
+    {
+        use std::io::Write as _;
+        stream.write_all(request.as_bytes()).expect("write");
+        stream.flush().expect("flush");
+    }
+
+    // It reaches the queue.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while seal::pending(&study.db).expect("pending").is_empty() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(seal::pending(&study.db).expect("pending").len(), 1, "the request was never raised");
+
+    // The hook dies.
+    drop(stream);
+
+    // And the question goes with it, in about as long as it takes to notice — not in half an hour.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !seal::pending(&study.db).expect("pending").is_empty() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        seal::pending(&study.db).expect("pending").is_empty(),
+        "a question nobody is left to answer must not stay in the owner's queue"
+    );
+
+    // And it says so honestly. `timed_out` would read, later, as "nobody answered within thirty
+    // minutes" — which is not what happened to a hook that died two seconds after asking.
+    let resolution: String = study
+        .db
+        .conn()
+        .expect("conn")
+        .query_row("SELECT resolution FROM seals", [], |r| r.get(0))
+        .expect("resolution");
+    assert_eq!(resolution, "withdrawn");
+}
+
+#[test]
+fn an_answer_the_owner_actually_gave_is_not_overwritten_by_the_hook_hanging_up() {
+    // The two race every time: the hook is answered, and then the hook exits and its socket
+    // closes. If withdrawing won that race it would overwrite a real decision, and the ledger
+    // would say the owner never answered questions they did answer.
+    let study = study(Autonomy::Propose, Bounds::default());
+    let path = study.workspace.join("out.md").display().to_string();
+
+    let socket = study.socket.clone();
+    let asking = std::thread::spawn(move || {
+        hook(&socket, "Write", serde_json::json!({ "file_path": path, "content": "x" }))
+    });
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while seal::pending(&study.db).expect("pending").is_empty() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let waiting = seal::pending(&study.db).expect("pending");
+    let id = waiting.first().expect("a request").id.clone();
+
+    study.server.decide(&id, Resolution::Sealed).expect("decide");
+    let reply = asking.join().expect("hook");
+    assert_eq!(decision(&reply), "allow");
+
+    // The hook has now exited and its socket has closed. The answer must still be the answer.
+    std::thread::sleep(Duration::from_millis(300));
+    let resolution: String = study
+        .db
+        .conn()
+        .expect("conn")
+        .query_row("SELECT resolution FROM seals", [], |r| r.get(0))
+        .expect("resolution");
+    assert_eq!(resolution, "sealed");
+}

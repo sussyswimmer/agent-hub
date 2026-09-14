@@ -3,4 +3,4 @@
 /**
  * How a request ended (§6.4).
  */
-export type Resolution = "sealed" | "sealed_always" | "refused" | "timed_out";
+export type Resolution = "sealed" | "sealed_always" | "refused" | "timed_out" | "withdrawn";

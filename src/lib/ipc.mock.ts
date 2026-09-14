@@ -325,7 +325,16 @@ export function createMockBackend(): Backend {
         // The real backend overlays what is actually happening onto the binding's own row
         // (see `list_familiars`). The mock does the one part a test can observe: a familiar
         // with a live summoning is not dormant.
-        crowd().map((f) => (live.has(f.id) && f.state === "dormant" ? { ...f, state: "idle" as const, status: "summoned, idle" } : f)),
+        crowd().map((f) => {
+          // A pending request is not always "waiting on your seal": §6.5's `extend` means the
+          // breaker has bound it, and `stalled` means nothing has moved for ten minutes. The
+          // real `list_familiars` reads the kind; so does this.
+          const asking = seals.pending().find((s) => s.familiar_id === f.id);
+          if (asking?.kind === "extend") return { ...f, state: "bound" as const, status: "bound — out of aether" };
+          if (asking?.kind === "stalled") return { ...f, state: "stalled" as const, status: "stalled — steer, or banish?" };
+          if (live.has(f.id) && f.state === "dormant") return { ...f, state: "idle" as const, status: "summoned, idle" };
+          return f;
+        }),
       ),
     aetherFor: async (id) => aether[id] ?? null,
     intakeFor: async (id) => structuredClone(intake[id] ?? []),
@@ -350,6 +359,20 @@ export function createMockBackend(): Backend {
             "write to ~/work/planning/week.md",
             "Astrolabe is set to propose, so anything beyond reading and thinking comes to you first.",
             "# The week\n\nMonday: the swimming essay.\n",
+          );
+        }
+      // Tally stands in for §6.5's breaker having bound a commission: the request is an
+        // `extend`, and the floor draws that as `bound` at its own desk rather than as a
+        // familiar standing in the ward circle asking to do something.
+        if (id === "tally" && taken) {
+          seals.raise(
+            id,
+            "Tally",
+            taken.id,
+            "extend",
+            "extend this commission's aether",
+            "You have reached your minutes budget for this commission.",
+            null,
           );
         }
       }

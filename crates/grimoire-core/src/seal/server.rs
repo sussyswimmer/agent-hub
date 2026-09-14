@@ -9,7 +9,7 @@
 //! question is open — which is precisely §6.4's "the summoning pauses".
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, mpsc};
@@ -38,6 +38,22 @@ pub type Sessions = Arc<Mutex<HashMap<String, Summoned>>>;
 /// A request waiting on the owner, and the way to answer it.
 struct Waiting {
     decided: mpsc::Sender<Resolution>,
+}
+
+/// One question, with everything needed to put it and to wait for the answer.
+///
+/// A struct rather than eight parameters, which is what this had grown into: at that length the
+/// call site is a row of values whose order is the only thing keeping them in the right slots.
+struct Asking<'a> {
+    summoned: &'a Summoned,
+    commission_id: &'a str,
+    kind: SealKind,
+    action: &'a Action,
+    reason: &'a str,
+    /// What a write is about to put on disk, where there is anything (§6.4's diff).
+    content: Option<String>,
+    /// The hook's own connection, watched only for its end.
+    watch: Option<UnixStream>,
 }
 
 /// The application's side of the seal.
@@ -180,7 +196,7 @@ impl Server {
     }
 
     /// Handle one hook, start to finish.
-    fn serve(&self, stream: UnixStream) {
+    fn serve(self: &Arc<Self>, stream: UnixStream) {
         let mut reader = BufReader::new(match stream.try_clone() {
             Ok(s) => s,
             Err(e) => {
@@ -193,8 +209,13 @@ impl Server {
             return;
         }
 
+        // A second handle on the same connection, so a request that has to wait can notice
+        // the hook going away. The reader above is finished with; this one is only ever read
+        // for its end.
+        let watch = stream.try_clone().ok();
+
         let response = match serde_json::from_str::<Request>(line.trim()) {
-            Ok(request) => self.judge(&request),
+            Ok(request) => self.judge(&request, watch),
             // A hook that sends something unreadable gets a refusal, not the benefit of the
             // doubt. The hook itself also fails closed, so this is the second of two.
             Err(e) => Response::deny(format!("Grimoire could not read that request ({e}), so it is refused.")),
@@ -210,7 +231,7 @@ impl Server {
     }
 
     /// Decide one action: the law, then the queue.
-    fn judge(&self, request: &Request) -> Response {
+    fn judge(self: &Arc<Self>, request: &Request, watch: Option<UnixStream>) -> Response {
         let action = security::from_tool(&request.tool_name, &request.tool_input);
 
         // A session Grimoire does not know about is one it did not start. Refuse: answering for
@@ -273,19 +294,20 @@ impl Server {
             Err(e) => tracing::warn!(error = %e, "could not check for a standing seal"),
         }
 
-        self.ask(&summoned, &commission_id, kind, &action, &reason, content)
+        self.ask(Asking {
+            summoned: &summoned,
+            commission_id: &commission_id,
+            kind,
+            action: &action,
+            reason: &reason,
+            content,
+            watch,
+        })
     }
 
     /// Raise the request and wait for the owner.
-    fn ask(
-        &self,
-        summoned: &Summoned,
-        commission_id: &str,
-        kind: SealKind,
-        action: &Action,
-        reason: &str,
-        content: Option<String>,
-    ) -> Response {
+    fn ask(self: &Arc<Self>, asking: Asking<'_>) -> Response {
+        let Asking { summoned, commission_id, kind, action, reason, content, watch } = asking;
         let preview = content.or_else(|| preview_of(action));
         let seal_id = match crate::seal::raise(&self.db, crate::seal::Raise {
             commission_id,
@@ -312,6 +334,27 @@ impl Server {
         }
         self.changed();
 
+        // Notice if the familiar that asked goes away.
+        //
+        // Nothing was reading this socket while the question waited, so a hook whose process
+        // died left its request in the queue for the full thirty minutes — the owner shown a
+        // question by a familiar no longer there to hear the answer. A read of zero bytes is
+        // the peer closing; that is the whole signal. The row is then withdrawn and the sender
+        // dropped, which is what wakes the wait below with `Disconnected`.
+        if let Some(mut watch) = watch {
+            let withdrawing = Arc::clone(self);
+            let id = seal_id.clone();
+            std::thread::spawn(move || {
+                let mut sink = [0u8; 1];
+                // The hook never writes again after its request, so anything but a clean end
+                // is unexpected — and either way the connection is finished with.
+                let gone = matches!(watch.read(&mut sink), Ok(0) | Err(_));
+                if gone {
+                    withdrawing.withdraw(&id);
+                }
+            });
+        }
+
         // Wait, but never for ever. §6.4 gives thirty minutes, after which the request times out
         // into `bind` — which for the familiar in front of it is a refusal.
         let outcome = rx.recv_timeout(crate::seal::TIMEOUT);
@@ -336,6 +379,22 @@ impl Server {
                 Response::deny("Grimoire stopped waiting on this, so it is refused.")
             }
         }
+    }
+
+    /// Take back a request nobody is left to answer.
+    ///
+    /// Removing the `Waiting` drops the only sender, which is what unblocks `ask` — it already
+    /// treats a disconnected channel as a refusal, and a refusal to a familiar that has gone
+    /// costs nothing.
+    fn withdraw(&self, seal_id: &str) {
+        let still_waiting = self.waiting.lock().map(|mut w| w.remove(seal_id).is_some()).unwrap_or(false);
+        if !still_waiting {
+            // Already answered between the hook dying and this noticing. The owner's answer
+            // stands; a withdrawal must never overwrite a decision they actually made.
+            return;
+        }
+        let _ = crate::seal::resolve(&self.db, seal_id, Resolution::Withdrawn);
+        self.changed();
     }
 
     /// Answer a request the owner has just decided. Wakes whichever hook is blocked on it.

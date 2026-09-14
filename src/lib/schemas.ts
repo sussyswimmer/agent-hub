@@ -13,9 +13,12 @@ import { z } from "zod";
 
 import type { Engine } from "./generated/Engine";
 import type { EventKind } from "./generated/EventKind";
+import type { IntakeKind } from "./generated/IntakeKind";
 import type { Order } from "./generated/Order";
+import type { Resolution } from "./generated/Resolution";
 import type { SealKind } from "./generated/SealKind";
 import type { SigilState } from "./generated/SigilState";
+import type { Status } from "./generated/Status";
 
 const ORDERS = ["quill", "lantern", "crucible", "compass", "ledger"] as const satisfies readonly Order[];
 const ENGINES = ["claude", "codex", "gemini", "qwen", "custom"] as const satisfies readonly Engine[];
@@ -70,7 +73,8 @@ export const emission = z.discriminatedUnion("kind", [
 ]);
 
 /** Mirrors `IntakeField` in crates/grimoire-core/src/binding/schema.rs (§6.2). */
-export const intakeKind = z.enum(["text", "select", "multiline"]);
+const INTAKE_KINDS = ["text", "select", "multiline"] as const satisfies readonly IntakeKind[];
+export const intakeKind = z.enum(INTAKE_KINDS);
 export const intakeField = z.object({
   id: z.string(),
   ask: z.string(),
@@ -83,14 +87,16 @@ export const intakeField = z.object({
 
 // ── Commissions and the ledger (§6.2, §6.9) ────────────────────────────────────────────
 
-export const commissionStatus = z.enum([
+const COMMISSION_STATUSES = [
   "queued",
   "running",
   "awaiting_seal",
   "done",
   "banished",
   "misfired",
-]);
+] as const satisfies readonly Status[];
+
+export const commissionStatus = z.enum(COMMISSION_STATUSES);
 
 export const tokens = z.object({
   input: z.number(),
@@ -178,7 +184,11 @@ const SEAL_KINDS = [
 ] as const satisfies readonly SealKind[];
 
 export const sealKind = z.enum(SEAL_KINDS);
-export const resolution = z.enum(["sealed", "sealed_always", "refused", "timed_out"]);
+const RESOLUTIONS = [
+  "sealed", "sealed_always", "refused", "timed_out", "withdrawn",
+] as const satisfies readonly Resolution[];
+
+export const resolution = z.enum(RESOLUTIONS);
 
 export const seal = z.object({
   id: z.string(),

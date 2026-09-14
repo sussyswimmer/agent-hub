@@ -199,3 +199,26 @@ test("with motion reduced, nothing walks and nothing spins", async ({ page }) =>
   const stats = page.getByTestId("floor-stats");
   await expect.poll(async () => Number(await stats.getAttribute("data-frames"))).toBeGreaterThan(0);
 });
+
+test("a familiar the breaker has bound reads as bound, not as one asking permission", async ({ page }) => {
+  // §7.4 gives `bound` a brass chord across the ring and §8.3 keeps it at its own desk. Both
+  // were drawn from the first day of Phase 5 and never once driven: every pending request read
+  // as `awaiting-seal`, so a familiar the breaker had stopped for running out of aether stood
+  // in the ward circle looking like one asking to write a file.
+  //
+  // The mirror is the floor's own text and the only assertable rendering of what it is showing.
+  await openFloor(page);
+  await page.locator('[data-familiar="tally"]').click();
+  await page.locator('[data-tab="commission"]').click();
+  await page.getByTestId("intake-prompt").fill("work out the sums");
+  await page.getByTestId("intake-submit").click();
+
+  await page.locator('[data-tab="terminal"]').click();
+  await page.getByTestId("terminal-toggle").click();
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
+
+  const mirror = page.getByTestId("floor-mirror");
+  await expect(mirror).toContainText("Tally, bound");
+  // And it is not reported as the thing §8.4 reserves for a question you have to answer.
+  await expect(mirror).not.toContainText("Tally, waiting for your seal");
+});

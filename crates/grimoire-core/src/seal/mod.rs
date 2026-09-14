@@ -47,6 +47,12 @@ pub enum Resolution {
     Refused,
     /// Nobody answered within §6.4's thirty minutes.
     TimedOut,
+    /// The familiar that asked is gone, so the question no longer has anyone to answer it.
+    ///
+    /// Distinct from `TimedOut` because the ledger is read later and both would otherwise say
+    /// "nobody answered within thirty minutes" — which, for a hook whose process died two
+    /// seconds after it asked, is not what happened.
+    Withdrawn,
 }
 
 impl Resolution {
@@ -61,6 +67,7 @@ impl Resolution {
             Resolution::SealedAlways => "sealed_always",
             Resolution::Refused => "refused",
             Resolution::TimedOut => "timed_out",
+            Resolution::Withdrawn => "withdrawn",
         }
     }
 }
