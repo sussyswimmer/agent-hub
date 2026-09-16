@@ -42,6 +42,7 @@ pub fn run() {
     // Held outside the builder so the shutdown paths below can reach it without going through
     // a window, which may already be gone by the time we are told to stop.
     let summonings = Arc::new(Summonings::default());
+    #[cfg(unix)]
     watch_for_signals(Arc::clone(&summonings));
 
     let app = tauri::Builder::default()
@@ -259,6 +260,7 @@ fn show(app: &tauri::AppHandle) {
 /// disposition, and the process still dies instantly on `SIGTERM` with the waiter never
 /// reached. That is exactly what happened the first time: the familiar survived only because
 /// closing the pty happened to hang it up, and the log had no trace of the stop at all.
+#[cfg(unix)]
 fn watch_for_signals(summonings: Arc<Summonings>) {
     // Safety: sigemptyset/sigaddset/pthread_sigmask operate on a signal set owned by this
     // stack frame. Blocking these signals process-wide is the documented precondition for

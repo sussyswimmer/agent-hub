@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, mpsc};
@@ -45,6 +46,7 @@ struct Waiting {
 ///
 /// A struct rather than eight parameters, which is what this had grown into: at that length the
 /// call site is a row of values whose order is the only thing keeping them in the right slots.
+#[cfg(unix)]
 struct Asking<'a> {
     summoned: &'a Summoned,
     commission_id: &'a str,
@@ -89,6 +91,7 @@ impl Server {
     /// Start listening. The socket is removed first: a file left by a crashed run would
     /// otherwise make every future start fail, and a seal that cannot start is one that denies
     /// everything.
+    #[cfg(unix)]
     pub fn start(db: Db, sessions: Sessions, socket: &Path) -> Result<Arc<Self>> {
         if let Some(parent) = socket.parent() {
             std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
@@ -133,6 +136,20 @@ impl Server {
 
         tracing::info!(socket = %socket.display(), "the seal is listening");
         Ok(server)
+    }
+
+    #[cfg(not(unix))]
+    pub fn start(db: Db, sessions: Sessions, socket: &Path) -> Result<Arc<Self>> {
+        tracing::warn!(socket = %socket.display(), "seal hooks are unavailable on Windows until named-pipe transport is added");
+        Ok(Arc::new(Self {
+            db,
+            sessions,
+            waiting: Arc::default(),
+            socket: socket.to_path_buf(),
+            on_change: Mutex::new(None),
+            tool_calls: Mutex::default(),
+            bound: Mutex::default(),
+        }))
     }
 
     pub fn socket(&self) -> &Path {
@@ -199,6 +216,7 @@ impl Server {
     }
 
     /// Handle one hook, start to finish.
+    #[cfg(unix)]
     fn serve(self: &Arc<Self>, stream: UnixStream) {
         let mut reader = BufReader::new(match stream.try_clone() {
             Ok(s) => s,
@@ -234,6 +252,7 @@ impl Server {
     }
 
     /// Decide one action: the law, then the queue.
+    #[cfg(unix)]
     fn judge(self: &Arc<Self>, request: &Request, watch: Option<UnixStream>) -> Response {
         let action = security::from_tool(&request.tool_name, &request.tool_input);
 
@@ -345,6 +364,7 @@ impl Server {
     }
 
     /// Raise the request and wait for the owner.
+    #[cfg(unix)]
     fn ask(self: &Arc<Self>, asking: Asking<'_>) -> Response {
         let Asking { summoned, commission_id, kind, action, reason, content, watch, action_label } = asking;
         let preview = content.or_else(|| preview_of(action));
@@ -482,6 +502,7 @@ impl Server {
 }
 
 /// What to show beside the request: the content about to be written, or the command (§6.4).
+#[cfg(unix)]
 fn preview_of(action: &Action) -> Option<String> {
     match action {
         Action::Write { .. } => None,

@@ -149,6 +149,15 @@ impl PtySession {
             .map_err(|e| Error::other(format!("could not wait for the familiar: {e}")))
     }
 
+    /// End the child with the platform's native process termination primitive.
+    pub fn kill(&self) -> Result<()> {
+        self.child
+            .lock()
+            .map_err(|_| Error::other("the child handle was poisoned"))?
+            .kill()
+            .map_err(|e| Error::other(format!("could not stop the familiar: {e}")))
+    }
+
     /// Whether the reader thread has seen end-of-file. Once this is true no further output
     /// will arrive, which is what "the transcript is complete" means.
     pub fn drained(&self) -> bool {

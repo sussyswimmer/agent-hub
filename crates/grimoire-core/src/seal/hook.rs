@@ -12,6 +12,7 @@
 //! answer, a slow answer, an answer it cannot read.
 
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::Duration;
@@ -66,6 +67,7 @@ fn parse(payload: &str) -> Result<Request, String> {
 }
 
 /// Put the request to the application and wait for its answer.
+#[cfg(unix)]
 fn ask(socket: &Path, request: &Request) -> Result<Response, String> {
     let mut stream = UnixStream::connect(socket)
         .map_err(|e| format!("Grimoire is not listening on {}: {e}", socket.display()))?;
@@ -90,6 +92,11 @@ fn ask(socket: &Path, request: &Request) -> Result<Response, String> {
         return Err("the answer was empty".into());
     }
     serde_json::from_str(reply.trim()).map_err(|e| format!("the answer could not be read: {e}"))
+}
+
+#[cfg(not(unix))]
+fn ask(_socket: &Path, _request: &Request) -> Result<Response, String> {
+    Err("seal hooks require Unix sockets and are not yet available on Windows".into())
 }
 
 /// The settings file that installs this hook for one summoning.

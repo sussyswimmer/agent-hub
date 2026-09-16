@@ -42,6 +42,7 @@ pub fn stop(session: &PtySession) -> Result<Stopped> {
 }
 
 /// The ladder with explicit waits, so a test does not take eight seconds to run.
+#[cfg(unix)]
 pub fn stop_with(session: &PtySession, interrupt: Duration, terminate: Duration) -> Result<Stopped> {
     if session.try_wait()?.is_some() {
         return Ok(Stopped::Already);
@@ -72,10 +73,21 @@ pub fn stop_with(session: &PtySession, interrupt: Duration, terminate: Duration)
     Ok(Stopped::Kill)
 }
 
+#[cfg(not(unix))]
+pub fn stop_with(session: &PtySession, _interrupt: Duration, _terminate: Duration) -> Result<Stopped> {
+    if session.try_wait()?.is_some() {
+        return Ok(Stopped::Already);
+    }
+    session.kill()?;
+    session.wait()?;
+    Ok(Stopped::Kill)
+}
+
 /// How long to let a killed group's zombies clear before giving up on tidiness.
 pub const ZOMBIE_DRAIN: Duration = Duration::from_secs(2);
 
 /// Poll until the group has no table entry left, or `grace` runs out. Returns whether it cleared.
+#[cfg(unix)]
 pub fn drain_group(pid: u32, grace: Duration) -> bool {
     let deadline = Instant::now() + grace;
     while Instant::now() < deadline {
@@ -87,10 +99,16 @@ pub fn drain_group(pid: u32, grace: Duration) -> bool {
     !group_alive(pid)
 }
 
+#[cfg(not(unix))]
+pub fn drain_group(_pid: u32, _grace: Duration) -> bool {
+    true
+}
+
 /// Send `sig` to the whole process group led by `pid`.
 ///
 /// Falls back to signalling the process alone if the group has already gone (ESRCH), which
 /// happens when the leader exited while its children were still being reaped.
+#[cfg(unix)]
 fn signal_group(pid: u32, sig: i32) {
     // Safety: killpg and kill take a pid and a signal number and touch no memory we own. A
     // failure is reported in the return value, and every failure here is benign — the only
@@ -126,7 +144,13 @@ fn wait_for_exit(session: &PtySession, grace: Duration) -> Result<bool> {
 /// parent has already died is reparented to init and sits in the table until init reaps it, so
 /// this can briefly report `true` for a group in which nothing is running. [`drain_group`] is
 /// the bounded wait for that to settle.
+#[cfg(unix)]
 pub fn group_alive(pid: u32) -> bool {
     // Safety: signal 0 delivers nothing. See above.
     unsafe { libc::killpg(pid as libc::pid_t, 0) == 0 }
+}
+
+#[cfg(not(unix))]
+pub fn group_alive(_pid: u32) -> bool {
+    false
 }
