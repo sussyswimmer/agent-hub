@@ -670,3 +670,15 @@ no runner and no log. DECISIONS 0023.
       account's billing settings — before any job will start
 - [ ] 1.0.3's installers: once Actions can run, **Actions → Release → Run workflow** with tag
       `v1.0.3` builds all three and makes a draft release; publishing it creates the tag
+
+**The first real run.** With the repository public, runners were assigned at once. The version
+check passed and all three installers built (Release run 36704551350, attempt 2); attaching them
+failed on the Windows artifact's `nsis/` and `msi/` folders, after the draft "Grimoire 1.0.3" had
+been made with both `.dmg`s on it. Fixed, and the upload step run locally against that exact
+layout. A run by hand for an existing tag now builds the tagged commit.
+
+- [ ] Rebuild 1.0.3: **Run workflow** on Release with `v1.0.3`, which fills in the `.exe` and
+      `.msi` on the existing draft
+- [ ] CLAUDE.md §1: the repository is public now, and §1 asks for a LICENSE and attribution pass
+      when that happens. The README and `Cargo.toml` already say MIT; there is no LICENSE file
+
