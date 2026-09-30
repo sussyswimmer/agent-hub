@@ -647,3 +647,26 @@ Release notes, for the release page:
 >
 > Unsigned and not notarized: macOS may ask you to approve it in Privacy & Security on first
 > launch.
+
+---
+
+## CI that can build the installers
+
+CI had not run since 14 September. The one workflow built installers on two macOS runners and a
+Windows runner for every push to every branch; on a private repository that bills at 10× and
+2×, and the account's allowance was gone after nine runs. Every job since failed in seconds with
+no runner and no log. DECISIONS 0023.
+
+- [x] `ci.yml`: every push and pull request runs the whole suite on Linux, and never a Mac
+- [x] `release.yml`: installers on a `v*` tag or by hand; version checked on Linux first; the
+      `.dmg` ×2, `.exe` and `.msi` attached to a draft release for the owner to publish
+- [x] `.github/release-notes/v1.0.3.md` holds the 1.0.3 notes the workflow uses
+- [x] Both workflows pass actionlint; the version check was run against v1.0.3 (passes) and
+      v1.0.4 (fails, naming both versions); the Linux job's steps were run in order in a fresh
+      clone with `CI=1`
+- [ ] Nothing has run on GitHub yet. The first CI run was one Linux job, and it was refused in
+      two seconds like every Mac job before it, so the block is the whole account, not macOS.
+      Actions needs its allowance back — the monthly reset, or a spending budget in the
+      account's billing settings — before any job will start
+- [ ] 1.0.3's installers: once Actions can run, **Actions → Release → Run workflow** with tag
+      `v1.0.3` builds all three and makes a draft release; publishing it creates the tag

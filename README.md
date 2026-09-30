@@ -131,12 +131,26 @@ cargo test -p grimoire-core --test engine -- --ignored --nocapture
 
 ## Building a release
 
+On your own machine, for the platform you are on:
+
 ```
 bun run dist
 ```
 
 Which composes the application icons on the way past — see `DECISIONS.md` 0020 for what is
 generated and what is drawn.
+
+For a published release with every installer, let GitHub build them:
+
+1. Bump the version in `Cargo.toml`, `package.json` and `src-tauri/tauri.conf.json`, and write
+   the notes in `.github/release-notes/v<version>.md`.
+2. Push a `v<version>` tag, or run **Actions → Release → Run workflow** with that tag.
+3. The Release workflow checks the tag against the version, builds the two macOS disk images
+   and the Windows installers, and attaches them to a **draft** release. Read it, then publish.
+
+Every push also runs **CI**: the whole test suite on Linux. Installers are built only by the
+Release workflow, because macOS runners cost ten times as much as Linux on a private
+repository (`DECISIONS.md` 0023).
 
 ## What to distrust
 

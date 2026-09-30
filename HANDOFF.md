@@ -109,6 +109,10 @@ bun run licences             # must leave no diff
 bun run bindings:check       # must leave no diff
 ```
 
+GitHub runs the same list on Linux for every push (`ci.yml`). Installers are built only by
+`release.yml`, on a `v*` tag or by hand from the Actions tab, into a draft release — never on a
+push, because macOS minutes cost ten times as much on this private repository (DECISIONS 0023).
+
 Driving the real application headless, which is how every phase here was verified:
 
 ```
