@@ -170,7 +170,7 @@ them grows a pre-execution hook.
 
 ## 0005 — Application icons are drawn in code and never committed
 
-**Status:** accepted · **Concerns:** §1
+**Status:** superseded by 0020 · **Concerns:** §1
 
 **Context.** §1: *"Do not vendor art assets from anywhere."* A Tauri bundle nonetheless needs
 `.png`, `.ico` and `.icns` files on disk before it can build.
@@ -572,3 +572,115 @@ that long, which turns the race into a certainty; the test seeds it with `addIni
 knob costs nothing when unset and exists only in the mock backend, which is test-only already.
 
 Calling this a flake and rerunning would have shipped doubled keystrokes to the owner's engine.
+
+---
+
+## 0020 — Art generated on the owner's Higgsfield account is the owner's art
+
+**Status:** accepted · **Concerns:** §1, §7.4, §8.1, §10 Phase 9 · **Replaces:** 0005, and the
+rule that `git status` never shows an image file · **Decided by:** the owner, 2026-09-30 —
+"use higgsfield for the rest of the generations"
+
+**Context.** §1 allows three kinds of visual: drawn in code, an open-licence typeface, or "made
+by the owner". The owner had already committed two Higgsfield images (the observatory and a
+sheet of five familiars, 7814cfe) without an entry here, and has now said that the rest of the
+generations go through Higgsfield too. §8.1 and Phase 9 ask for a floor and an app icon drawn
+in code; that is the part this changes.
+
+**Decision.** An image generated on the owner's own Higgsfield account, at the owner's direction,
+for this project, is "made by the owner" under §1 and may be committed. Four rules keep §1's
+purpose, which was never about pixels versus code but about owing nothing to anyone:
+
+1. **Every generated file has a row in `src/assets/higgsfield/PROVENANCE.md`**: its job id, model,
+   prompt, references, and what was done to it afterwards. A file without one does not ship.
+2. **References are this repository's own images only**: earlier generations, code-drawn marks,
+   diagrams drawn from `plan.ts`. No prompt names another work, artist, studio, game or franchise.
+3. **The canon in §3 still binds.** Generated figures are the orders' familiars, with no names
+   written into the pixels. Captions baked into the first sheet were the reason it was replaced.
+4. **The code keeps the meaning.** State is still drawn in code, where it is exact: the sigil in
+   the rail, the state ring, the aether arc, the brass dot, the thread of ink, the lit ward
+   circle, the lamp rings. A generated image may set the scene; it may not be the only place a
+   state is shown. And everything generated has a drawn fallback (0021).
+
+**What is generated now.** The floor, as a top-down painting registered to `plan.ts` rather than
+the perspective view it replaced, which could line up with nothing. The five familiars, one
+transparent figure per order. The app mark, the Grimoire sigil as a brass medallion;
+`scripts/icons.ts` still draws the tile, its light and its shadow on Apple's 1024 grid, and
+still derives every size from one composition.
+
+**What this costs.** 4.2 MB of images in the repository and the bundle, where §1 as written
+allowed none: 2.1 MB added in this change, beside the owner's 2.2 MB observatory. The old sheet
+(4.7 MB) went out in the same change, so the bundle is lighter than 1.0.2's. A reader can no longer check §1 by running
+`git status`; they check it by reading `PROVENANCE.md` against `git ls-files '*.png' '*.jpg'`.
+
+**CLAUDE.md §1 has not been edited.** It is the owner's specification; this entry records the
+owner's ruling beside it. §1 still reads "Do not vendor art assets", and should say this when
+the owner next edits it.
+
+---
+
+## 0021 — The floor's art is loaded before anything uses it, and a floor that fails fails alone
+
+**Status:** accepted · **Concerns:** §6.1, §8.6, §8.7, §11, §12 · **Found in:** the Phase 9 pass
+
+**Context.** The floor is the default view, and it had never drawn in a packaged build. Two
+different things were wrong depending on where it ran, and four more were waiting behind them.
+Every one of them passed the browser suite, because the browser has neither the CSP nor the
+`tauri://` scheme; the ones marked *binary* were found by running `tauri build` under `Xvfb`.
+
+1. **Packaged builds (1.0.1, 1.0.2, every platform): Pixi refused to start.** Pixi v8 builds its
+   shader glue with `new Function`. The CSP in `tauri.conf.json` forbids eval, so `app.init`
+   threw "Current environment does not allow unsafe-eval", and the owner's first-light scene
+   caught it: "The tower lost its lens", with a button offering to restore five familiars who
+   were already in the rail. The scene never said why. *Binary.*
+2. **`tauri dev` and the browser: an empty window.** With no CSP, Pixi started, and `actors.ts`
+   built its familiars from `Texture.from()` of an image nobody had loaded. In Pixi v8 that is a
+   cache lookup, not a load: it returned nothing, the first draw threw, nothing caught it, and
+   React unmounted the root — rail, seal count and Roster toggle with it. Every test in
+   `floor.spec.ts` waits on `data-ready`, and they had all been timing out since that commit.
+3. **The tick reset the sprite's scale to 1** every frame, to bob it. With the texture actually
+   loaded, each familiar would have been drawn at its native 454×700, across half the room.
+4. **The observatory was a CSS background behind the canvas**, blended with `screen`. It did not
+   pan or zoom with the plan drawn over it, and as a perspective view it could not line up with
+   an orthographic plan in any case: the painted ward circle was a hundred units from the one
+   you click.
+5. **Pixi decodes images in Web Workers built from `blob:` URLs**, after asking another such
+   worker whether `ImageBitmap` works. The CSP has no `worker-src`, the worker never starts, and
+   Pixi listens only for its reply: the load neither resolves nor rejects. *Binary* — with
+   workers left on, the floor sat without its familiars until the limit below gave up on them.
+6. **Pixi mangles rooted URLs on a custom scheme.** It resolves Vite's `/assets/name.png`
+   against the page's root, and only knows what a root is for `http:`. Under `tauri://localhost`
+   (macOS and Linux) every image was requested from `tauri://assets/name.png`, with no host.
+   Windows (`http://tauri.localhost`) would have been spared. *Binary.*
+
+**Decision.**
+
+- **`import "pixi.js/unsafe-eval"`** in `stage.ts`, before anything is initialised. It is Pixi's
+  own module for this, and it leaves the CSP exactly as strict as it is. Adding `'unsafe-eval'`
+  to the CSP would have been the one-word fix and the wrong one (§11).
+- **`art.ts` loads everything through `Assets.load` before any actor exists**, on the main thread
+  (`loadTextures.config.preferWorkers = false`), with each URL resolved against the page first
+  (`assetUrl.ts`), and eight seconds per file. It never rejects. A portrait that does not arrive
+  is the familiar drawn in code; a painting that does not arrive is the whole vector plan, as it
+  was drawn before any art existed. Either way a line in the corner of the floor says what did
+  not load and why (§3), not only a console nobody opens.
+- **What bobs is a container, not the sprite**, so nothing that animates can undo the sprite's fit.
+- **The painting is a sprite inside the world**, under the baked layer, registered to the plan
+  (0020, and `PROVENANCE.md` for the arithmetic). With it present the bake draws only what the
+  painting cannot know: the order-coloured lamp rings and the labels. The lamps moved to where the
+  painting lit them (`LAMPS` in `plan.ts`), and the lit ward circle gained a band of light,
+  because a brass line on a painted brass ring changes nothing anyone can see (§8.4).
+- **`FloorBoundary` wraps the floor.** A throw anywhere in it replaces the floor with a sentence
+  and a Show the roster button; the rail is untouched. §8.7 says the floor is never the only
+  route to anything, and until now one exception in it was the route to everything.
+- **The first-light scene says why the renderer failed**, and when it failed, offers the roster
+  rather than a restore of bindings that are already there. Its figures are positioned
+  absolutely: WebKitGTK does not resolve a percentage height on a grid item's image, and they
+  had spilled across the heading.
+
+**Tests.** `floor.spec.ts`: the floor opens painted, with five portraits and no page errors (run
+against the unfixed code, it fails, as does every older test in the file); with every image
+refused it opens drawn in code, every familiar still on it, and says what did not load; with
+WebGL taken away it says why and its button puts the floor away. `assetUrl.test.ts` pins the
+URL the loader is given under `tauri://`. The CSP faults (1, 5) and the scheme fault (6) cannot
+be seen by a browser test here; each was seen, and seen fixed, in the binary.

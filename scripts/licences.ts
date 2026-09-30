@@ -150,8 +150,11 @@ Only **runtime** dependencies are listed: what ships inside the application. Dev
 (the test harnesses) and build-dependencies (code generation that runs once on the build
 machine) are excluded, because they are not distributed.
 
-Grimoire itself is MIT. No art assets are vendored from anywhere: every mark in the interface
-is drawn in code (see \`src/ui/sigil-geometry.ts\` and \`scripts/icons.ts\`).
+Grimoire itself is MIT. No art assets are vendored from anywhere. The sigils, state marks and
+the plan are drawn in code (see \`src/ui/sigil-geometry.ts\`); the painted floor, the familiars
+and the application mark were generated for this project on the owner's Higgsfield account and
+are the owner's (DECISIONS.md 0020). Each has its job id and prompt in
+\`src/assets/higgsfield/PROVENANCE.md\`.
 
 ## Typefaces
 

@@ -528,3 +528,78 @@ real binary runs under `Xvfb` and its window can be read straight out of the fra
 is worth keeping up. **The Chromium-based Playwright run is not a substitute**: it passed
 sixteen tests green while the real WebKit build was drawing a sigil on top of its own status
 line. Run the binary at the end of every phase, look at it, and only then call the phase done.
+
+---
+
+## Phase 9 — the art, the icon, and a floor that did not open
+
+The owner's instruction for this session: carry on to the next step, and use Higgsfield for the
+rest of the generations. The next step in §10 is Phase 9. Its code-side item is the app icon,
+and the owner's ruling changes how that icon is made (DECISIONS 0020).
+
+**The first thing found was that the floor had never drawn in a packaged build.** In the
+releases, Pixi refused to start under the CSP (it wants `eval` for its shaders), and the owner's
+first-light scene caught it without saying why. Under `tauri dev` and in the browser, where there
+is no CSP, it got further and then took the whole window down: it built the familiars from an
+image nobody had loaded, the first draw threw, and React unmounted everything, rail included.
+Every test in `floor.spec.ts` had been timing out since that commit. DECISIONS 0021 has both,
+and the four faults behind them, three of which only the binary could show.
+
+- [x] `pixi.js/unsafe-eval`: the floor draws under the CSP without loosening it. Seen in the binary
+- [x] Art loaded through `Assets.load` before any actor exists, on the main thread, with a time limit
+- [x] Asset URLs resolved before Pixi sees them: under `tauri://localhost` it dropped the host. Seen in the binary
+- [x] A line on the floor says what art did not load and why
+- [x] A missing portrait is the familiar drawn in code; a missing painting is the whole vector plan
+- [x] `FloorBoundary`: a floor that throws takes only the floor with it, and offers the roster
+- [x] The first-light scene says why the renderer failed and offers the roster, not a restore of
+      bindings that are already there; its figures no longer spill across the heading in WebKitGTK
+- [x] Five transparent familiars from Higgsfield, one per order, replacing the captioned sheet
+- [x] A top-down floor painting from Higgsfield, generated from a diagram of `plan.ts` and registered
+      to it, drawn inside the world so it pans and zooms with the plan
+- [x] Lamps moved to where the painting lit them (`LAMPS` in `plan.ts`)
+- [x] The lit ward circle made visible against a painted brass ring (§8.4's first question)
+- [x] Name plates and station labels outlined so they read on the painting
+- [x] The app mark from Higgsfield; `scripts/icons.ts` composes every icon size from it on Apple's grid
+- [x] `src/assets/higgsfield/PROVENANCE.md`: every generated file, its job, prompt, references and post-processing
+- [x] `bun run typecheck` passes again. The first art commit had broken it: the node config
+      reached the floor through a unit test and had no type for a `.png` import
+- [x] DECISIONS 0020 (the ruling), 0021 (the floor); 0005 marked superseded; README, HANDOFF,
+      THIRD-PARTY brought up to date
+- [x] `cargo test --workspace` compiles again: three test fixtures had been missing the
+      `archivist` field since a6642e9, so no Rust test had run since
+- [x] `bun run bindings:check` clean: `BindingFrontmatter.ts` regenerated for the archivist's doc comment
+- [ ] CLAUDE.md §1 still reads "do not vendor art assets" — the owner's to amend, not mine
+- [ ] The week of use on a Mac (§10 Phase 9). Blocked on the owner's machine, as before
+
+**Higgsfield spend.** 11 generations, 19 credits (698.53 before, 679.53 after): five sprites,
+two framed icon drafts, two medallions, two floor paintings. The drafts and the second of each pair were not used;
+their job ids are in `PROVENANCE.md` so nothing is lost if one is wanted later.
+
+**Checked in the binary.** `tauri build --debug --no-bundle`, run under `Xvfb` with a scratch
+`GRIMOIRE_HOME`. This container arrived without WebKitGTK's development packages, so
+`libwebkit2gtk-4.1-dev` and `libgtk-3-dev` were installed first; the earlier note that "the real
+binary runs here" was true of a different container. Seen, in order: the first-light scene with
+Pixi's unsafe-eval refusal written on it; then the plan drawn in code with the drawn figures and
+the note "the quill familiar's portrait: Failed to load tauri://assets/quill-….png"; then the
+painted floor with all five portraits at the hearth. Hovering Vellum showed the marginalia card,
+and clicking opened the workspace with the painted floor as the strip above. A build with Pixi's
+workers left on sat without familiars for eight seconds and then said "the painted floor: no
+answer in 8s", which is the hang the limit exists for.
+
+**A test that failed once.** The first full Playwright run had one failure: the terminal did
+not echo typed text (`terminal.spec.ts`, desk). It did not come back in 60 isolated runs, in 26
+more run while forcing the two things suspected of causing it (files being written under `src/`,
+and 46 Tailwind CSS hot updates), or in two further full runs. No cause was found. It is written
+down here rather than called a flake, because the last test in this repository that failed only
+in a full run was a race that doubled every keystroke (DECISIONS 0019). If it is seen again, the
+trace is the thing to keep.
+
+At the end of this pass: 238 Rust tests (5 ignored, needing a live engine), 41 unit tests, 128
+Playwright tests, clippy clean, typecheck clean, `bun run licences` and `bun run bindings:check`
+leaving no diff, and the debug binary opening on the painted floor under `Xvfb`.
+
+**Found and not fixed here.** `stage.ts` decides whether the baked layer is stale from the zoom,
+while `bake.ts` decides whether it carries labels from zoom × device pixels. On a 1× display
+where the room fits below 0.9, the two never agree, and every pan and wheel step re-bakes the
+whole plan. §8.6 asks for a re-bake only on resize or on crossing 0.9×. Retina hides it.
+
