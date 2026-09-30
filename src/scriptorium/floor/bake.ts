@@ -16,7 +16,6 @@ import {
   DESK_DEPTH,
   DOOR_ARC,
   ORDERS,
-  PLATE_ZOOM,
   STATIONS,
   type Station,
   WALL_INNER,
@@ -242,16 +241,29 @@ export interface Baked {
   destroy: () => void;
 }
 
-/**
- * Draw the room into a texture.
- *
- * `scale` is how many device pixels one world unit is about to occupy, which sets how many
- * texels the texture needs. Capped at 3: past that the texture costs memory to hold detail no
- * display resolves.
- */
-export function bake(renderer: Renderer, scale: number, options: { painted?: boolean } = {}): Baked {
+export interface BakeOptions {
+  /**
+   * How many device pixels one world unit may come to occupy, which sets the texels. The stage
+   * passes what the *largest* zoom needs, so zooming in never outgrows the texture and never
+   * needs another bake. Capped at 3: past that the texture costs memory to hold detail no
+   * display resolves.
+   */
+  resolution: number;
+  /**
+   * Whether the station labels are drawn: the reader's zoom at or above `PLATE_ZOOM`, the same
+   * rule as the name plates (§8.3). Passed in rather than worked out here from `resolution`,
+   * which counts device pixels — the two answers disagreed on a 1× display, and every pan
+   * re-baked the room (DECISIONS 0022).
+   */
+  plates: boolean;
+  /** A painted floor lies underneath, so only lamps and labels are drawn (DECISIONS 0020). */
+  painted?: boolean;
+}
+
+/** Draw the room into a texture. */
+export function bake(renderer: Renderer, options: BakeOptions): Baked {
   const p = palette();
-  const plates = scale >= PLATE_ZOOM;
+  const { plates } = options;
 
   const room = new Container();
   const g = new Graphics();
@@ -274,7 +286,7 @@ export function bake(renderer: Renderer, scale: number, options: { painted?: boo
   // Below 0.9× the labels are illegible anyway, and drawing them turns the plan into a smear.
   if (plates) drawLabels(room, p);
 
-  const resolution = Math.max(1, Math.min(3, scale));
+  const resolution = Math.max(1, Math.min(3, options.resolution));
   const texture = RenderTexture.create({ width: WORLD, height: WORLD, resolution, antialias: true });
   renderer.render({ container: room, target: texture, clear: true });
   room.destroy({ children: true });

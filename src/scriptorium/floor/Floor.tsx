@@ -224,6 +224,7 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
       element.dataset["fps"] = String(Math.round(s.fps));
       element.dataset["frames"] = String(s.frames);
       element.dataset["running"] = s.running ? "true" : "false";
+      element.dataset["bakes"] = String(s.bakes);
     };
     write();
     const timer = setInterval(write, 250);

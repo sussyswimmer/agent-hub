@@ -217,6 +217,39 @@ test("a hidden floor renders nothing at all", async ({ page }) => {
   await expect.poll(async () => Number(await stats.getAttribute("data-frames"))).toBeGreaterThan(stopped);
 });
 
+test("panning and zooming inside a band does not redraw the room", async ({ page }) => {
+  // §8.6: the baked layer is re-made on a resize, or when the zoom crosses 0.9× where the labels
+  // come and go — never on a pan. At one device pixel per CSS pixel the stage and the bake
+  // disagreed about which side of 0.9 the floor was on, so every drag and every wheel notch
+  // re-drew the whole plan. This runner is 1×, which is the case Retina hid (DECISIONS 0022).
+  await openFloor(page);
+  const stats = page.getByTestId("floor-stats");
+  const bakes = async () => Number(await stats.getAttribute("data-bakes"));
+  await expect.poll(bakes).toBeGreaterThan(0);
+  await page.waitForTimeout(600); // the first resize lands after mount
+  const settled = await bakes();
+
+  const box = (await page.getByTestId("floor-canvas").boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height * 0.3;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(x + i * 12, y + i * 6);
+  await page.mouse.up();
+  // In, then back out to where it began, never below 0.9×: exp(60/400) a notch.
+  for (let i = 0; i < 3; i++) await page.mouse.wheel(0, -60);
+  for (let i = 0; i < 3; i++) await page.mouse.wheel(0, 60);
+  await page.waitForTimeout(600); // the readout is written every 250ms
+  expect(await bakes()).toBe(settled);
+
+  // Crossing 0.9× is the one zoom that re-draws it, and it does so once.
+  await page.mouse.wheel(0, 120);
+  await expect.poll(bakes).toBe(settled + 1);
+  await page.mouse.wheel(0, 60);
+  await page.waitForTimeout(600);
+  expect(await bakes()).toBe(settled + 1);
+});
+
 test("twelve familiars, five of them working, keeps drawing", async ({ page }) => {
   // §10 sets the budget at twelve familiars with five working, at 60fps. **That number cannot
   // honestly be taken here**: this runner has no GPU, WebGL falls back to a software

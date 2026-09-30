@@ -17,7 +17,7 @@ import { Application, Container, Sprite, type Renderer, type Texture, Ticker } f
 import "pixi.js/unsafe-eval";
 
 import { type Baked, bake } from "./bake";
-import { CENTRE, WORLD } from "./plan";
+import { CENTRE, PLATE_ZOOM, WORLD } from "./plan";
 
 export const MIN_ZOOM = 0.6;
 export const MAX_ZOOM = 2.0;
@@ -51,8 +51,12 @@ export interface Stage {
    * With one in place the bake draws only what the painting cannot know: lamps and labels.
    */
   setBackdrop(texture: Texture | null): void;
-  /** Frames actually rendered, and the ticker's own reading. §10 asks for its number, not a feel. */
-  stats: { frames: number; fps: number; running: boolean };
+  /**
+   * Frames actually rendered, and the ticker's own reading. §10 asks for its number, not a feel.
+   * `bakes` counts how many times the room has been drawn into its texture, which §8.6 allows
+   * only on a resize or when the zoom crosses 0.9×.
+   */
+  stats: { frames: number; fps: number; running: boolean; bakes: number };
   destroy(): void;
 }
 
@@ -113,17 +117,27 @@ export async function createStage(host: HTMLElement): Promise<Stage> {
    * §8.6 allows two reasons: the viewport changed size, so the texture wants a different number
    * of texels; or the zoom crossed 0.9×, where the station labels come and go. Re-baking on
    * every zoom step would mean a full vector re-draw per wheel notch.
+   *
+   * Which side of 0.9× is decided here, once, and handed to the bake — so the question asked
+   * before baking and the answer recorded after it are the same question. And the texture is
+   * sized for the largest zoom rather than the current one, because a zoom that stays inside
+   * its band gets no new bake and would otherwise be magnifying one made for a smaller view.
    */
   function rebake(force = false) {
-    const plates = view.zoom >= 0.9;
+    const plates = view.zoom >= PLATE_ZOOM;
     if (!force && baked && baked.plates === plates) return;
     baked?.destroy();
-    baked = bake(app.renderer, scale() * (globalThis.devicePixelRatio || 1), { painted: backdrop.visible });
+    baked = bake(app.renderer, {
+      resolution: fit() * MAX_ZOOM * (globalThis.devicePixelRatio || 1),
+      plates,
+      painted: backdrop.visible,
+    });
+    stats.bakes++;
     floor.texture = baked.texture;
     floor.setSize(WORLD, WORLD);
   }
 
-  const stats = { frames: 0, fps: 0, running: false };
+  const stats = { frames: 0, fps: 0, running: false, bakes: 0 };
   app.ticker.add(() => {
     stats.frames++;
     stats.fps = app.ticker.FPS;
