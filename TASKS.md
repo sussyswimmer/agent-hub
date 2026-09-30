@@ -721,4 +721,6 @@ painted fresh, and strolling near each familiar's own spot.
 - [ ] A real `claude` taking a pasted commission mid-session — the container's engine will not
       run interactively. Try it on the Mac: give a summoned familiar a second commission
 
-**Next.** The release: 1.0.3 is drafted from before any of this. These changes want a 1.0.4.
+**Release.** 1.0.3 was drafted from before any of this and never published, so this is 1.0.4:
+version bumped in all three places, `.github/release-notes/v1.0.4.md` carries 1.0.3's changes
+too for anyone on 1.0.2, and the README's download links point at v1.0.4.
