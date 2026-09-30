@@ -568,7 +568,7 @@ and the four faults behind them, three of which only the binary could show.
 - [x] `cargo test --workspace` compiles again: three test fixtures had been missing the
       `archivist` field since a6642e9, so no Rust test had run since
 - [x] `bun run bindings:check` clean: `BindingFrontmatter.ts` regenerated for the archivist's doc comment
-- [ ] CLAUDE.md §1 still reads "do not vendor art assets" — the owner's to amend, not mine
+- [x] CLAUDE.md §1 amended at the owner's request: Higgsfield art is the owner's, under five rules
 - [ ] The week of use on a Mac (§10 Phase 9). Blocked on the owner's machine, as before
 
 **Higgsfield spend.** 11 generations, 19 credits (698.53 before, 679.53 after): five sprites,
@@ -598,8 +598,11 @@ At the end of this pass: 238 Rust tests (5 ignored, needing a live engine), 41 u
 Playwright tests, clippy clean, typecheck clean, `bun run licences` and `bun run bindings:check`
 leaving no diff, and the debug binary opening on the painted floor under `Xvfb`.
 
-**Found and not fixed here.** `stage.ts` decides whether the baked layer is stale from the zoom,
-while `bake.ts` decides whether it carries labels from zoom × device pixels. On a 1× display
-where the room fits below 0.9, the two never agree, and every pan and wheel step re-bakes the
-whole plan. §8.6 asks for a re-bake only on resize or on crossing 0.9×. Retina hides it.
+**Fixed at the owner's request: the floor re-baked on every pan at 1×.** `stage.ts` judged the
+baked layer stale from the zoom, while `bake.ts` judged its labels from zoom × device pixels; on
+a 1× display the two never agreed, and one drag and six wheel notches cost 13 to 15 full
+re-bakes. The stage now decides the label band and hands it over, and the texture is sized for
+the largest zoom so a zoom inside its band stays sharp without another bake. The test counts
+bakes and failed on the old stage. Station labels now show at the default zoom on 1× displays,
+as §8.3 says. DECISIONS 0022.
 

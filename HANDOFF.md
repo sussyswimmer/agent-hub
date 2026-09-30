@@ -14,7 +14,7 @@ releases on top. Nothing has been merged into a default branch.
 | File | What it is | Why you need it |
 | --- | --- | --- |
 | `CLAUDE.md` | The specification | §1 (originality and licensing) and §11 (security) are binding constraints, not suggestions. §10 is the phase order. |
-| `DECISIONS.md` | Twenty-one entries | Every place the code diverges from the spec, and why. Do not re-litigate one without reading it. |
+| `DECISIONS.md` | Twenty-two entries | Every place the code diverges from the spec, and why. Do not re-litigate one without reading it. |
 | `TASKS.md` | Session log, per phase | What was verified by hand and what could not be. The "Blocked here — needs the Mac" table at the end is the honest list. |
 | `README.md` | For the owner, not for you | "Running it" and "What to distrust". |
 
@@ -128,9 +128,10 @@ here** — the pattern matches your own wrapper shell and kills it (exit 144). U
 1. **Phase 9 — the week of use.** Install the `.dmg` to `/Applications`, use it for a week without
    the dev server, and log in `TASKS.md` which parts of the floor were looked at and which never
    were. Blocked on the owner's Mac. Everything in §8 of this file is the list of what to watch.
-2. **New art goes through Higgsfield** (the owner's instruction, DECISIONS 0020). Give it only this
-   repository's images as references, write its row in `src/assets/higgsfield/PROVENANCE.md`
-   before committing it, and keep a drawn fallback: `floor/art.ts` is the pattern.
+2. **New art goes through Higgsfield**, under the five rules now in `CLAUDE.md` §1 (DECISIONS
+   0020). Give it only this repository's images as references, write its row in
+   `src/assets/higgsfield/PROVENANCE.md` in the same commit, and keep a drawn fallback:
+   `floor/art.ts` is the pattern.
 3. **The ward panel is per-familiar**, with no global list. §6.7 does not ask for one; with five
    familiars there is nowhere to see every schedule at once.
 

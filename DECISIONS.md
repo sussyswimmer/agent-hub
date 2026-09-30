@@ -377,6 +377,9 @@ wants more texels, and when the zoom crosses 0.9×, where the station labels com
 pixels a world unit is about to occupy, capped at 3. At a 1600-pixel-tall window that is a
 4.8k-square texture — about 90 MB — which is the cost of the decision and is paid once.
 
+**Amended 2026-09-30 (0022).** The resolution is now what the *largest* zoom needs, not the
+current one, and the stage — not the bake — decides which side of 0.9× the floor is on.
+
 ---
 
 ## 0012 — Pixi's `arc()` does not lift the pen
@@ -613,9 +616,9 @@ allowed none: 2.1 MB added in this change, beside the owner's 2.2 MB observatory
 (4.7 MB) went out in the same change, so the bundle is lighter than 1.0.2's. A reader can no longer check §1 by running
 `git status`; they check it by reading `PROVENANCE.md` against `git ls-files '*.png' '*.jpg'`.
 
-**CLAUDE.md §1 has not been edited.** It is the owner's specification; this entry records the
-owner's ruling beside it. §1 still reads "Do not vendor art assets", and should say this when
-the owner next edits it.
+**CLAUDE.md §1 says this now.** Amended 2026-09-30 at the owner's request: the four rules above
+are its five (the first, "Higgsfield only, on the owner's account", was implicit here and is
+stated there), with a line saying how to read the later sections that still say "drawn in code".
 
 ---
 
@@ -684,3 +687,36 @@ refused it opens drawn in code, every familiar still on it, and says what did no
 WebGL taken away it says why and its button puts the floor away. `assetUrl.test.ts` pins the
 URL the loader is given under `tauri://`. The CSP faults (1, 5) and the scheme fault (6) cannot
 be seen by a browser test here; each was seen, and seen fixed, in the binary.
+
+---
+
+## 0022 — The bake is sized for the largest zoom, and asked the same question it answers
+
+**Status:** accepted · **Concerns:** §8.3, §8.6 · **Found in:** the Phase 9 pass, at 1×
+
+**Context.** `stage.ts` decided whether the baked room was stale from the reader's zoom
+(`view.zoom >= 0.9`). `bake.ts` recorded whether it had drawn the labels from zoom × fit × device
+pixels. On a 1× display where the room fits below 0.9 — 1280×800 fits at about 0.76 — the two
+answers never agreed, so every `setView` re-baked the whole plan: every pointer move of a drag
+and every wheel notch. The test below counted 13 and 15 extra bakes for one drag and six
+notches. On Retina the device pixels pushed the bake's answer over 0.9 and the two happened to
+agree, which is why it was never seen. The same mismatch meant a 1× display never showed the
+station labels at the default zoom, which §8.3 asks for at 0.9× and above.
+
+Fixing only the question would have uncovered what the bug was hiding. The texture's resolution
+was taken from the zoom at the moment of baking; once a zoom inside its band stops re-baking,
+zooming in magnifies a texture made for a smaller view. On Retina that was already happening.
+
+**Decision.** `rebake` decides the label band once, from `view.zoom` against `PLATE_ZOOM`, and
+hands it to `bake`, which no longer works it out. The texture is sized for `MAX_ZOOM`: `fit ×
+MAX_ZOOM × devicePixelRatio`, capped at 3 as before. The room is drawn once per resize or band
+crossing, and is sharp at every zoom in between.
+
+**Consequence.** At 1280×800 the texture is about 1520² at 1× (9 MB) and 3000² at 2× (36 MB),
+inside the budget 0011 accepted. Station labels now appear at the default zoom on a 1× display.
+
+**Test.** `floor.spec.ts`, "panning and zooming inside a band does not redraw the room": a drag
+and a zoom in and out that stays above 0.9× leave `data-bakes` where it was, and crossing 0.9×
+adds exactly one. Against the old stage it failed, 4 bakes becoming 17 and 19. The count is
+`stage.stats.bakes`, written to the floor's readout beside the frame counter.
+
