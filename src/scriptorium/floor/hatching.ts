@@ -1,6 +1,6 @@
 // The hatch that fills the wall, drawn rather than fetched (§1: every visual is generated).
 //
-// A plan hatches a wall with close parallel strokes. Drawing every stroke of a 470-unit annulus
+// A plan hatches a wall with close parallel strokes. Drawing every stroke of the wall's annulus
 // as geometry is hundreds of lines for something that is, by construction, the same eight pixels
 // over and over — so it is one small tile, made once, and repeated.
 

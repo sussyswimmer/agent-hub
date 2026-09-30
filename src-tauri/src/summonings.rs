@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use grimoire_core::summon::{PtySession, PtySize, Spawn, resolve, scrubbed_env, stop, usage};
+use grimoire_core::summon::{PasteMode, PtySession, PtySize, Spawn, initial_prompt, keystrokes, resolve, scrubbed_env, stop, usage};
 use grimoire_core::types::Engine;
 use grimoire_core::seal::server::{Sessions, Summoned};
 use grimoire_core::{Db, commission, db as gdb, ledger};
@@ -66,6 +66,21 @@ fn emit(outlet: &Outlet, emission: Emission) {
     }
 }
 
+/// The commission a summoning has in hand.
+///
+/// A summoning outlives its commissions: marking one done leaves the familiar summoned, and the
+/// next in its queue is handed to the same engine. So the commission is held here, swappable,
+/// rather than fixed when the summoning started.
+#[derive(Clone)]
+struct InHand {
+    commission_id: String,
+    /// The engine session's usage when this commission was handed over. The transcript counts
+    /// the whole session, and each commission is metered from here (§6.5).
+    baseline: usage::Usage,
+    /// When it was handed over, for the minutes meter.
+    started: std::time::Instant,
+}
+
 /// A summoning the application is holding, plus what it is working on.
 struct Live {
     session: Arc<PtySession>,
@@ -73,25 +88,35 @@ struct Live {
     outlet: Outlet,
     /// The row in `summonings`, so the exit can be recorded against it.
     summoning_id: String,
-    /// The commission it is running, when it was started to do one.
-    commission_id: Option<String>,
+    /// The commission it is running, if any. Shared with the thread that watches the process,
+    /// which records what each commission cost.
+    work: Arc<Mutex<Option<InHand>>>,
     /// The session id we gave the engine, which is how its transcript is found (§6.5).
     engine_session: String,
     model: String,
     /// When a byte last came out of the pty. §6.5's stall detection is "no output *and* no token
     /// movement", and this is the first half.
     last_output: Arc<Mutex<std::time::Instant>>,
-    /// When the commission started, for the minutes meter.
-    started: std::time::Instant,
+    /// Whether the engine has bracketed paste on, which decides how a commission is typed in.
+    paste: Arc<Mutex<PasteMode>>,
     /// What the breaker has already done about this commission, so it does not do it twice.
     breaker: Arc<Mutex<grimoire_core::breaker::Done>>,
     /// Whether a stall has already been raised, so it is raised once and not every tick.
     stalled: Arc<Mutex<bool>>,
 }
 
+impl Live {
+    fn in_hand(&self) -> Option<InHand> {
+        self.work.lock().ok()?.clone()
+    }
+}
+
 /// Where one familiar's meters are read from.
 pub struct AetherSource {
     pub engine_session: String,
+    /// Subtract this from the transcript's reading: it is what the session had spent before
+    /// this commission was handed over.
+    pub baseline: usage::Usage,
     pub elapsed: std::time::Duration,
 }
 
@@ -101,6 +126,7 @@ pub struct Beat {
     pub commission_id: String,
     pub engine_session: String,
     pub model: String,
+    pub baseline: usage::Usage,
     pub started: std::time::Instant,
     pub quiet_for: std::time::Duration,
     pub done: grimoire_core::breaker::Done,
@@ -176,9 +202,16 @@ impl Summonings {
             }
         }
 
+        // The commission is the engine's first message (summon::handover). Last on the line,
+        // after `--`, so nothing in it can be read as an option.
+        if let Some(c) = &commission {
+            args.extend(initial_prompt(&c.prompt));
+        }
+
         let outlet: Outlet = Arc::new(Mutex::new(Some(channel)));
         let out = Arc::clone(&outlet);
         let last_output = Arc::new(Mutex::new(std::time::Instant::now()));
+        let paste = Arc::new(Mutex::new(PasteMode::default()));
         let session = PtySession::spawn(
             Spawn {
                 program: resolved.path().to_path_buf(),
@@ -191,9 +224,13 @@ impl Summonings {
             // having gone, and a closed window is not a reason to tear down the familiar.
             {
                 let seen = Arc::clone(&last_output);
+                let paste = Arc::clone(&paste);
                 Arc::new(move |bytes| {
                     if let Ok(mut at) = seen.lock() {
                         *at = std::time::Instant::now();
+                    }
+                    if let Ok(mut mode) = paste.lock() {
+                        mode.feed(&bytes);
                     }
                     emit(&out, Emission::Output { bytes });
                 })
@@ -229,6 +266,11 @@ impl Summonings {
         {
             tracing::warn!(error = %e, "could not mark the commission running");
         }
+        let work = Arc::new(Mutex::new(commission_id.clone().map(|commission_id| InHand {
+            commission_id,
+            baseline: usage::Usage::default(),
+            started: std::time::Instant::now(),
+        })));
 
         // Tell the seal whose session this is, and what it is allowed to do, before the engine
         // has had a chance to call a single tool.
@@ -253,11 +295,11 @@ impl Summonings {
                 session: Arc::clone(&session),
                 outlet: Arc::clone(&outlet),
                 summoning_id: summoning_id.clone(),
-                commission_id: commission_id.clone(),
+                work: Arc::clone(&work),
                 engine_session: engine_session.clone(),
                 model: model.clone(),
                 last_output: Arc::clone(&last_output),
-                started: std::time::Instant::now(),
+                paste,
                 breaker: Arc::default(),
                 stalled: Arc::default(),
             },
@@ -273,7 +315,7 @@ impl Summonings {
         // nothing caught it. Polling releases the lock between looks.
         let watch_outlet = Arc::clone(&outlet);
         let watch_db = db.clone();
-        let watch_commission = commission_id.clone();
+        let watch_work = Arc::clone(&work);
         let watch_session = engine_session.clone();
         let watch_model = model.clone();
         std::thread::spawn(move || {
@@ -297,7 +339,8 @@ impl Summonings {
                 // numbers come from the engine's own transcript, not from the terminal (§6.5).
                 ticks += 1;
                 if ticks.is_multiple_of(20) {
-                    record_usage(&watch_db, watch_commission.as_deref(), &watch_session, &watch_model);
+                    let held = watch_work.lock().ok().and_then(|w| w.clone());
+                    record_usage(&watch_db, held.as_ref(), &watch_session, &watch_model);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
@@ -309,7 +352,8 @@ impl Summonings {
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
             // The transcript is complete now, so this is the figure that stands.
-            record_usage(&watch_db, watch_commission.as_deref(), &watch_session, &watch_model);
+            let held = watch_work.lock().ok().and_then(|w| w.clone());
+            record_usage(&watch_db, held.as_ref(), &watch_session, &watch_model);
             emit(&watch_outlet, Emission::Ended { code });
         });
 
@@ -344,8 +388,12 @@ impl Summonings {
         let l = live.get(familiar_id)?;
         // A summoning with no commission has nothing to meter: §6.5 budgets a commission, not a
         // familiar, and a terminal someone is simply typing into is not spending a budget.
-        l.commission_id.as_ref()?;
-        Some(AetherSource { engine_session: l.engine_session.clone(), elapsed: l.started.elapsed() })
+        let held = l.in_hand()?;
+        Some(AetherSource {
+            engine_session: l.engine_session.clone(),
+            baseline: held.baseline,
+            elapsed: held.started.elapsed(),
+        })
     }
 
     /// Every live summoning that is running a commission, as the heartbeat needs to see it.
@@ -357,7 +405,7 @@ impl Summonings {
         let Ok(live) = self.live.lock() else { return Vec::new() };
         live.iter()
             .filter_map(|(familiar_id, l)| {
-                let commission_id = l.commission_id.clone()?;
+                let held = l.in_hand()?;
                 let quiet_for = l
                     .last_output
                     .lock()
@@ -366,10 +414,11 @@ impl Summonings {
                     .unwrap_or_default();
                 Some(Beat {
                     familiar_id: familiar_id.clone(),
-                    commission_id,
+                    commission_id: held.commission_id,
                     engine_session: l.engine_session.clone(),
                     model: l.model.clone(),
-                    started: l.started,
+                    baseline: held.baseline,
+                    started: held.started,
                     quiet_for,
                     done: l.breaker.lock().map(|d| *d).unwrap_or_default(),
                     stall_raised: l.stalled.lock().map(|s| *s).unwrap_or(false),
@@ -400,7 +449,72 @@ impl Summonings {
 
     /// The commission this familiar is currently working on, if any.
     pub fn commission_of(&self, id: &str) -> Option<String> {
-        self.live.lock().ok()?.get(id)?.commission_id.clone()
+        Some(self.live.lock().ok()?.get(id)?.in_hand()?.commission_id)
+    }
+
+    /// Whether this familiar is summoned at all.
+    pub fn is_live(&self, id: &str) -> bool {
+        self.live.lock().is_ok_and(|m| m.contains_key(id))
+    }
+
+    /// Hand a queued commission to a familiar that is summoned and has nothing in hand.
+    ///
+    /// Types it into the engine as its next message (summon::handover) and marks it running
+    /// against this summoning. Metering starts from what the session had already spent, so the
+    /// new commission is not charged for the conversation before it.
+    pub fn hand_over(&self, db: &Db, id: &str, next: &commission::Commission) -> Result<(), String> {
+        let live = self.live.lock().map_err(poisoned)?;
+        let l = live.get(id).ok_or_else(|| format!("{id} is not summoned."))?;
+        let mut work = l.work.lock().map_err(poisoned)?;
+        if let Some(held) = work.as_ref() {
+            return Err(format!("{id} already has commission {} in hand.", held.commission_id));
+        }
+        commission::start(db, &next.id, &l.summoning_id).map_err(|e| e.to_string())?;
+        *work = Some(InHand {
+            commission_id: next.id.clone(),
+            baseline: usage::for_session(&l.engine_session).unwrap_or_default(),
+            started: std::time::Instant::now(),
+        });
+        drop(work);
+        if let Ok(mut d) = l.breaker.lock() {
+            *d = grimoire_core::breaker::Done::default();
+        }
+        if let Ok(mut s) = l.stalled.lock() {
+            *s = false;
+        }
+        // The seal scopes its questions and its "don't ask again" to the commission, so it has
+        // to know which one this session is on now (§6.4).
+        if let Ok(mut sessions) = self.sessions.lock()
+            && let Some(summoned) = sessions.get_mut(&l.engine_session)
+        {
+            summoned.commission_id = Some(next.id.clone());
+        }
+
+        let bracketed = l.paste.lock().is_ok_and(|m| m.on());
+        l.session.write(&keystrokes(&next.prompt, bracketed)).map_err(|e| e.to_string())?;
+        // Enter a moment later, on its own: in the same read as a paste it can be taken as part
+        // of the paste rather than as the key that submits it.
+        let session = Arc::clone(&l.session);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let _ = session.write(b"\r");
+        });
+        Ok(())
+    }
+
+    /// Take the commission out of a familiar's hands, leaving it summoned. Records what it cost
+    /// and answers which one it was; the caller decides what it became.
+    pub fn release(&self, db: &Db, id: &str) -> Option<String> {
+        let live = self.live.lock().ok()?;
+        let l = live.get(id)?;
+        let held = l.work.lock().ok()?.take()?;
+        record_usage(db, Some(&held), &l.engine_session, &l.model);
+        if let Ok(mut sessions) = self.sessions.lock()
+            && let Some(summoned) = sessions.get_mut(&l.engine_session)
+        {
+            summoned.commission_id = None;
+        }
+        Some(held.commission_id)
     }
 
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
@@ -427,20 +541,21 @@ impl Summonings {
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.remove(&live.engine_session);
         }
-        record_usage(db, live.commission_id.as_deref(), &live.engine_session, &live.model);
+        let held = live.in_hand();
+        record_usage(db, held.as_ref(), &live.engine_session, &live.model);
         let _ = gdb::summonings::close(db, &live.summoning_id, reason);
         let _ = ledger::append(
             db,
             ledger::EventKind::Banished,
             Some(familiar_id),
-            live.commission_id.as_deref(),
+            held.as_ref().map(|h| h.commission_id.as_str()),
             serde_json::json!({ "reason": reason }),
         );
 
         // A commission whose familiar has gone is over. Banished rather than done: nobody said
         // the work finished, only that it stopped, and recording it as done would be a claim
         // the application is in no position to make.
-        if let Some(cid) = &live.commission_id
+        if let Some(cid) = held.as_ref().map(|h| &h.commission_id)
             && let Ok(Some(c)) = commission::get(db, cid)
             && c.status.is_live()
         {
@@ -483,9 +598,10 @@ impl Summonings {
 /// Silent when there is nothing to read: a summoning with no commission has nowhere to put the
 /// numbers, and a transcript that is not there yet simply has not been written. An absent figure
 /// is honest; a fabricated one is not.
-fn record_usage(db: &Db, commission_id: Option<&str>, engine_session: &str, model: &str) {
-    let Some(cid) = commission_id else { return };
-    let Some(u) = usage::for_session(engine_session) else { return };
+fn record_usage(db: &Db, held: Option<&InHand>, engine_session: &str, model: &str) {
+    let Some(held) = held else { return };
+    let cid = held.commission_id.as_str();
+    let Some(u) = usage::for_session(engine_session).map(|u| u.since(held.baseline)) else { return };
     if u.turns == 0 {
         return;
     }
@@ -566,4 +682,137 @@ fn getrandom_bytes(out: &mut [u8]) {
 
 fn poisoned<T>(_: T) -> String {
     "The summonings table was left in a broken state by an earlier panic. Restart Grimoire.".into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::{Duration, Instant};
+
+    use grimoire_core::db::familiars;
+
+    /// An engine that is not one. It prints each argument it was given on a line of its own,
+    /// turns bracketed paste on the way `claude` does, and then echoes whatever it is typed.
+    fn stand_in(dir: &std::path::Path) -> std::path::PathBuf {
+        let path = dir.join("claude");
+        std::fs::write(
+            &path,
+            "#!/bin/sh\nfor a in \"$@\"; do printf 'ARG[%s]\\n' \"$a\"; done\nprintf '\\033[?2004h'\nexec cat\n",
+        )
+        .expect("write the stand-in");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        path
+    }
+
+    /// Everything the terminal was sent, as text.
+    fn collector() -> (Channel<Emission>, Arc<Mutex<Vec<u8>>>) {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let into = Arc::clone(&seen);
+        let channel = Channel::new(move |body| {
+            let json = match body {
+                tauri::ipc::InvokeResponseBody::Json(s) => s,
+                tauri::ipc::InvokeResponseBody::Raw(b) => String::from_utf8_lossy(&b).into_owned(),
+            };
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json)
+                && let Some(bytes) = v.get("bytes").and_then(|b| b.as_array())
+            {
+                into.lock().expect("lock").extend(bytes.iter().filter_map(|b| b.as_u64()).map(|b| b as u8));
+            }
+            Ok(())
+        });
+        (channel, seen)
+    }
+
+    fn until(seen: &Arc<Mutex<Vec<u8>>>, needle: &str) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            if String::from_utf8_lossy(&seen.lock().expect("lock")).contains(needle) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        false
+    }
+
+    #[test]
+    fn a_summoning_is_given_its_commission_and_then_the_next_one() {
+        let tmp = tempfile::tempdir().expect("tmp");
+        let engine = stand_in(tmp.path());
+        let db = Db::memory().expect("db");
+        familiars::upsert(&db, "vellum", "Vellum", "quill", "/b/vellum.binding.md", "writ").expect("familiar");
+        let first = commission::create(&db, "vellum", "-v Tighten the opening.", &serde_json::json!({})).expect("first");
+
+        let seal = Seal {
+            familiar_name: "Vellum".into(),
+            autonomy: Default::default(),
+            bounds: Default::default(),
+            socket: tmp.path().join("seal.sock"),
+            settings_dir: tmp.path().join("summon"),
+            archivist: false,
+        };
+        let (channel, seen) = collector();
+        let summonings = Summonings::default();
+        summonings
+            .summon(
+                &db,
+                SummonArgs {
+                    id: "vellum".into(),
+                    engine: Engine::Claude,
+                    args: Vec::new(),
+                    cwd: tmp.path().display().to_string(),
+                    cols: 120,
+                    rows: 40,
+                    model: None,
+                },
+                Some(engine.display().to_string()),
+                tmp.path().to_path_buf(),
+                &seal,
+                channel,
+            )
+            .expect("summon");
+
+        // The first commission is the engine's first message: the last argument, after `--`, so
+        // its leading dash is not an option.
+        assert!(until(&seen, "ARG[-v Tighten the opening.]"), "the commission never reached the engine");
+        let out = String::from_utf8_lossy(&seen.lock().expect("lock")).into_owned();
+        let dash = out.find("ARG[--]").expect("no `--` before the commission");
+        assert!(dash < out.find("ARG[-v Tighten").expect("commission"));
+        assert_eq!(commission::get(&db, &first.id).expect("get").expect("row").status, commission::Status::Running);
+        assert_eq!(summonings.commission_of("vellum").as_deref(), Some(first.id.as_str()));
+
+        // Busy: a second commission waits, and handing it over is refused rather than doubled up.
+        let second = commission::create(&db, "vellum", "Now cut it by a third.\nKeep the ending.", &serde_json::json!({}))
+            .expect("second");
+        assert!(summonings.hand_over(&db, "vellum", &second).is_err(), "handed a busy familiar a second commission");
+
+        // Done: out of its hands, and the next is typed into the same engine, as one paste —
+        // once the engine has said it takes pastes, which a real one does as it starts.
+        assert!(until(&seen, "\u{1b}[?2004h"), "the stand-in never turned bracketed paste on");
+        assert_eq!(summonings.release(&db, "vellum").as_deref(), Some(first.id.as_str()));
+        commission::finish(&db, &first.id, commission::Status::Done, None).expect("finish");
+        let next = commission::next_to_run(&db, "vellum").expect("next").expect("queued");
+        assert_eq!(next.id, second.id);
+        summonings.hand_over(&db, "vellum", &next).expect("hand over");
+        assert!(until(&seen, "Keep the ending."), "the next commission was not typed in");
+        // The terminal only hands a line to the program behind it once Enter is pressed, so the
+        // text coming back a second time — the echo, then the stand-in's own copy — is the proof
+        // that Enter was sent after the paste.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while String::from_utf8_lossy(&seen.lock().expect("lock")).matches("Keep the ending.").count() < 2
+            && Instant::now() < deadline
+        {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let out = String::from_utf8_lossy(&seen.lock().expect("lock")).into_owned();
+        assert!(out.matches("Keep the ending.").count() >= 2, "no Enter after the commission:\n{out}");
+        assert!(out.contains("[200~"), "the engine asked for bracketed paste and did not get it:\n{out:?}");
+        assert_eq!(commission::get(&db, &second.id).expect("get").expect("row").status, commission::Status::Running);
+        assert_eq!(summonings.commission_of("vellum").as_deref(), Some(second.id.as_str()));
+
+        summonings.banish(&db, "vellum").expect("banish");
+        // Banishing ends the commission in hand as banished, and leaves the finished one alone.
+        assert_eq!(commission::get(&db, &second.id).expect("get").expect("row").status, commission::Status::Banished);
+        assert_eq!(commission::get(&db, &first.id).expect("get").expect("row").status, commission::Status::Done);
+    }
 }

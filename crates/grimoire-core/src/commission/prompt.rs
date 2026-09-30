@@ -53,6 +53,48 @@ pub fn fill(template: &str, answers: &BTreeMap<String, String>) -> (String, Vec<
     (out, missing)
 }
 
+/// What a familiar is actually given for a commission: the prompt with its placeholders filled,
+/// followed by every answer the prompt did not already place, one line each, in the order the
+/// binding asks them.
+///
+/// A person typing a task writes a sentence, not `{{intake.piece}}`. Before this, the answers to
+/// a binding's own questions were stored beside the commission and never sent anywhere, so
+/// "Which piece are we working on?" was asked, answered, and lost. `asked` is the binding's
+/// intake as `(id, question)`; answers to anything it does not ask are not sent.
+///
+/// Returns the text and, as [`fill`] does, the placeholders nothing answered.
+pub fn brief(template: &str, answers: &BTreeMap<String, String>, asked: &[(String, String)]) -> (String, Vec<String>) {
+    let (mut text, missing) = fill(template, answers);
+    let placed = placeholders(template);
+    let extra: Vec<String> = asked
+        .iter()
+        .filter(|(id, _)| !placed.contains(id))
+        .filter_map(|(id, question)| {
+            let answer = answers.get(id)?.trim();
+            if answer.is_empty() {
+                return None;
+            }
+            let question = question.trim();
+            // "Which piece?" reads on into its answer; a bare label needs a colon to.
+            let joined = if question.ends_with(['?', ':', '.']) {
+                format!("{question} {answer}")
+            } else {
+                format!("{question}: {answer}")
+            };
+            Some(joined)
+        })
+        .collect();
+    if !extra.is_empty() {
+        let trimmed = text.trim_end().len();
+        text.truncate(trimmed);
+        if !text.is_empty() {
+            text.push_str("\n\n");
+        }
+        text.push_str(&extra.join("\n"));
+    }
+    (text, missing)
+}
+
 /// Which placeholders a template uses. Lets the interface check a commission against its
 /// binding's intake before anything is dispatched.
 pub fn placeholders(template: &str) -> Vec<String> {
@@ -81,6 +123,54 @@ mod tests {
 
     fn answers(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    fn asked(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn answers_the_prompt_does_not_place_are_sent_after_it() {
+        let (out, missing) = brief(
+            "Tighten the opening.",
+            &answers(&[("piece", "the swimming essay"), ("mode", "line edit")]),
+            &asked(&[("piece", "Which piece are we working on?"), ("mode", "What kind of pass?")]),
+        );
+        assert_eq!(
+            out,
+            "Tighten the opening.\n\nWhich piece are we working on? the swimming essay\nWhat kind of pass? line edit"
+        );
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn an_answer_the_prompt_already_placed_is_not_repeated() {
+        let (out, _) = brief(
+            "Edit {{intake.piece}}.",
+            &answers(&[("piece", "the essay"), ("mode", "structural")]),
+            &asked(&[("piece", "Which piece?"), ("mode", "What kind of pass?")]),
+        );
+        assert_eq!(out, "Edit the essay.\n\nWhat kind of pass? structural");
+    }
+
+    #[test]
+    fn blank_and_unasked_answers_are_not_sent() {
+        let (out, _) = brief(
+            "Go.",
+            &answers(&[("audience", "  "), ("stray", "not a question anyone asked")]),
+            &asked(&[("audience", "Who reads it?")]),
+        );
+        assert_eq!(out, "Go.");
+    }
+
+    #[test]
+    fn a_label_without_punctuation_gets_a_colon_and_order_follows_the_binding() {
+        let (out, _) = brief(
+            "",
+            &answers(&[("b", "two"), ("a", "one")]),
+            &asked(&[("a", "First"), ("b", "Second?")]),
+        );
+        assert_eq!(out, "First: one\nSecond? two");
     }
 
     #[test]

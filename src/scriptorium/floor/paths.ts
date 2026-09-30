@@ -12,15 +12,16 @@
 // across it would say something untrue every time.
 
 import {
+  BEFORE_FURNITURE,
   CENTRE,
   CONCOURSE_RADIUS,
-  DESK_DEPTH,
-  DESK_RADIUS,
+  HEARTH_ARC,
   type Point,
   STATIONS,
   type Station,
   WALL_INNER,
   at,
+  deskInboard,
   distance,
   station,
 } from "./plan";
@@ -37,13 +38,15 @@ interface Node {
 export function approach(s: Station): Point {
   switch (s.kind) {
     case "desk":
-      return at(s.bearing, DESK_RADIUS - DESK_DEPTH / 2 - 34);
+      return at(s.bearing, deskInboard(s));
     case "ward":
       return CENTRE;
     case "door":
-      return at(0, WALL_INNER - 46);
+      return at(0, WALL_INNER - 50);
+    case "hearth":
+      return at(s.bearing, HEARTH_ARC);
     default:
-      return at(s.bearing, 358);
+      return at(s.bearing, distance(s.at, CENTRE) - BEFORE_FURNITURE);
   }
 }
 

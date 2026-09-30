@@ -3,10 +3,11 @@
 // None of this moves. Re-drawing a few hundred vector operations every frame to produce an
 // identical image is the easiest 60fps to give away, so it is drawn once and blitted.
 //
-// **Baked in world space, not screen space.** The texture covers the 1000 × 1000 room and lives
-// inside the container that pans and zooms, so panning and zooming cost nothing and change
-// nothing. It is re-made only when the window resizes — where a larger viewport wants more
-// texels — or when the zoom crosses 0.9×, where the station labels come and go (§8.3).
+// **Baked in world space, not screen space.** The texture covers the whole room, `WORLD` units
+// square, and lives inside the container that pans and zooms, so panning and zooming cost
+// nothing and change nothing. It is re-made only when the window resizes — where a larger
+// viewport wants more texels — or when the zoom crosses 0.9×, where the station labels come and
+// go (§8.3).
 
 import { Container, Graphics, type Renderer, RenderTexture, Text } from "pixi.js";
 
@@ -25,6 +26,7 @@ import {
   at,
   deskCorners,
   deskLamp,
+  distance,
   station,
 } from "./plan";
 
@@ -174,9 +176,10 @@ function drawFurniture(g: Graphics, p: Palette) {
   g.poly([ca.x, ca.y, cb.x, cb.y, cc.x, cc.y, cd.x, cd.y])
     .fill({ color: p.panel })
     .stroke({ width: 1.6, color: p.ink, alpha: 0.5 });
-  for (const bearing of [cabinet.bearing - 8, cabinet.bearing + 8]) {
-    const a = at(bearing, 380);
-    const b = at(bearing, 330);
+  const cr = distance(cabinet.at, CENTRE);
+  for (const bearing of [cabinet.bearing - 6, cabinet.bearing + 6]) {
+    const a = at(bearing, cr - 24);
+    const b = at(bearing, cr - 74);
     g.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: 1.2, color: p.ink, alpha: 0.35 });
   }
 
@@ -188,17 +191,19 @@ function drawFurniture(g: Graphics, p: Palette) {
     .stroke({ width: 1.6, color: p.ink, alpha: 0.5 });
   // The open book on it. Bounded by the lectern's own length — set out by bearing it ran on
   // past both ends of the furniture it is supposed to be lying on.
-  const spine = [at(lectern.bearing - 8, 404), at(lectern.bearing + 8, 404)];
+  const r = distance(lectern.at, CENTRE);
+  const spine = [at(lectern.bearing - 5, r), at(lectern.bearing + 5, r)];
   g.moveTo(spine[0]!.x, spine[0]!.y).lineTo(spine[1]!.x, spine[1]!.y).stroke({ width: 1.2, color: p.bone, alpha: 0.45 });
 
   // The hearth, south: a recess in the wall with a fire back.
   const hearth = station("hearth");
-  arcAt(g, CENTRE, 432, hearth.bearing - 22, hearth.bearing + 22).stroke({ width: 26, color: p.panel });
-  arcAt(g, CENTRE, 419, hearth.bearing - 22, hearth.bearing + 22)
+  const hr = distance(hearth.at, CENTRE);
+  arcAt(g, CENTRE, hr + 28, hearth.bearing - 12, hearth.bearing + 12).stroke({ width: 26, color: p.panel });
+  arcAt(g, CENTRE, hr + 15, hearth.bearing - 12, hearth.bearing + 12)
     .stroke({ width: 1.6, color: p.ink, alpha: 0.5 });
-  for (const bearing of [hearth.bearing - 22, hearth.bearing + 22]) {
-    const a = at(bearing, 419);
-    const b = at(bearing, 445);
+  for (const bearing of [hearth.bearing - 12, hearth.bearing + 12]) {
+    const a = at(bearing, hr + 15);
+    const b = at(bearing, hr + 41);
     g.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: 1.6, color: p.ink, alpha: 0.5 });
   }
 }
@@ -210,11 +215,11 @@ function drawLabels(into: Container, p: Palette) {
       text: s.label,
       style: {
         fontFamily: "EB Garamond, Georgia, serif",
-        fontSize: 17,
+        fontSize: 26,
         fill: p.boneDim,
         letterSpacing: 0.4,
         // Outlined in the void, as the name plates are, so a label reads on the painted floor.
-        stroke: { color: p.void, width: 4, join: "round" },
+        stroke: { color: p.void, width: 5, join: "round" },
       },
     });
     label.anchor.set(0.5);
@@ -223,16 +228,17 @@ function drawLabels(into: Container, p: Palette) {
     // Set beside what it names, pushed off the centre line so it never sits under a sigil.
     const where =
       s.kind === "desk"
-        ? at(s.bearing, DESK_RADIUS_LABEL)
+        ? at(s.bearing, distance(s.at, CENTRE) + DESK_DEPTH / 2 + 30)
         : s.kind === "ward"
           ? at(180, WARD_RADIUS + 22)
-          : at(s.bearing, 446);
+          : s.kind === "door"
+            ? at(s.bearing, WALL_INNER - 30)
+            : at(s.bearing, Math.min(WALL_INNER - 14, distance(s.at, CENTRE) + 42));
     label.position.set(where.x, where.y);
     into.addChild(label);
   }
 }
 
-const DESK_RADIUS_LABEL = 300 + DESK_DEPTH / 2 + 30;
 
 export interface Baked {
   texture: RenderTexture;
@@ -260,6 +266,8 @@ export interface BakeOptions {
   painted?: boolean;
 }
 
+const MAX_TEXELS = 4096;
+
 /** Draw the room into a texture. */
 export function bake(renderer: Renderer, options: BakeOptions): Baked {
   const p = palette();
@@ -286,7 +294,9 @@ export function bake(renderer: Renderer, options: BakeOptions): Baked {
   // Below 0.9× the labels are illegible anyway, and drawing them turns the plan into a smear.
   if (plates) drawLabels(room, p);
 
-  const resolution = Math.max(1, Math.min(3, options.resolution));
+  // And never past 4096 texels a side, which is the most some integrated GPUs will hold. At the
+  // old 1000-unit room the cap of 3 kept it to 3000; the bigger room would have asked for 4800.
+  const resolution = Math.max(1, Math.min(3, MAX_TEXELS / WORLD, options.resolution));
   const texture = RenderTexture.create({ width: WORLD, height: WORLD, resolution, antialias: true });
   renderer.render({ container: room, target: texture, clear: true });
   room.destroy({ children: true });

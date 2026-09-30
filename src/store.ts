@@ -3,13 +3,21 @@ import { create } from "zustand";
 import { backend } from "./lib/ipc";
 import type { Aether, FamiliarSummary, HomeInfo, Tab } from "./lib/types";
 
-type View = "familiar" | "ledger" | "seals" | "workbench";
+type View = "familiar" | "ledger" | "seals" | "workbench" | "help";
 
 interface State {
   ready: boolean;
   kind: "tauri" | "mock" | null;
   home: HomeInfo | null;
   familiars: FamiliarSummary[];
+  /**
+   * Which familiars have a summoning running, asked of the backend on the roster's tick.
+   *
+   * Not read off `state`: a familiar whose last commission was banished and one that is summoned
+   * and idle can both be at their desks, and "can I talk to it" is a different question from
+   * "where does it stand".
+   */
+  live: ReadonlySet<string>;
   selected: string | null;
   tab: Tab;
   /**
@@ -49,6 +57,26 @@ interface State {
    */
   commissionsChanged: number;
   noteCommissionsChanged: () => void;
+  /**
+   * A familiar whose terminal should summon it as soon as it opens.
+   *
+   * Summoning belongs to the terminal: it is the thing the engine's output goes to, and output
+   * sent before a terminal is listening is gone. So "Start" on the commission tab does not
+   * summon; it asks for a summon and opens the terminal, and the terminal does it.
+   */
+  summonOnOpen: string | null;
+  /**
+   * Which step of the guided tour is showing, or null when it is not. The tour opens by itself
+   * once, on the first launch with familiars in the rail, and from "How it works" after that.
+   */
+  tour: number | null;
+  setTour: (step: number | null) => void;
+  /** Close the tour and remember that it has been seen. */
+  endTour: () => void;
+  /** Ask for a summon, and open the terminal that will do it. */
+  summonAndWatch: (id: string) => void;
+  /** Take the request if it is for this familiar. True once, then false. */
+  claimSummon: (id: string) => boolean;
   load: () => Promise<void>;
   /**
    * Re-read the roster, and set it only when something actually moved.
@@ -64,6 +92,16 @@ interface State {
 }
 
 const FLOOR_KEY = "grimoire.floor";
+const TOUR_KEY = "grimoire.tour";
+
+/** Whether the guided tour has been seen (or skipped) in this window before. */
+export function tourSeen(): boolean {
+  try {
+    return localStorage.getItem(TOUR_KEY) === "seen";
+  } catch {
+    return true;
+  }
+}
 
 function readFloorPreference(): boolean {
   try {
@@ -78,6 +116,7 @@ export const useStore = create<State>((set, get) => ({
   kind: null,
   home: null,
   familiars: [],
+  live: new Set(),
   selected: null,
   tab: "commission",
   aether: new Map(),
@@ -87,6 +126,8 @@ export const useStore = create<State>((set, get) => ({
   floor: readFloorPreference(),
   sealCount: 0,
   commissionsChanged: 0,
+  summonOnOpen: null,
+  tour: null,
 
   load: async () => {
     try {
@@ -105,6 +146,7 @@ export const useStore = create<State>((set, get) => ({
           : (familiars[0]?.id ?? null);
       set({ ready: true, kind: be.kind, home, familiars, selected });
       void get().refreshAether();
+      void get().refreshRoster();
 
       // §4: an edit to a binding reaches the rail without a restart. Subscribed once, on the
       // first load, and left for the life of the window. The seal's count is watched the same
@@ -155,7 +197,9 @@ export const useStore = create<State>((set, get) => ({
   refreshRoster: async () => {
     try {
       const be = await backend();
-      const next = await be.listFamiliars();
+      const [next, ids] = await Promise.all([be.listFamiliars(), be.liveSummonings()]);
+      const was = get().live;
+      if (ids.length !== was.size || ids.some((id) => !was.has(id))) set({ live: new Set(ids) });
       const before = get().familiars;
       const same =
         before.length === next.length &&
@@ -205,7 +249,33 @@ export const useStore = create<State>((set, get) => ({
 
   setSealCount: (sealCount) => set({ sealCount }),
 
-  noteCommissionsChanged: () => set((s) => ({ commissionsChanged: s.commissionsChanged + 1 })),
+  noteCommissionsChanged: () => {
+    set((s) => ({ commissionsChanged: s.commissionsChanged + 1 }));
+    // Starting, finishing or queueing work moves the familiar on the floor and in the rail, so
+    // ask now rather than on the next slow tick.
+    void get().refreshRoster();
+  },
+
+  setTour: (tour) => set({ tour }),
+
+  endTour: () => {
+    set({ tour: null });
+    try {
+      localStorage.setItem(TOUR_KEY, "seen");
+    } catch {
+      // Storage blocked: the tour will offer itself again next launch, which is the lesser harm.
+    }
+  },
+
+  summonAndWatch: (id) => {
+    set({ summonOnOpen: id, tab: "terminal", view: "familiar", selected: id });
+  },
+
+  claimSummon: (id) => {
+    if (get().summonOnOpen !== id) return false;
+    set({ summonOnOpen: null });
+    return true;
+  },
 }));
 
 /** The selected familiar's meters, out of the one map everything else reads. */

@@ -26,6 +26,18 @@ pub struct Usage {
     pub turns: i64,
 }
 
+impl Usage {
+    /// What a session has used since `earlier`, a reading taken from the same session.
+    ///
+    /// A familiar that stays summoned can take one commission after another in the same engine
+    /// session, and the transcript counts the whole session. Each commission is metered from a
+    /// reading taken when it was handed over, so the second is not charged for the first (§6.5
+    /// budgets a commission, not a summoning).
+    pub fn since(self, earlier: Usage) -> Usage {
+        Usage { tokens: self.tokens.since(earlier.tokens), turns: (self.turns - earlier.turns).max(0) }
+    }
+}
+
 /// Where `claude` keeps its transcripts. One directory per working directory, named after it.
 fn projects_dir() -> Option<PathBuf> {
     std::env::home_dir().map(|h| h.join(".claude").join("projects"))
@@ -102,6 +114,20 @@ mod tests {
         let p = dir.join(name);
         std::fs::write(&p, body).expect("write");
         p
+    }
+
+    #[test]
+    fn a_later_commission_is_metered_from_its_own_start() {
+        let tmp = tempfile::tempdir().expect("tmp");
+        let whole = read_transcript(&write(tmp.path(), "s.jsonl", LINES));
+        let first_turn_only = Usage {
+            tokens: Tokens { input: 10, output: 20, cache_read: 100, cache_write: 5 },
+            turns: 1,
+        };
+        let second = whole.since(first_turn_only);
+        assert_eq!(second.turns, 1);
+        assert_eq!(second.tokens, Tokens { input: 2, output: 8, cache_read: 50, cache_write: 0 });
+        assert_eq!(Usage::default().since(whole), Usage::default(), "a shorter reading is not a refund");
     }
 
     #[test]

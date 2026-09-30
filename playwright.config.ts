@@ -22,7 +22,12 @@ export default defineConfig({
       origins: [
         {
           origin: "http://localhost:1420",
-          localStorage: [{ name: "grimoire.floor", value: "0" }],
+          // And past the first-run tour, which would otherwise stand over every test's first click.
+          // tutorial.spec.ts takes it away again.
+          localStorage: [
+            { name: "grimoire.floor", value: "0" },
+            { name: "grimoire.tour", value: "seen" },
+          ],
         },
       ],
     },

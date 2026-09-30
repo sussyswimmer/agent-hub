@@ -86,6 +86,9 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
     // A familiar drawing a full-screen interface keeps painting to the old geometry until it
     // is told otherwise, and the buffer tears. Tell it on every resize, not just on drag end.
     const onResize = () => {
+      // Hidden behind another tab, the host has no size, and fitting to nothing would tell the
+      // engine it has a zero-column screen.
+      if (!host.current || host.current.clientWidth === 0) return;
       fit.fit();
       void backend()
         .then((b) => b.resizeSummoning(familiar.id, xterm.cols, xterm.rows))
@@ -114,6 +117,13 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
         // pressed first, the question is no longer worth asking and the outlet stays where
         // `summon` put it.
         if (abandoned || summoning.current) return;
+        // Opened by Start or Summon elsewhere, which asked for this. Claimed here, after the
+        // await, and not as the effect begins: React runs a mount twice in development, and the
+        // first mount has been torn down by now, so only the terminal that stays does it.
+        if (useStore.getState().claimSummon(familiar.id)) {
+          void summonRef.current();
+          return;
+        }
         const found = await b.attachSummoning(familiar.id, (e) => {
           if (e.kind === "output") {
             xterm.write(e.bytes);
@@ -149,6 +159,10 @@ export function Terminal({ familiar }: { familiar: FamiliarSummary }) {
       xterm.dispose();
     };
   }, [familiar.id, noteCommissionsChanged]);
+
+  // The latest `summon`, for the mount effect, which runs once per familiar.
+  const summonRef = useRef<() => Promise<void>>(async () => {});
+  summonRef.current = summon;
 
   async function summon() {
     const xterm = term.current;

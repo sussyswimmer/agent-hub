@@ -158,6 +158,7 @@ pub fn run() {
             commands::attach_summoning,
             commands::quit,
             commands::commission_create,
+            commands::commission_done,
             commands::commissions_for,
             commands::ledger_summary,
             commands::ledger_events,

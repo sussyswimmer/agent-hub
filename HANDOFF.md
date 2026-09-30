@@ -4,8 +4,8 @@ Written for whoever picks this up next, human or otherwise. `CLAUDE.md` is the s
 the source of truth — where it and this file disagree, read `CLAUDE.md`. This file is only the
 state of play: what is built, what is known broken, what is untested, and what to do first.
 
-Branch: `claude/laughing-lamport-pk21v3`, which carries `claude/sharp-euler-l2gy92` and the owner's
-releases on top. Nothing has been merged into a default branch.
+Branch: `claude/laughing-lamport-pk21v3`, merged by pull request into `claude/sharp-euler-l2gy92`,
+the default branch.
 
 ---
 
@@ -14,7 +14,7 @@ releases on top. Nothing has been merged into a default branch.
 | File | What it is | Why you need it |
 | --- | --- | --- |
 | `CLAUDE.md` | The specification | §1 (originality and licensing) and §11 (security) are binding constraints, not suggestions. §10 is the phase order. |
-| `DECISIONS.md` | Twenty-two entries | Every place the code diverges from the spec, and why. Do not re-litigate one without reading it. |
+| `DECISIONS.md` | Twenty-six entries | Every place the code diverges from the spec, and why. Do not re-litigate one without reading it. |
 | `TASKS.md` | Session log, per phase | What was verified by hand and what could not be. The "Blocked here — needs the Mac" table at the end is the honest list. |
 | `README.md` | For the owner, not for you | "Running it" and "What to distrust". |
 
@@ -71,7 +71,8 @@ crates/grimoire-core/src/     ← everything with a decision in it. Tested in is
   paths.rs     everything under ~/.grimoire; GRIMOIRE_HOME overrides it (use this in tests)
   seal/        server.rs is the unix-socket seal. THE most important file in the repo.
   security/    canonicalising path checks, bounds, the never-exempt list
-  summon/      binary resolution, the engine's argv, the settings file that installs the hook
+  summon/      binary resolution, the engine's argv, the settings file that installs the hook,
+               and handover.rs: how a commission reaches the engine (DECISIONS 0024)
   ward/        due(cron, last_run, now) is pure; store.rs is the table
   types.rs     the ts-rs source of truth for the TypeScript types
 
@@ -86,7 +87,9 @@ src/                          ← React. IPC goes through src/lib/ipc.ts and now
   lib/generated/      ts-rs output. Run `bun run bindings` after changing types.rs.
   lib/ipc.mock.ts     the in-memory backend behind VITE_IPC_MOCK=1; Playwright runs on it
   scriptorium/floor/  PixiJS. plan.ts is data; adding an order should mean editing one array.
-  familiar/           the five tabs
+                      wander.ts is where an idle familiar may stroll (DECISIONS 0025)
+  familiar/           the five tabs; Now.tsx says what the familiar is doing and what to press
+  tutorial/           the first-run tour and How it works (DECISIONS 0026)
   seal/Seals.tsx      the queue
   workbench/          engine paths, provider sign-in, spend cap, transcripts, restore seeds
 ```
@@ -181,6 +184,10 @@ things you already understood, and find nothing about things you did not.
   `Texture.from(url)`, on the main thread, and through `assetUrl.ts`. Check the floor with
   `bun run tauri build --debug --no-bundle` under `Xvfb`, not only with `tauri dev`, which
   applies no CSP either.
+- **The floor's radii are measured off the painting**, not the other way round (DECISIONS 0025).
+  A new painting means re-measuring `plan.ts`: the ward ring, the wall, the furniture and every
+  candle in `LAMPS`. The figures stand up out of the plan, so anything standing north of a
+  piece of furniture needs `FIGURE_REACH` of clearance; `plan.test.ts` checks the desks.
 - **`~/.grimoire` is the owner's real data.** Always set `GRIMOIRE_HOME` when testing.
 - **Never log the writ, prompts, file contents or agent output** anywhere but the local transcript
   the owner can see and delete (§6.1). Redact key patterns from PTY output (§11).

@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CENTRE,
   DESK_RADIUS,
+  FIGURE_REACH,
   ORDERS,
   SIGIL_SIZE,
   STATIONS,
@@ -84,6 +85,31 @@ describe("where familiars stand", () => {
     const before = [0, 1, 2].map((i) => slot(hearth, i));
     const after = [0, 1, 2].map((i) => slot(hearth, i));
     expect(after).toEqual(before);
+  });
+
+  test("a familiar standing at a desk does not reach onto it", () => {
+    // The figures stand up out of the plan, head to the north of the feet. At the two desks on
+    // the north side the first version stood them with their heads on the desktop.
+    for (const o of ORDERS) {
+      const desk = station(`desk-${o}`);
+      const [a, b, , d] = deskCorners(desk);
+      const along = { x: b.x - a.x, y: b.y - a.y };
+      const across = { x: d.x - a.x, y: d.y - a.y };
+      const onDesk = (q: { x: number; y: number }) => {
+        const u = ((q.x - a.x) * along.x + (q.y - a.y) * along.y) / (along.x ** 2 + along.y ** 2);
+        const v = ((q.x - a.x) * across.x + (q.y - a.y) * across.y) / (across.x ** 2 + across.y ** 2);
+        return u > 0 && u < 1 && v > 0 && v < 1;
+      };
+      for (let i = 0; i < 4; i++) {
+        const p = slot(desk, i);
+        // The figure, as a box from its feet up to the top of its head, 36 units wide.
+        for (let dx = -18; dx <= 18; dx += 6) {
+          for (let up = 0; up <= FIGURE_REACH; up += 4) {
+            expect(onDesk({ x: p.x + dx, y: p.y - up })).toBe(false);
+          }
+        }
+      }
+    }
   });
 
   test("everyone waiting on a seal is inside the ward circle", () => {

@@ -64,6 +64,7 @@ export function createTauriBackend(): Backend {
     },
 
     commissionCreate: (id, prompt, intake) => call("commission_create", S.commission, { id, prompt, intake }),
+    commissionDone: (id) => call("commission_done", S.commission.nullable(), { id }),
     commissionsFor: (id) => call("commissions_for", S.commission.array(), { id }),
     wardsFor: (id) => call("wards_for", S.ward.array(), { id }),
     wardCreate: (id, cron, prompt, intake) => call("ward_create", S.ward, { id, cron, prompt, intake }),

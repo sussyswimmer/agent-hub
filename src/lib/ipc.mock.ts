@@ -59,6 +59,13 @@ class FakeSummoning {
     this.say("\u001b[38;2;176;141;63m❯\u001b[0m ");
   }
 
+  /** A commission arriving, the way a real engine shows its first message. */
+  commission(text: string) {
+    this.say(`${text.replace(/\n/g, "\r\n  ")}\r\n`);
+    this.say("\u001b[2m(the mock has no engine; a real familiar would start on this now)\u001b[0m\r\n");
+    this.prompt();
+  }
+
   input(bytes: Uint8Array) {
     for (const byte of bytes) {
       if (byte === 13) {
@@ -257,6 +264,23 @@ class Commissions {
     return structuredClone(next);
   }
 
+  /** The one it is working on, if any. */
+  running(familiarId: string): Commission | null {
+    const c = this.rows.find((c) => c.familiar_id === familiarId && (c.status === "running" || c.status === "awaiting_seal"));
+    return c ? structuredClone(c) : null;
+  }
+
+  /** The owner says it is done. Mirrors `commission_done`'s bookkeeping. */
+  finish(commissionId: string) {
+    const c = this.rows.find((c) => c.id === commissionId);
+    if (!c) return;
+    c.status = "done";
+    c.ended = Math.floor(Date.now() / 1000);
+    c.tokens = { input: 18_000, output: 900, cache_read: 0, cache_write: 0 };
+    c.turns = 2;
+    c.cost = { usd: 0.07, estimated: true };
+  }
+
   end(familiarId: string) {
     for (const c of this.rows) {
       if (c.familiar_id === familiarId && (c.status === "running" || c.status === "awaiting_seal")) {
@@ -436,6 +460,7 @@ export function createMockBackend(): Backend {
           const asking = seals.pending().find((s) => s.familiar_id === f.id);
           if (asking?.kind === "extend") return { ...f, state: "bound" as const, status: "bound — out of aether" };
           if (asking?.kind === "stalled") return { ...f, state: "stalled" as const, status: "stalled — steer, or banish?" };
+          if (live.has(f.id) && !asking && commissions.running(f.id)) return { ...f, state: "working" as const, status: "working" };
           if (live.has(f.id) && f.state === "dormant") return { ...f, state: "idle" as const, status: "summoned, idle" };
           return f;
         }),
@@ -482,7 +507,10 @@ export function createMockBackend(): Backend {
       }
       events.push(event(events.length + 1, id, taken?.id ?? null, "summoned"));
       // Next tick, so a caller that renders on the resolved promise is mounted first.
-      setTimeout(() => s.greet(), 0);
+      setTimeout(() => {
+        s.greet();
+        if (taken) s.commission(taken.prompt);
+      }, 0);
       return 4242;
     },
     async sendInput(id, bytes) {
@@ -525,7 +553,30 @@ export function createMockBackend(): Backend {
     async commissionCreate(id, prompt, intake) {
       const row = commissions.place(id, prompt, intake);
       events.push(event(events.length + 1, id, row.id, "commission_queued"));
-      return row;
+      // A summoned familiar with nothing in hand starts on it now, as the real one does.
+      const s = live.get(id);
+      if (s && !commissions.running(id)) {
+        const taken = commissions.startNext(id);
+        if (taken) {
+          events.push(event(events.length + 1, id, taken.id, "commission_started"));
+          s.commission(taken.prompt);
+        }
+      }
+      return commissions.for(id).find((c) => c.id === row.id) ?? row;
+    },
+    async commissionDone(id) {
+      const name = roster.find((f) => f.id === id)?.name ?? id;
+      const current = live.has(id) ? commissions.running(id) : null;
+      if (!current) throw new Error(`${name} has no commission running.`);
+      if (current.status === "awaiting_seal") throw new Error(`${name} is waiting on your seal. Seal or refuse it first.`);
+      commissions.finish(current.id);
+      events.push(event(events.length + 1, id, current.id, "commission_ended"));
+      const next = commissions.startNext(id);
+      if (next) {
+        events.push(event(events.length + 1, id, next.id, "commission_started"));
+        live.get(id)?.commission(next.prompt);
+      }
+      return next;
     },
     async commissionsFor(id) {
       return commissions.for(id);

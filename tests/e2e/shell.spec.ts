@@ -171,5 +171,5 @@ test("every tab shows its own thing rather than an empty box", async ({ page }) 
 
   // Outputs has not arrived, and §3 asks an empty state to say so rather than show nothing.
   await page.locator('[data-tab="outputs"]').click();
-  await expect(page.getByTestId("tabpanel")).toContainText("Outputs arrive");
+  await expect(page.getByTestId("tabpanel")).toContainText("is written into its workspace");
 });

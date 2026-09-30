@@ -69,8 +69,17 @@ export interface Backend {
    */
   attachSummoning(id: string, onEmission: (e: Emission) => void): Promise<boolean>;
 
-  /** Place a commission. It queues; it starts when its familiar is next free (§6.2). */
+  /**
+   * Place a commission. A summoned familiar with nothing in hand starts on it at once; otherwise
+   * it queues and starts when its familiar is next free (§6.2). Resolves to the row as it stands
+   * afterwards, so `status` says which of the two happened.
+   */
   commissionCreate(id: string, prompt: string, intake: Record<string, string>): Promise<Commission>;
+  /**
+   * The owner says the running commission is done. The familiar stays summoned and is handed the
+   * next in its queue; resolves to that one, or null if the queue was empty.
+   */
+  commissionDone(id: string): Promise<Commission | null>;
   /** Every commission for one familiar, newest first. */
   commissionsFor(id: string): Promise<Commission[]>;
   /** Every standing ward on one familiar (§6.7). */

@@ -47,7 +47,7 @@ export interface Stage {
   setVisible(visible: boolean): void;
   setFocused(focused: boolean): void;
   /**
-   * Lay the painted floor under the plan, registered to its 1000-unit world (DECISIONS 0020).
+   * Lay the painted floor under the plan, registered to its 1600-unit world (DECISIONS 0020, 0025).
    * With one in place the bake draws only what the painting cannot know: lamps and labels.
    */
   setBackdrop(texture: Texture | null): void;

@@ -17,7 +17,13 @@ test.use({
   storageState: {
     cookies: [],
     origins: [
-      { origin: "http://localhost:1420", localStorage: [{ name: "grimoire.floor", value: "1" }] },
+      {
+        origin: "http://localhost:1420",
+        localStorage: [
+          { name: "grimoire.floor", value: "1" },
+          { name: "grimoire.tour", value: "seen" },
+        ],
+      },
     ],
   },
 });
@@ -295,9 +301,6 @@ test("a familiar the breaker has bound reads as bound, not as one asking permiss
   await page.locator('[data-tab="commission"]').click();
   await page.getByTestId("intake-prompt").fill("work out the sums");
   await page.getByTestId("intake-submit").click();
-
-  await page.locator('[data-tab="terminal"]').click();
-  await page.getByTestId("terminal-toggle").click();
   await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
 
   const mirror = page.getByTestId("floor-mirror");

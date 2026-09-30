@@ -48,7 +48,7 @@ test("submit is blocked while a required answer is missing, and says which", asy
 
   await page.getByTestId("intake-submit").click();
   await expect(page.getByTestId("intake-blocked")).toBeVisible();
-  await expect(page.getByTestId("intake-blocked")).toContainText("Say what the commission is");
+  await expect(page.getByTestId("intake-blocked")).toContainText("Say what Vellum should do");
   // The tab has not moved on.
   await expect(page.locator('[data-tab="commission"]')).toHaveAttribute("aria-selected", "true");
 
@@ -64,9 +64,10 @@ test("submit is blocked while a required answer is missing, and says which", asy
   await expect(page.locator("[data-missing]")).toHaveCount(1);
   await expect(page.locator('[data-field="mode"] [data-missing]')).toBeVisible();
 
-  // Answer the last one and it goes through. The optional field stays empty on purpose.
+  // Answer the last one and it goes through. The optional field stays empty on purpose. Queued
+  // for later, so the familiar stays where it is and the queue is what shows.
   await page.locator('[data-field="mode"] select').selectOption("structural");
-  await page.getByTestId("intake-submit").click();
+  await page.getByTestId("intake-queue").click();
 
   // "Goes through" means a commission was placed and is visible in the queue (§6.2), not that
   // some other tab opened. The complaint is gone too.

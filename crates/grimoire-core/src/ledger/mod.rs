@@ -146,6 +146,16 @@ impl Tokens {
             cache_write: self.cache_write + o.cache_write,
         }
     }
+    /// What was spent after `earlier`. Never below zero: a transcript that was rewritten
+    /// shorter reports nothing new rather than a refund.
+    pub fn since(self, earlier: Self) -> Self {
+        Self {
+            input: (self.input - earlier.input).max(0),
+            output: (self.output - earlier.output).max(0),
+            cache_read: (self.cache_read - earlier.cache_read).max(0),
+            cache_write: (self.cache_write - earlier.cache_write).max(0),
+        }
+    }
 }
 
 /// Append an event. The only way to write to the ledger.
