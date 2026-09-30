@@ -105,7 +105,7 @@ else
   // someone is reading this because a build failed on a missing icon.
   absent(
     "Application mark",
-    "Not drawn yet. `bun run tauri dev` draws it for you; `bun run icons` does it now.",
+    "Not composed yet. `bun run tauri dev` composes it for you; `bun run icons` does it now.",
   );
 
 const FONTS = join(ROOT, "src", "theme", "fonts");
