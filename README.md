@@ -64,11 +64,11 @@ check and why.
 
 ### Download for macOS
 
-[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.1/Grimoire_1.0.1_aarch64.dmg)
+[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.3/Grimoire_1.0.3_aarch64.dmg)
 
-[Download Grimoire for Intel Macs](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.1/Grimoire_1.0.1_x64.dmg)
+[Download Grimoire for Intel Macs](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.3/Grimoire_1.0.3_x64.dmg)
 
-[Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.2/Grimoire_1.0.2_x64-setup.exe)
+[Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.3/Grimoire_1.0.3_x64-setup.exe)
 
 This preview build is unsigned and not notarized, so macOS may ask you to approve it in Privacy
 & Security the first time you open it. [See all releases](https://github.com/sussyswimmer/agent-hub/releases).

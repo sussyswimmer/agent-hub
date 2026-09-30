@@ -606,3 +606,21 @@ the largest zoom so a zoom inside its band stays sharp without another bake. The
 bakes and failed on the old stage. Station labels now show at the default zoom on 1× displays,
 as §8.3 says. DECISIONS 0022.
 
+
+---
+
+## Release 1.0.3
+
+Cut from the merge of PR #1: the floor draws in a packaged build for the first time, with the
+Higgsfield art, the composed icon and the 1× re-bake fix. Version bumped in `Cargo.toml`,
+`Cargo.lock`, `package.json` and `tauri.conf.json`; the README's download links point at the
+v1.0.3 assets. The debug binary of this commit was built and opened on the painted floor under
+`Xvfb` before tagging.
+
+- [x] Version 1.0.3, tagged `v1.0.3`
+- [ ] Installers. CI has not assigned a runner since 14 September (every run fails in seconds,
+      before checkout), and this container cannot build for macOS. 1.0.1 and 1.0.2 were built
+      and attached by hand; 1.0.3 needs the same: `bun run dist` on the Mac for both
+      architectures, and the Windows build, attached as `Grimoire_1.0.3_aarch64.dmg`,
+      `Grimoire_1.0.3_x64.dmg` and `Grimoire_1.0.3_x64-setup.exe` — the names the README links.
+- [ ] The GitHub release page for the tag. Its notes are in the tag's annotation (`git show v1.0.3`)
