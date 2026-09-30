@@ -615,12 +615,35 @@ Cut from the merge of PR #1: the floor draws in a packaged build for the first t
 Higgsfield art, the composed icon and the 1× re-bake fix. Version bumped in `Cargo.toml`,
 `Cargo.lock`, `package.json` and `tauri.conf.json`; the README's download links point at the
 v1.0.3 assets. The debug binary of this commit was built and opened on the painted floor under
-`Xvfb` before tagging.
+`Xvfb` before the release commit was made.
 
-- [x] Version 1.0.3, tagged `v1.0.3`
+- [x] Version 1.0.3, merged to `claude/sharp-euler-l2gy92` as b687829 (#2)
+- [ ] The tag. This session's GitHub access may push its working branch and nothing else: the
+      tag push was refused with a 403. Create `v1.0.3` from GitHub's release form ("Choose a
+      tag", target `claude/sharp-euler-l2gy92`), which tags that branch's tip and makes the
+      release page in one step. Every commit from b687829 on is version 1.0.3.
 - [ ] Installers. CI has not assigned a runner since 14 September (every run fails in seconds,
       before checkout), and this container cannot build for macOS. 1.0.1 and 1.0.2 were built
       and attached by hand; 1.0.3 needs the same: `bun run dist` on the Mac for both
       architectures, and the Windows build, attached as `Grimoire_1.0.3_aarch64.dmg`,
       `Grimoire_1.0.3_x64.dmg` and `Grimoire_1.0.3_x64-setup.exe` — the names the README links.
-- [ ] The GitHub release page for the tag. Its notes are in the tag's annotation (`git show v1.0.3`)
+
+Release notes, for the release page:
+
+> Grimoire 1.0.3
+>
+> The floor now draws in the packaged app. In 1.0.1 and 1.0.2 it never did: the renderer
+> refused to start under the app's security policy, and you saw "The tower lost its lens"
+> instead.
+>
+> - The floor is a top-down painting of the tower, aligned with the plan, so what you click
+>   is where it is drawn. It pans and zooms with the room.
+> - Five new familiar figures, one per order.
+> - A new app icon: the Grimoire sigil as a brass medallion.
+> - If any art fails to load, the floor is drawn in code and says what failed. If the floor
+>   itself cannot start, it says why and offers the roster.
+> - Panning and zooming no longer redraw the whole room on non-Retina displays, and station
+>   labels now show at the default zoom there.
+>
+> Unsigned and not notarized: macOS may ask you to approve it in Privacy & Security on first
+> launch.
