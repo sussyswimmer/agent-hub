@@ -15,6 +15,7 @@ import { type ActorInput, type Actors, createActors } from "./actors";
 import { palette } from "./bake";
 import { type Interaction, attachInteraction } from "./interaction";
 import { MarginaliaCard } from "./marginalia";
+import { PORTRAIT_URLS, loadArt } from "./art";
 import { type Stage, createStage } from "./stage";
 
 function reducedMotion(): boolean {
@@ -34,6 +35,8 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
   const actors = useRef<Actors | null>(null);
   const interaction = useRef<Interaction | null>(null);
   const [ready, setReady] = useState(false);
+  // What art arrived, said on the element so a test can tell a painted floor from the fallback.
+  const [art, setArt] = useState<{ painted: boolean; portraits: number; missing: string[] } | null>(null);
   const [stageError, setStageError] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [hovered, setHovered] = useState<Hovered | null>(null);
@@ -45,6 +48,7 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
 
   const select = useStore((s) => s.select);
   const setView = useStore((s) => s.setView);
+  const setFloor = useStore((s) => s.setFloor);
   const reload = useStore((s) => s.load);
   const commissionsChanged = useStore((s) => s.commissionsChanged);
 
@@ -92,11 +96,19 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
     void (async () => {
       if (!host.current) return;
       const p = palette();
-      const s = await createStage(host.current);
+      // Both before any actor exists: an actor is made once, and a portrait that arrived after
+      // it would never be shown. `loadArt` never rejects — what fails is drawn instead.
+      const [s, loaded] = await Promise.all([createStage(host.current), loadArt()]);
       if (!live) {
         s.destroy();
         return;
       }
+      s.setBackdrop(loaded.floor);
+      setArt({
+        painted: loaded.floor !== null,
+        portraits: Object.keys(loaded.portraits).length,
+        missing: loaded.missing,
+      });
       built = s;
       stage.current = s;
 
@@ -105,6 +117,7 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
         threads: s.threads,
         palette: p,
         reducedMotion: reducedMotion(),
+        portraits: loaded.portraits,
       });
       actors.current = a;
 
@@ -240,7 +253,13 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
     // to shrink below its content, and the canvas Pixi inserts has a size of its own before the
     // first resize lands — so without this the floor props the whole window open and the
     // scriptorium scrolls sideways at 1024px.
-    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden" data-testid="floor" data-ready={ready}>
+    <div
+      className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
+      data-testid="floor"
+      data-ready={ready}
+      data-painted={art?.painted}
+      data-portraits={art?.portraits}
+    >
       <div
         ref={host}
         tabIndex={0}
@@ -251,10 +270,20 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
       />
       {(stageError || familiars.length === 0) && (
         <FloorRecovery
-          failed={stageError !== null}
+          reason={stageError}
+          empty={familiars.length === 0}
           restoring={restoring}
           onRestore={() => void restoreStarterCircle()}
+          onRoster={() => setFloor(false)}
         />
+      )}
+      {art && art.missing.length > 0 && (
+        // §3: a failure says what happened. The floor still works, drawn in code, so this is a
+        // note in the corner rather than an alert — but it is on screen, not only in a console.
+        <p role="status" data-testid="floor-art-missing" className="floor-art-missing mono">
+          Drawn in code: {art.missing.length === 6 ? "the art" : `${art.missing.length} of 6 images`} did
+          not load ({art.missing[0]}).
+        </p>
       )}
       {hovered && (
         <MarginaliaCard
@@ -272,25 +301,46 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
   );
 }
 
-function FloorRecovery({ failed, restoring, onRestore }: { failed: boolean; restoring: boolean; onRestore: () => void }) {
+/**
+ * What stands in for the floor when there is nothing to draw on it, or nothing to draw it with.
+ *
+ * The two cases ask for different things. An empty roster wants the starter bindings. A renderer
+ * that would not start wants the reader to know why and to be given the roster, which works on
+ * every machine — offering to restore five familiars who are already in the rail helps nobody.
+ */
+function FloorRecovery({
+  reason,
+  empty,
+  restoring,
+  onRestore,
+  onRoster,
+}: {
+  reason: string | null;
+  empty: boolean;
+  restoring: boolean;
+  onRestore: () => void;
+  onRoster: () => void;
+}) {
+  const failed = reason !== null;
   return (
-    <section className="floor-recovery" aria-live="polite">
+    <section className="floor-recovery" aria-live="polite" data-testid="floor-recovery">
       <div className="floor-recovery__grain" aria-hidden="true" />
       <div className="floor-recovery__constellation floor-recovery__constellation--one" aria-hidden="true" />
       <div className="floor-recovery__constellation floor-recovery__constellation--two" aria-hidden="true" />
       <div className="floor-recovery__orbit floor-recovery__orbit--outer" aria-hidden="true" />
       <div className="floor-recovery__orbit floor-recovery__orbit--inner" aria-hidden="true" />
       <div className="floor-recovery__party" aria-hidden="true">
-        {[
-          ["quill", "Scribe"],
-          ["lantern", "Scout"],
-          ["crucible", "Maker"],
-          ["compass", "Guide"],
-          ["ledger", "Keeper"],
-        ].map(([order, name], index) => (
+        {(
+          [
+            ["quill", "Scribe"],
+            ["lantern", "Scout"],
+            ["crucible", "Maker"],
+            ["compass", "Guide"],
+            ["ledger", "Keeper"],
+          ] as const
+        ).map(([order, name], index) => (
           <div className="floor-recovery__familiar" data-order={order} style={{ "--i": index } as React.CSSProperties} key={order}>
-            <i className="floor-recovery__head" />
-            <i className="floor-recovery__body" />
+            <img src={PORTRAIT_URLS[order]} alt="" draggable={false} />
             <span>{name}</span>
           </div>
         ))}
@@ -300,12 +350,19 @@ function FloorRecovery({ failed, restoring, onRestore }: { failed: boolean; rest
         <h2>{failed ? "The tower lost its lens." : "The tower is waiting for its circle."}</h2>
         <p>
           {failed
-            ? "Your Mac can still restore the familiar roster while the animated floor takes its safer route."
+            ? "The floor's renderer did not start on this machine. Every familiar is still in the rail, and the roster works without it."
             : "Five starter familiars are ready to be placed around the hearth."}
         </p>
-        <button type="button" onClick={onRestore} disabled={restoring}>
-          {restoring ? "Calling the circle..." : "Restore starter circle"}
-        </button>
+        {failed && <p className="mono floor-recovery__reason">{reason}</p>}
+        {failed && !empty ? (
+          <button type="button" onClick={onRoster}>
+            Show the roster
+          </button>
+        ) : (
+          <button type="button" onClick={onRestore} disabled={restoring}>
+            {restoring ? "Calling the circle..." : "Restore starter circle"}
+          </button>
+        )}
       </div>
     </section>
   );

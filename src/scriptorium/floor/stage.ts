@@ -9,7 +9,12 @@
 // Stopping is not throttling: a stopped ticker renders no frames at all, which is the difference
 // between a background window at 0% and one quietly burning a core to redraw a hidden canvas.
 
-import { Application, Container, Sprite, type Renderer, Ticker } from "pixi.js";
+import { Application, Container, Sprite, type Renderer, type Texture, Ticker } from "pixi.js";
+// Pixi builds its shader glue with `new Function` unless this is loaded first. The application's
+// CSP forbids eval, so without it `app.init` throws in every packaged build — the floor had never
+// drawn outside `tauri dev` and the browser, neither of which applies the CSP (DECISIONS 0021).
+// This is Pixi's own answer, and it keeps the CSP as strict as it is.
+import "pixi.js/unsafe-eval";
 
 import { type Baked, bake } from "./bake";
 import { CENTRE, WORLD } from "./plan";
@@ -41,6 +46,11 @@ export interface Stage {
   resize(width: number, height: number): void;
   setVisible(visible: boolean): void;
   setFocused(focused: boolean): void;
+  /**
+   * Lay the painted floor under the plan, registered to its 1000-unit world (DECISIONS 0020).
+   * With one in place the bake draws only what the painting cannot know: lamps and labels.
+   */
+  setBackdrop(texture: Texture | null): void;
   /** Frames actually rendered, and the ticker's own reading. §10 asks for its number, not a feel. */
   stats: { frames: number; fps: number; running: boolean };
   destroy(): void;
@@ -67,10 +77,15 @@ export async function createStage(host: HTMLElement): Promise<Stage> {
   host.appendChild(app.canvas);
 
   const world = new Container();
+  // The painting is a child of the world like everything else, so it pans and zooms with the
+  // plan it was registered to. As a CSS background behind the canvas it stood still while the
+  // room moved over it.
+  const backdrop = new Sprite();
+  backdrop.visible = false;
   const staticLayer = new Container();
   const threads = new Container();
   const actors = new Container();
-  world.addChild(staticLayer, threads, actors);
+  world.addChild(backdrop, staticLayer, threads, actors);
   app.stage.addChild(world);
 
   const view: View = { zoom: 1, panX: 0, panY: 0 };
@@ -103,7 +118,7 @@ export async function createStage(host: HTMLElement): Promise<Stage> {
     const plates = view.zoom >= 0.9;
     if (!force && baked && baked.plates === plates) return;
     baked?.destroy();
-    baked = bake(app.renderer, scale() * (globalThis.devicePixelRatio || 1));
+    baked = bake(app.renderer, scale() * (globalThis.devicePixelRatio || 1), { painted: backdrop.visible });
     floor.texture = baked.texture;
     floor.setSize(WORLD, WORLD);
   }
@@ -165,6 +180,14 @@ export async function createStage(host: HTMLElement): Promise<Stage> {
     setFocused(next) {
       focused = next;
       applyTickerPolicy();
+    },
+    setBackdrop(texture) {
+      if (texture) {
+        backdrop.texture = texture;
+        backdrop.setSize(WORLD, WORLD);
+      }
+      backdrop.visible = texture !== null;
+      rebake(true);
     },
     destroy() {
       app.ticker.stop();

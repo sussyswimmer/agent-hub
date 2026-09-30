@@ -8,7 +8,7 @@
 // The sigil geometry comes from `ui/sigil-geometry`, the same module the rail's SVG reads, so a
 // familiar's mark is the same mark in both places rather than two drawings that happen to agree.
 
-import { Container, Graphics, Rectangle, Sprite, Text, Texture } from "pixi.js";
+import { Container, Graphics, Sprite, Text } from "pixi.js";
 
 import {
   type Mark,
@@ -21,7 +21,6 @@ import {
   sigilGeometry,
 } from "@/ui/sigil-geometry";
 import type { Order, SigilState } from "@/lib/types";
-import familiarSheet from "@/assets/higgsfield/familiar-sheet.png";
 
 import { arcAt, type Palette } from "./bake";
 import {
@@ -36,6 +35,7 @@ import {
   WARD_RADIUS,
 } from "./plan";
 import { walk } from "./paths";
+import type { Portraits } from "./art";
 
 /** §8.3: the walk is 1.1s, ease-in-out, along the waypoints. */
 const WALK_MS = 1100;
@@ -43,15 +43,12 @@ const WALK_MS = 1100;
 /** The gap left in the ring when a familiar is banished or misfired (§7.4). */
 const BREAK_DEGREES = 34;
 
-/** The lower row of the Higgsfield sheet: five original familiars, with generated captions cropped away. */
-const FAMILIAR_FRAMES: Record<Order, Rectangle> = {
-  quill: new Rectangle(52, 405, 454, 700),
-  lantern: new Rectangle(522, 366, 444, 740),
-  crucible: new Rectangle(1006, 394, 460, 710),
-  compass: new Rectangle(1494, 352, 500, 755),
-  ledger: new Rectangle(2022, 375, 514, 730),
-};
-const familiarSheetTexture = Texture.from(familiarSheet);
+/**
+ * How tall a portrait stands, in the sigil's 100-unit frame, and where its feet fall. The width
+ * follows from each image's own proportions, so no figure is stretched to fit a box.
+ */
+const PORTRAIT_HEIGHT = 150;
+const PORTRAIT_ANCHOR_Y = 0.72;
 
 /** What the floor needs to know about one familiar. Everything else is the room's business. */
 export interface ActorInput {
@@ -87,8 +84,10 @@ interface Actor {
   container: Container;
   ring: Container;
   ringMark: Graphics;
+  /** What bobs and steps: the portrait if one loaded, otherwise the figure drawn in `body`. */
+  figure: Container;
   body: Graphics;
-  portrait: Sprite;
+  portrait: Sprite | null;
   arc: Graphics;
   dot: Graphics;
   plate: Text;
@@ -140,10 +139,12 @@ export interface ActorsOptions {
   palette: Palette;
   /** §8.7: no walking, no rotation, no breathing. */
   reducedMotion: boolean;
+  /** Already loaded (`loadArt`). An order with none is drawn in code instead. */
+  portraits?: Portraits;
 }
 
 export function createActors(options: ActorsOptions): Actors {
-  const { actors: layer, threads, palette: p, reducedMotion } = options;
+  const { actors: layer, threads, palette: p, reducedMotion, portraits = {} } = options;
   const byId = new Map<string, Actor>();
   const threadGraphics = new Graphics();
   threads.addChild(threadGraphics);
@@ -189,10 +190,13 @@ export function createActors(options: ActorsOptions): Actors {
       a.ringMark.moveTo(x1, y1).lineTo(x2, y2).stroke({ width: 4, color: p.brass, cap: "round" });
     }
 
-    // The generated familiar is the actor now; the geometric sigil, state ring and aether arc
-    // remain vector work so their interaction and state changes stay exact.
-    a.body.visible = false;
-    a.portrait.visible = true;
+    // The generated familiar is the actor where its portrait loaded; the state ring and aether
+    // arc stay vector work either way, so interaction and state changes are exact.
+    if (a.portrait) {
+      a.body.clear();
+    } else {
+      drawPixelFamiliar(a, colour);
+    }
   }
 
   function drawMark(g: Graphics, mark: Mark, colour: number) {
@@ -286,18 +290,32 @@ export function createActors(options: ActorsOptions): Actors {
     const ring = new Container();
     const ringMark = new Graphics();
     const body = new Graphics();
-    const portrait = new Sprite(new Texture({ source: familiarSheetTexture.source, frame: FAMILIAR_FRAMES[input.order] }));
-    portrait.anchor.set(0.5, 0.72);
-    portrait.position.set(0, 5);
-    portrait.width = 112;
-    portrait.height = 150;
+    const figure = new Container();
+    figure.addChild(body);
+    const texture = portraits[input.order];
+    let portrait: Sprite | null = null;
+    if (texture) {
+      portrait = new Sprite(texture);
+      portrait.anchor.set(0.5, PORTRAIT_ANCHOR_Y);
+      portrait.position.set(0, 5);
+      // Fitted once, here. Everything that moves it moves `figure`, so nothing can reset this
+      // scale to 1 and draw the image at its native size across half the room.
+      portrait.scale.set(PORTRAIT_HEIGHT / texture.height);
+      figure.addChild(portrait);
+    }
     const arc = new Graphics();
     const dot = new Graphics();
     ring.addChild(ringMark);
 
     const plate = new Text({
       text: input.name,
-      style: { fontFamily: "Junicode, EB Garamond, Georgia, serif", fontSize: 12, fill: p.boneDim },
+      // Outlined in the void so the name reads on lit flagstone as well as on the plain plan.
+      style: {
+        fontFamily: "Junicode, EB Garamond, Georgia, serif",
+        fontSize: 12,
+        fill: p.boneDim,
+        stroke: { color: p.void, width: 3, join: "round" },
+      },
     });
     plate.anchor.set(0.5, 0);
     plate.resolution = 2;
@@ -305,7 +323,7 @@ export function createActors(options: ActorsOptions): Actors {
     // The sigil is drawn in its own 100-unit frame and scaled to the 44 §8.3 asks for, so the
     // geometry module never has to know how big the floor draws things.
     const marks = new Container();
-    marks.addChild(portrait, body, ring, arc, dot);
+    marks.addChild(figure, ring, arc, dot);
     marks.scale.set(SIGIL_SIZE / 100);
     container.addChild(marks);
 
@@ -319,6 +337,7 @@ export function createActors(options: ActorsOptions): Actors {
       container,
       ring,
       ringMark,
+      figure,
       body,
       portrait,
       arc,
@@ -478,18 +497,14 @@ export function createActors(options: ActorsOptions): Actors {
         // the desks, a firmer bounce while working, and a quick two-step gait while walking.
         // All of it is pinned to the reduced-motion preference in the same place as the sigil.
         if (reducedMotion) {
-          a.body.position.set(0, 0);
-          a.body.scale.set(1);
-          a.portrait.position.set(0, 5);
-          a.portrait.scale.set(1);
+          a.figure.position.set(0, 0);
+          a.figure.scale.set(1);
         } else {
           const moving = a.legs.length > 0;
           const speed = moving ? 11 : a.input.state === "working" ? 7 : 4;
           const wave = Math.sin(Date.now() / 1000 * speed + a.rhythm);
-          a.body.position.set(moving ? wave * 2 : 0, moving ? Math.abs(wave) * -5 : wave * -1.4);
-          a.body.scale.set(1, moving ? 1 + Math.abs(wave) * 0.08 : 1);
-          a.portrait.position.set(moving ? wave * 2 : 0, 5 + (moving ? Math.abs(wave) * -5 : wave * -1.4));
-          a.portrait.scale.set(1, moving ? 1 + Math.abs(wave) * 0.08 : 1);
+          a.figure.position.set(moving ? wave * 2 : 0, moving ? Math.abs(wave) * -5 : wave * -1.4);
+          a.figure.scale.set(1, moving ? 1 + Math.abs(wave) * 0.08 : 1);
         }
 
         a.container.position.set(a.at.x, a.at.y);
@@ -509,7 +524,14 @@ export function createActors(options: ActorsOptions): Actors {
       // This is §8.4's first question — "is anything waiting on me?" — and it is meant to be
       // answerable from across the room without picking a small pulsing dot out of a plan. The
       // circle is the largest thing on the floor, so the circle is what changes.
+      //
+      // The painted floor already has a brass ring there, so a brass line alone changes nothing
+      // anyone can see. It is lit with a band of light around the ring as well, which the unlit
+      // painting never has.
       if ([...byId.values()].some((a) => a.input.state === "awaiting-seal")) {
+        threadGraphics
+          .circle(CENTRE.x, CENTRE.y, WARD_RADIUS)
+          .stroke({ width: 22, color: p.brass, alpha: reducedMotion ? 0.3 : 0.18 + 0.16 * breath });
         threadGraphics
           .circle(CENTRE.x, CENTRE.y, WARD_RADIUS)
           .stroke({ width: 2.5, color: p.brass, alpha: reducedMotion ? 0.9 : 0.55 + 0.35 * breath });

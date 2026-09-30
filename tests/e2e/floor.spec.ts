@@ -35,6 +35,56 @@ test("the floor is what the window opens on", async ({ page }) => {
   await expect(page.getByTestId("floor-toggle")).toHaveAttribute("data-floor", "on");
 });
 
+test("the floor opens on its painted room and every portrait, and nothing throws", async ({ page }) => {
+  // The first Higgsfield floor asked Pixi for a texture it had never loaded. The first sync
+  // threw, nothing caught it, and the default view was an empty window — rail and all
+  // (DECISIONS 0021). Every other test in this file waited on `data-ready` and timed out.
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await openFloor(page);
+  await expect(page.getByTestId("floor")).toHaveAttribute("data-painted", "true");
+  await expect(page.getByTestId("floor")).toHaveAttribute("data-portraits", "5");
+  await expect(page.getByTestId("roster")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("art that does not load leaves the drawn floor, not a blank window", async ({ page }) => {
+  // The painting and the portraits are files, and a file can be missing. What is left is the
+  // floor the plan draws in code, with every familiar still standing on it.
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  // Only the image fetches. Under Vite an asset `import` is itself a module request (`?import`)
+  // that answers with the URL; failing that would fail the module graph, not the art.
+  await page.route(
+    (url) => url.pathname.includes("/assets/higgsfield/") && !url.search.includes("import"),
+    (route) => route.abort(),
+  );
+  await openFloor(page);
+  await expect(page.getByTestId("floor")).toHaveAttribute("data-painted", "false");
+  await expect(page.getByTestId("floor")).toHaveAttribute("data-portraits", "0");
+  await expect(page.getByTestId("floor-mirror")).toContainText("Astrolabe is waiting for your seal");
+  // §3: and it says so, on the floor, rather than only in a console nobody opens.
+  await expect(page.getByTestId("floor-art-missing")).toContainText("did not load");
+  expect(errors).toEqual([]);
+});
+
+test("a floor whose renderer cannot start says why and offers the roster", async ({ page }) => {
+  // In every packaged build until now, Pixi refused to start under the CSP, and the scene that
+  // caught it offered to restore five familiars who were already in the rail (DECISIONS 0021).
+  // Taking WebGL away is the nearest a browser comes to that machine.
+  await page.addInitScript(() => {
+    HTMLCanvasElement.prototype.getContext = () => null;
+    Object.defineProperty(navigator, "gpu", { value: undefined });
+  });
+  await page.goto("/");
+  const recovery = page.getByTestId("floor-recovery");
+  await expect(recovery).toContainText("did not start", { timeout: 20_000 });
+  await expect(recovery.locator(".floor-recovery__reason")).not.toBeEmpty();
+  await expect(page.getByTestId("roster")).toBeVisible();
+  await recovery.getByRole("button", { name: "Show the roster" }).click();
+  await expect(page.getByTestId("floor-toggle")).toHaveAttribute("data-floor", "off");
+});
+
 test("the floor fills the pane until you choose someone", async ({ page }) => {
   // §8 calls the floor "the thing you open the app to look at". Opening on a 40% strip beneath
   // a familiar nobody picked is not that, so nothing is selected until something is picked.

@@ -137,9 +137,24 @@ export function deskCorners(s: Station): [Point, Point, Point, Point] {
   return [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
 }
 
+/**
+ * Where each desk's candle stands in the painted floor, as a turn off the desk's bearing and a
+ * distance from the centre. Measured from `floor-plan.jpg` after it was registered to this file
+ * (DECISIONS 0020): a thread of ink that ends a hand's breadth from the flame it is meant to
+ * run to reads as a thread to nothing. An order with no entry gets the drawn default.
+ */
+const LAMPS: Partial<Record<Order, { turn: number; radius: number }>> = {
+  lantern: { turn: -6, radius: 330 },
+  compass: { turn: 3, radius: 338 },
+  ledger: { turn: -9, radius: 305 },
+  crucible: { turn: 5, radius: 339 },
+  quill: { turn: 7, radius: 338 },
+};
+
 /** The desk lamp, which is what a working familiar's thread of ink runs to (§8.3). */
 export function deskLamp(s: Station): Point {
-  return at(s.bearing + 5, DESK_RADIUS + DESK_DEPTH / 2 + 12);
+  const lamp = (s.order && LAMPS[s.order]) ?? { turn: 5, radius: DESK_RADIUS + DESK_DEPTH / 2 + 12 };
+  return at(s.bearing + lamp.turn, lamp.radius);
 }
 
 /**
