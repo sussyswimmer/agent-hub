@@ -8,6 +8,7 @@ import { Seals } from "@/seal/Seals";
 import { Workbench } from "@/workbench/Workbench";
 
 import { Roster } from "./Roster";
+import { FloorBoundary } from "./floor/Boundary";
 import { Floor } from "./floor/Floor";
 import { Quit } from "./Quit";
 
@@ -43,7 +44,7 @@ function FloorToggle() {
 }
 
 export function Scriptorium() {
-  const { load, familiars, selected, ready, error, kind, view, sealCount, floor } = useStore();
+  const { load, familiars, selected, ready, error, kind, view, sealCount, floor, setFloor } = useStore();
   useEffect(() => {
     void load();
   }, [load]);
@@ -90,7 +91,9 @@ export function Scriptorium() {
                 data-testid="floor-slot"
                 data-strip={familiar ? "true" : "false"}
               >
-                <Floor familiars={familiars} />
+                <FloorBoundary onRoster={() => setFloor(false)}>
+                  <Floor familiars={familiars} />
+                </FloorBoundary>
               </div>
               {familiar && <Rule />}
             </>

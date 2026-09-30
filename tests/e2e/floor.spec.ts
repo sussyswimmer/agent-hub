@@ -35,6 +35,56 @@ test("the floor is what the window opens on", async ({ page }) => {
   await expect(page.getByTestId("floor-toggle")).toHaveAttribute("data-floor", "on");
 });
 
+test("the floor opens on its painted room and every portrait, and nothing throws", async ({ page }) => {
+  // The first Higgsfield floor asked Pixi for a texture it had never loaded. The first sync
+  // threw, nothing caught it, and the default view was an empty window — rail and all
+  // (DECISIONS 0021). Every other test in this file waited on `data-ready` and timed out.
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await openFloor(page);
+  await expect(page.getByTestId("floor")).toHaveAttribute("data-painted", "true");
+  await expect(page.getByTestId("floor")).toHaveAttribute("data-portraits", "5");
+  await expect(page.getByTestId("roster")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("art that does not load leaves the drawn floor, not a blank window", async ({ page }) => {
+  // The painting and the portraits are files, and a file can be missing. What is left is the
+  // floor the plan draws in code, with every familiar still standing on it.
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  // Only the image fetches. Under Vite an asset `import` is itself a module request (`?import`)
+  // that answers with the URL; failing that would fail the module graph, not the art.
+  await page.route(
+    (url) => url.pathname.includes("/assets/higgsfield/") && !url.search.includes("import"),
+    (route) => route.abort(),
+  );
+  await openFloor(page);
+  await expect(page.getByTestId("floor")).toHaveAttribute("data-painted", "false");
+  await expect(page.getByTestId("floor")).toHaveAttribute("data-portraits", "0");
+  await expect(page.getByTestId("floor-mirror")).toContainText("Astrolabe is waiting for your seal");
+  // §3: and it says so, on the floor, rather than only in a console nobody opens.
+  await expect(page.getByTestId("floor-art-missing")).toContainText("did not load");
+  expect(errors).toEqual([]);
+});
+
+test("a floor whose renderer cannot start says why and offers the roster", async ({ page }) => {
+  // In every packaged build until now, Pixi refused to start under the CSP, and the scene that
+  // caught it offered to restore five familiars who were already in the rail (DECISIONS 0021).
+  // Taking WebGL away is the nearest a browser comes to that machine.
+  await page.addInitScript(() => {
+    HTMLCanvasElement.prototype.getContext = () => null;
+    Object.defineProperty(navigator, "gpu", { value: undefined });
+  });
+  await page.goto("/");
+  const recovery = page.getByTestId("floor-recovery");
+  await expect(recovery).toContainText("did not start", { timeout: 20_000 });
+  await expect(recovery.locator(".floor-recovery__reason")).not.toBeEmpty();
+  await expect(page.getByTestId("roster")).toBeVisible();
+  await recovery.getByRole("button", { name: "Show the roster" }).click();
+  await expect(page.getByTestId("floor-toggle")).toHaveAttribute("data-floor", "off");
+});
+
 test("the floor fills the pane until you choose someone", async ({ page }) => {
   // §8 calls the floor "the thing you open the app to look at". Opening on a 40% strip beneath
   // a familiar nobody picked is not that, so nothing is selected until something is picked.
@@ -165,6 +215,39 @@ test("a hidden floor renders nothing at all", async ({ page }) => {
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await expect.poll(async () => Number(await stats.getAttribute("data-frames"))).toBeGreaterThan(stopped);
+});
+
+test("panning and zooming inside a band does not redraw the room", async ({ page }) => {
+  // §8.6: the baked layer is re-made on a resize, or when the zoom crosses 0.9× where the labels
+  // come and go — never on a pan. At one device pixel per CSS pixel the stage and the bake
+  // disagreed about which side of 0.9 the floor was on, so every drag and every wheel notch
+  // re-drew the whole plan. This runner is 1×, which is the case Retina hid (DECISIONS 0022).
+  await openFloor(page);
+  const stats = page.getByTestId("floor-stats");
+  const bakes = async () => Number(await stats.getAttribute("data-bakes"));
+  await expect.poll(bakes).toBeGreaterThan(0);
+  await page.waitForTimeout(600); // the first resize lands after mount
+  const settled = await bakes();
+
+  const box = (await page.getByTestId("floor-canvas").boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height * 0.3;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(x + i * 12, y + i * 6);
+  await page.mouse.up();
+  // In, then back out to where it began, never below 0.9×: exp(60/400) a notch.
+  for (let i = 0; i < 3; i++) await page.mouse.wheel(0, -60);
+  for (let i = 0; i < 3; i++) await page.mouse.wheel(0, 60);
+  await page.waitForTimeout(600); // the readout is written every 250ms
+  expect(await bakes()).toBe(settled);
+
+  // Crossing 0.9× is the one zoom that re-draws it, and it does so once.
+  await page.mouse.wheel(0, 120);
+  await expect.poll(bakes).toBe(settled + 1);
+  await page.mouse.wheel(0, 60);
+  await page.waitForTimeout(600);
+  expect(await bakes()).toBe(settled + 1);
 });
 
 test("twelve familiars, five of them working, keeps drawing", async ({ page }) => {

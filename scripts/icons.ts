@@ -1,131 +1,263 @@
 /**
- * Draws the application mark and writes every size the bundler asks for.
+ * Composes the application mark and writes every size the bundler asks for.
  *
- * §1 of CLAUDE.md forbids vendored art. Nothing here is vendored: the mark is the same
- * deterministic sigil the roster draws, rasterised by the small signed-distance routines
- * below, and the output lands in a gitignored folder so no image file ever enters the repo.
- * Tauri embeds these at compile time through `generate_context!()`, so they must exist before
- * any Rust build — `bun run dev` included. `beforeDevCommand` and `beforeBuildCommand` in
- * tauri.conf.json both run this first; `bun run icons` re-draws them by hand.
+ * The mark itself is a Higgsfield generation the owner commissioned — the Grimoire sigil made as
+ * an engraved brass medallion — committed at `src/assets/higgsfield/app-mark.png` with its
+ * provenance beside it (DECISIONS 0020). What is drawn here, in code, is everything around it:
+ * the tile on Apple's 1024 grid, its lamplight, and the medallion's shadow. Then every size is
+ * derived from one 1024 composition, so the dock icon and the 16px favicon cannot disagree.
+ *
+ * The output lands in `src-tauri/icons/`, which stays gitignored: it is a build product. Tauri
+ * embeds these at compile time through `generate_context!()`, so they must exist before any Rust
+ * build — `beforeDevCommand` and `beforeBuildCommand` in tauri.conf.json both run this first.
  */
-import { deflateSync } from "node:zlib";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { deflateSync, inflateSync } from "node:zlib";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { RING_RADIUS, polar, sigilGeometry } from "../src/ui/sigil-geometry";
-
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "src-tauri", "icons");
+const MARK = join(ROOT, "src", "assets", "higgsfield", "app-mark.png");
 
 // Straight from src/theme/tokens.css. Kept as literals because a .css import here would
 // drag Tailwind into a plain Bun script for four numbers.
 const VOID: RGB = [0x14, 0x13, 0x1a];
+const PANEL: RGB = [0x1e, 0x1c, 0x27];
+const RULE: RGB = [0x33, 0x2f, 0x40];
 const BRASS: RGB = [0xb0, 0x8d, 0x3f];
-const BONE: RGB = [0xc9, 0xbf, 0xa4];
 
 type RGB = [number, number, number];
-type Pt = [number, number];
 
-/** One drawable: a signed distance in viewBox units, plus what to paint where it is ≤ 0. */
-interface Shape {
-  sdf: (x: number, y: number) => number;
-  colour: RGB;
+/** Premultiplied RGBA in 0..1, row-major. Every operation below stays premultiplied. */
+interface Img {
+  size: number;
+  px: Float32Array;
 }
 
-const ring = (r: number, w: number, colour: RGB): Shape => ({
-  colour,
-  sdf: (x, y) => Math.abs(Math.hypot(x, y) - r) - w / 2,
-});
+// ── The composition, on Apple's grid ──────────────────────────────────────────────────
 
-const disc = (c: Pt, r: number, colour: RGB): Shape => ({
-  colour,
-  sdf: (x, y) => Math.hypot(x - c[0], y - c[1]) - r,
-});
+const CANVAS = 1024;
+/** macOS: an 824 tile centred on the 1024 canvas, with continuous-looking corners. */
+const TILE_HALF = 412;
+const TILE_RADIUS = 186;
+/** How wide the medallion stands on the tile. */
+const MARK_SIZE = 700;
 
-/** A segment with round caps: the distance from a point to the segment, less half the width. */
-const bar = (a: Pt, b: Pt, w: number, colour: RGB): Shape => ({
-  colour,
-  sdf: (x, y) => {
-    const [ax, ay] = a;
-    const vx = b[0] - ax;
-    const vy = b[1] - ay;
-    const len2 = vx * vx + vy * vy || 1;
-    let t = ((x - ax) * vx + (y - ay) * vy) / len2;
-    t = t < 0 ? 0 : t > 1 ? 1 : t;
-    return Math.hypot(x - (ax + t * vx), y - (ay + t * vy)) - w / 2;
-  },
-});
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-/** The mark itself, in the same -50..50 viewBox the Sigil component uses. */
-function mark(): Shape[] {
-  const g = sigilGeometry("Grimoire");
-  const shapes: Shape[] = [ring(RING_RADIUS, 5, BRASS)];
-
-  for (const s of g.strokes) {
-    shapes.push(bar(polar(s.angle, s.inner), polar(s.angle, s.outer), s.width, BRASS));
-  }
-
-  // A fixed interior lozenge rather than the hashed glyph: the app mark should not change
-  // shape if the glyph table is ever extended. Four bars and a centre dot, all segments.
-  const r = 13;
-  const pts: Pt[] = [
-    [0, -r],
-    [r, 0],
-    [0, r],
-    [-r, 0],
-  ];
-  for (let i = 0; i < 4; i++) shapes.push(bar(pts[i]!, pts[(i + 1) % 4]!, 4, BONE));
-  shapes.push(disc([0, 0], 3.2, BONE));
-
-  return shapes;
+function roundedRectDistance(x: number, y: number): number {
+  const qx = Math.abs(x) - (TILE_HALF - TILE_RADIUS);
+  const qy = Math.abs(y) - (TILE_HALF - TILE_RADIUS);
+  const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
+  return outside + Math.min(Math.max(qx, qy), 0) - TILE_RADIUS;
 }
 
-const SHAPES = mark();
+function over(dst: Float32Array, o: number, r: number, g: number, b: number, a: number) {
+  // Source premultiplied: r, g, b already carry a.
+  const k = 1 - a;
+  dst[o] = r + dst[o]! * k;
+  dst[o + 1] = g + dst[o + 1]! * k;
+  dst[o + 2] = b + dst[o + 2]! * k;
+  dst[o + 3] = a + dst[o + 3]! * k;
+}
 
-/** 3×3 supersampling. Enough at 32px, and the largest icon is only a megapixel. */
-const SS = 3;
+function compose(mark: Img): Img {
+  const px = new Float32Array(CANVAS * CANVAS * 4);
+  const half = CANVAS / 2;
 
-function render(size: number): Buffer {
-  const px = Buffer.alloc(size * size * 4);
-  // Leave a margin so the mark is not flush to the tile edge on macOS.
-  const scale = size / 108;
-  const half = size / 2;
-
-  for (let py = 0; py < size; py++) {
-    for (let pxi = 0; pxi < size; pxi++) {
-      const acc: [number, number, number] = [0, 0, 0];
-      let n = 0;
-      for (let sy = 0; sy < SS; sy++) {
-        for (let sx = 0; sx < SS; sx++) {
-          const x = (pxi + (sx + 0.5) / SS - half) / scale;
-          const y = (py + (sy + 0.5) / SS - half) / scale;
-          let c: RGB = VOID;
-          let best = Infinity;
-          for (const s of SHAPES) {
-            const d = s.sdf(x, y);
-            if (d <= 0 && d < best) {
-              best = d;
-              c = s.colour;
-            }
-          }
-          acc[0] += c[0];
-          acc[1] += c[1];
-          acc[2] += c[2];
-          n++;
-        }
-      }
-      const o = (py * size + pxi) * 4;
-      px[o] = Math.round(acc[0] / n);
-      px[o + 1] = Math.round(acc[1] / n);
-      px[o + 2] = Math.round(acc[2] / n);
-      px[o + 3] = 255;
+  // The tile: ink, lifted toward the panel colour where the lamp is (upper left), a hairline of
+  // rule colour at its edge. Coverage is analytic, so the corner is smooth at every size.
+  for (let y = 0; y < CANVAS; y++) {
+    for (let x = 0; x < CANVAS; x++) {
+      const cx = x + 0.5 - half;
+      const cy = y + 0.5 - half;
+      const d = roundedRectDistance(cx, cy);
+      const coverage = clamp01(0.5 - d);
+      if (coverage === 0) continue;
+      const lamp = clamp01(1 - Math.hypot(cx + 150, cy + 190) / 640);
+      const glow = lamp * lamp * 0.16;
+      const lift = clamp01((TILE_HALF - cy) / (2 * TILE_HALF)) * 0.6;
+      const edge = clamp01(1 - Math.abs(d + 2.5) / 1.5) * 0.9;
+      const c = [0, 1, 2].map((i) => {
+        const base = VOID[i]! + (PANEL[i]! - VOID[i]!) * lift;
+        const lit = base + (BRASS[i]! - base) * glow;
+        return (lit + (RULE[i]! - lit) * edge) / 255;
+      });
+      over(px, (y * CANVAS + x) * 4, c[0]! * coverage, c[1]! * coverage, c[2]! * coverage, coverage);
     }
   }
-  return png(px, size);
+
+  // The medallion's shadow: its own alpha, blurred and dropped toward the floor of the tile.
+  const placed = resample(mark, MARK_SIZE);
+  const offset = (CANVAS - MARK_SIZE) / 2;
+  const shadow = blurAlpha(placed, 14, 3);
+  for (let y = 0; y < MARK_SIZE; y++) {
+    for (let x = 0; x < MARK_SIZE; x++) {
+      const a = shadow[y * MARK_SIZE + x]! * 0.55;
+      const ty = y + offset + 18;
+      const tx = x + offset;
+      if (a > 0 && ty < CANVAS) over(px, (ty * CANVAS + tx) * 4, 0, 0, 0, a);
+    }
+  }
+  for (let y = 0; y < MARK_SIZE; y++) {
+    for (let x = 0; x < MARK_SIZE; x++) {
+      const s = (y * MARK_SIZE + x) * 4;
+      const a = placed.px[s + 3]!;
+      if (a > 0) {
+        over(px, ((y + offset) * CANVAS + x + offset) * 4, placed.px[s]!, placed.px[s + 1]!, placed.px[s + 2]!, a);
+      }
+    }
+  }
+  return { size: CANVAS, px };
 }
 
-// ── PNG ────────────────────────────────────────────────────────────────────────────────
+// ── Resampling ────────────────────────────────────────────────────────────────────────
+
+/** Area-average resample to `size`: every source pixel contributes by how much of it is covered. */
+function resample(src: Img, size: number): Img {
+  const ratio = src.size / size;
+  const weights: { i: number; w: number }[][] = [];
+  for (let d = 0; d < size; d++) {
+    const from = d * ratio;
+    const to = from + ratio;
+    const row: { i: number; w: number }[] = [];
+    for (let i = Math.floor(from); i < Math.min(src.size, Math.ceil(to)); i++) {
+      const w = Math.min(to, i + 1) - Math.max(from, i);
+      if (w > 0) row.push({ i, w: w / ratio });
+    }
+    weights.push(row);
+  }
+  // Horizontal, then vertical.
+  const mid = new Float32Array(size * src.size * 4);
+  for (let y = 0; y < src.size; y++) {
+    for (let x = 0; x < size; x++) {
+      const o = (y * size + x) * 4;
+      for (const { i, w } of weights[x]!) {
+        const s = (y * src.size + i) * 4;
+        for (let c = 0; c < 4; c++) mid[o + c]! += src.px[s + c]! * w;
+      }
+    }
+  }
+  const px = new Float32Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const o = (y * size + x) * 4;
+      for (const { i, w } of weights[y]!) {
+        const s = (i * size + x) * 4;
+        for (let c = 0; c < 4; c++) px[o + c]! += mid[s + c]! * w;
+      }
+    }
+  }
+  return { size, px };
+}
+
+/** A box blur of the alpha channel, `passes` times — near enough to a gaussian for a shadow. */
+function blurAlpha(img: Img, radius: number, passes: number): Float32Array {
+  const n = img.size;
+  let a = new Float32Array(n * n);
+  for (let i = 0; i < n * n; i++) a[i] = img.px[i * 4 + 3]!;
+  const span = radius * 2 + 1;
+  for (let p = 0; p < passes; p++) {
+    for (const horizontal of [true, false]) {
+      const out = new Float32Array(n * n);
+      for (let line = 0; line < n; line++) {
+        let sum = 0;
+        const read = (k: number) => {
+          if (k < 0 || k >= n) return 0;
+          return horizontal ? a[line * n + k]! : a[k * n + line]!;
+        };
+        for (let k = -radius; k <= radius; k++) sum += read(k);
+        for (let k = 0; k < n; k++) {
+          const at = horizontal ? line * n + k : k * n + line;
+          out[at] = sum / span;
+          sum += read(k + radius + 1) - read(k - radius);
+        }
+      }
+      a = out;
+    }
+  }
+  return a;
+}
+
+// ── PNG in ────────────────────────────────────────────────────────────────────────────
+
+const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** Enough of a PNG decoder for one file this repository controls: 8-bit RGBA, not interlaced. */
+function decodePng(file: Buffer, name: string): Img {
+  if (!file.subarray(0, 8).equals(SIGNATURE)) throw new Error(`${name} is not a PNG.`);
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  const idat: Buffer[] = [];
+  while (pos < file.length) {
+    const length = file.readUInt32BE(pos);
+    const type = file.toString("ascii", pos + 4, pos + 8);
+    const data = file.subarray(pos + 8, pos + 8 + length);
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      if (data[8] !== 8 || data[9] !== 6 || data[12] !== 0) {
+        throw new Error(`${name} must be 8-bit RGBA and not interlaced. Re-save it that way.`);
+      }
+    } else if (type === "IDAT") idat.push(data);
+    else if (type === "IEND") break;
+    pos += 12 + length;
+  }
+  if (width !== height) throw new Error(`${name} must be square; it is ${width}×${height}.`);
+
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * 4;
+  const bytes = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)]!;
+    const line = y * (stride + 1) + 1;
+    for (let x = 0; x < stride; x++) {
+      const a = x >= 4 ? bytes[y * stride + x - 4]! : 0;
+      const b = y > 0 ? bytes[(y - 1) * stride + x]! : 0;
+      const c = x >= 4 && y > 0 ? bytes[(y - 1) * stride + x - 4]! : 0;
+      let v = raw[line + x]!;
+      if (filter === 1) v += a;
+      else if (filter === 2) v += b;
+      else if (filter === 3) v += (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      } else if (filter !== 0) throw new Error(`${name} uses an unknown PNG filter (${filter}).`);
+      bytes[y * stride + x] = v & 0xff;
+    }
+  }
+
+  const px = new Float32Array(width * height * 4);
+  for (let i = 0; i < width * height; i++) {
+    const a = bytes[i * 4 + 3]! / 255;
+    px[i * 4] = (bytes[i * 4]! / 255) * a;
+    px[i * 4 + 1] = (bytes[i * 4 + 1]! / 255) * a;
+    px[i * 4 + 2] = (bytes[i * 4 + 2]! / 255) * a;
+    px[i * 4 + 3] = a;
+  }
+  return { size: width, px };
+}
+
+/** Back to straight 8-bit RGBA, then through the encoder below. */
+function encode(img: Img): Buffer {
+  const out = Buffer.alloc(img.size * img.size * 4);
+  for (let i = 0; i < img.size * img.size; i++) {
+    const a = img.px[i * 4 + 3]!;
+    const un = (v: number) => Math.round(clamp01(a > 0 ? v / a : 0) * 255);
+    out[i * 4] = un(img.px[i * 4]!);
+    out[i * 4 + 1] = un(img.px[i * 4 + 1]!);
+    out[i * 4 + 2] = un(img.px[i * 4 + 2]!);
+    out[i * 4 + 3] = Math.round(clamp01(a) * 255);
+  }
+  return png(out, img.size);
+}
+
+// ── PNG out ────────────────────────────────────────────────────────────────────────────────
 
 const CRC_TABLE = (() => {
   const t = new Int32Array(256);
@@ -219,9 +351,17 @@ function icns(entries: { tag: string; data: Buffer }[]): Buffer {
 
 mkdirSync(OUT, { recursive: true });
 
+let source: Buffer;
+try {
+  source = readFileSync(MARK);
+} catch {
+  throw new Error(`The application mark is missing: ${MARK}. It is committed; check out the repository again.`);
+}
+const full = compose(decodePng(source, "app-mark.png"));
+
 const SIZES = [16, 32, 64, 128, 256, 512, 1024];
 const bySize = new Map<number, Buffer>();
-for (const s of SIZES) bySize.set(s, render(s));
+for (const s of SIZES) bySize.set(s, encode(s === CANVAS ? full : resample(full, s)));
 
 const files: [string, Buffer][] = [
   ["32x32.png", bySize.get(32)!],
@@ -250,4 +390,4 @@ for (const [name, data] of files) {
   writeFileSync(join(OUT, name), data);
   console.log(`  ${name.padEnd(16)} ${(data.length / 1024).toFixed(1)} kB`);
 }
-console.log(`Drew ${files.length} files into src-tauri/icons/ (gitignored; §1 forbids vendored art).`);
+console.log(`Composed ${files.length} files into src-tauri/icons/ from src/assets/higgsfield/app-mark.png.`);

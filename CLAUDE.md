@@ -42,9 +42,29 @@ This project is inspired by existing open-source agent harnesses. The rules:
   not "the same function with different variable names." Read other projects for ideas about
   architecture; write this one from scratch.
 - **Do not vendor art assets** from anywhere. No purchased or licensed tilesets, no sprite
-  packs, no ripped UI. Every visual in this app is either generated (SVG/canvas drawn in code),
-  a free open-licence typeface, or made by the owner. If a phase seems to need art we don't
-  have, use the code-drawn fallback described in §7 and move on.
+  packs, no ripped UI, no stock images, nothing downloaded. Every visual in this app is one of:
+  drawn in code (SVG, canvas, Pixi `Graphics`); a free open-licence typeface; or made by the
+  owner. **Art generated on the owner's own Higgsfield account, at the owner's direction, for
+  this project, is made by the owner** (DECISIONS 0020), and new art is generated there.
+- **Generated art follows five rules**, and a file that breaks one does not ship:
+  1. Higgsfield only, on the owner's account. No other generator, no image from anyone else's.
+  2. References are this repository's own images only: earlier generations, code-drawn marks,
+     diagrams drawn from the code. No prompt names another work, artist, studio, game, film or
+     franchise, and none asks for anyone's style.
+  3. Every generated file has its row in `src/assets/higgsfield/PROVENANCE.md` — job id, model,
+     prompt, references, and what was done to it afterwards — in the same commit that adds it.
+     `git ls-files '*.png' '*.jpg'` read against that file is the audit for this section.
+  4. No names, captions or text in the pixels. The canon in the next bullet binds generated
+     figures exactly as it binds everything else.
+  5. State lives in code. A generated image may set the scene; it is never the only place a
+     state, a click target or a warning is shown, and everything generated has a fallback drawn
+     in code for when it fails to load.
+
+  If a phase seems to need art we don't have, generate it under these rules, or use the
+  code-drawn fallback described in §7 and move on. Where a later section says something is
+  "drawn in code" or asks for "no image files" (§7.4, §8.1, §10 Phases 5 and 9), read it with
+  this exception: the scene may be a registered Higgsfield image, and what that section protects
+  — nothing owed to anyone, every state exact in code — still holds.
 - **Every name, character, house, spell, creature and place in this app is original to this
   project.** The naming system in §3 is the canon. Do not substitute names from published
   fiction, films, or games — not in the UI, not in comments, not in seed data, not in agent

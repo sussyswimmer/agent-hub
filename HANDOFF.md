@@ -4,7 +4,8 @@ Written for whoever picks this up next, human or otherwise. `CLAUDE.md` is the s
 the source of truth — where it and this file disagree, read `CLAUDE.md`. This file is only the
 state of play: what is built, what is known broken, what is untested, and what to do first.
 
-Branch: `claude/sharp-euler-l2gy92`. Nothing has been merged anywhere.
+Branch: `claude/laughing-lamport-pk21v3`, which carries `claude/sharp-euler-l2gy92` and the owner's
+releases on top. Nothing has been merged into a default branch.
 
 ---
 
@@ -13,7 +14,7 @@ Branch: `claude/sharp-euler-l2gy92`. Nothing has been merged anywhere.
 | File | What it is | Why you need it |
 | --- | --- | --- |
 | `CLAUDE.md` | The specification | §1 (originality and licensing) and §11 (security) are binding constraints, not suggestions. §10 is the phase order. |
-| `DECISIONS.md` | Eighteen entries | Every place the code diverges from the spec, and why. Do not re-litigate one without reading it. |
+| `DECISIONS.md` | Twenty-two entries | Every place the code diverges from the spec, and why. Do not re-litigate one without reading it. |
 | `TASKS.md` | Session log, per phase | What was verified by hand and what could not be. The "Blocked here — needs the Mac" table at the end is the honest list. |
 | `README.md` | For the owner, not for you | "Running it" and "What to distrust". |
 
@@ -29,8 +30,9 @@ session should keep:
 
 ## 2. Where the work stands
 
-Phases 0 through 7 of §10 are done, verified by hand, and committed. Phases 8 and 9 are not
-started.
+Phases 0 through 8 of §10 are done and committed. Phase 9 is under way: CI cuts macOS and
+Windows installers, the app icon is composed from generated art (DECISIONS 0020), and the week of
+real use on a Mac is what remains.
 
 | Phase | What it is | State |
 | --- | --- | --- |
@@ -42,8 +44,8 @@ started.
 | 5 | The floor | Done |
 | 6 | Aether and the breaker | Done |
 | 7 | Standing wards and the menu bar | Done, except the tray itself (no session bus here) |
-| 8 | The archivist | **Not started** |
-| 9 | Ship | **Not started** |
+| 8 | The archivist | Done. It proposes; it cannot dispatch |
+| 9 | Ship | **Under way.** Installers build in CI; the week of use on a Mac is not started |
 
 Commit history on the branch, newest first:
 
@@ -86,7 +88,7 @@ src/                          ← React. IPC goes through src/lib/ipc.ts and now
   scriptorium/floor/  PixiJS. plan.ts is data; adding an order should mean editing one array.
   familiar/           the five tabs
   seal/Seals.tsx      the queue
-  workbench/          EMPTY. See §5.
+  workbench/          engine paths, provider sign-in, spend cap, transcripts, restore seeds
 ```
 
 ---
@@ -123,20 +125,14 @@ here** — the pattern matches your own wrapper shell and kills it (exit 144). U
 
 ## 5. What is missing, in the order it matters
 
-1. **The workbench does not exist.** `src/workbench/` is an empty directory. §6.5 puts the
-   runaway guard's spend cap there, §6.1 puts the engine binary's path there, §11 puts transcript
-   deletion there. All three are real settings with working defaults and no interface — the spend
-   cap is read from a settings key nobody can set. This is the largest gap before Phase 9 and the
-   most likely thing the owner asks for first.
-2. **Phase 8 — the archivist.** §6.8. The point of it is what it *cannot* do: it reads the roster,
-   the queue and the ledger, and it may only **propose** commissions into the seal queue. §10's
-   acceptance criterion is a test that tries to dispatch directly and fails. Build the
-   impossibility first and the feature second; `crates/grimoire-core/src/breaker/guard.rs` is the
-   pattern — it takes no `on_exceed` parameter and has a test asserting there is no way to give it
-   one (DECISIONS 0014).
-3. **Phase 9 — ship.** `.dmg`, install to `/Applications`, a week of real use logged in
-   `TASKS.md`. Blocked on having a Mac.
-4. **The ward panel is per-familiar**, with no global list. §6.7 does not ask for one; with five
+1. **Phase 9 — the week of use.** Install the `.dmg` to `/Applications`, use it for a week without
+   the dev server, and log in `TASKS.md` which parts of the floor were looked at and which never
+   were. Blocked on the owner's Mac. Everything in §8 of this file is the list of what to watch.
+2. **New art goes through Higgsfield**, under the five rules now in `CLAUDE.md` §1 (DECISIONS
+   0020). Give it only this repository's images as references, write its row in
+   `src/assets/higgsfield/PROVENANCE.md` in the same commit, and keep a drawn fallback:
+   `floor/art.ts` is the pattern.
+3. **The ward panel is per-familiar**, with no global list. §6.7 does not ask for one; with five
    familiars there is nowhere to see every schedule at once.
 
 ---
@@ -172,8 +168,15 @@ things you already understood, and find nothing about things you did not.
 - **The never-exempt list is in code, not config**, and `free` does not reach it (§6.4). Anything
   that makes it configurable is a bug, whatever it looks like.
 - **§1 is absolute.** No copied source, no vendored art, no names from published fiction anywhere —
-  UI, comments, seed data, or "placeholders". `git status` showing an image file means something
-  went wrong. Icons and sigils are drawn in code (DECISIONS 0005).
+  UI, comments, seed data, or "placeholders". The one kind of image allowed in is art generated on
+  the owner's Higgsfield account, and only with its row in `src/assets/higgsfield/PROVENANCE.md`
+  (DECISIONS 0020). An image file without one means something went wrong.
+- **The browser suite cannot see the CSP or the `tauri://` scheme.** Three floor faults lived
+  there, and the floor had never drawn in a packaged build (DECISIONS 0021). Keep
+  `import "pixi.js/unsafe-eval"` in `stage.ts`; load textures with `Assets.load`, never
+  `Texture.from(url)`, on the main thread, and through `assetUrl.ts`. Check the floor with
+  `bun run tauri build --debug --no-bundle` under `Xvfb`, not only with `tauri dev`, which
+  applies no CSP either.
 - **`~/.grimoire` is the owner's real data.** Always set `GRIMOIRE_HOME` when testing.
 - **Never log the writ, prompts, file contents or agent output** anywhere but the local transcript
   the owner can see and delete (§6.1). Redact key patterns from PTY output (§11).

@@ -17,5 +17,5 @@ playwright-report/
 .env.*
 !.env.example
 
-# Icons are drawn in code (scripts/icons.ts), never committed (CLAUDE.md §1)
+# Icons are composed by scripts/icons.ts from src/assets/higgsfield/app-mark.png: a build product
 src-tauri/icons/

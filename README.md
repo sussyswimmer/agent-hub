@@ -16,7 +16,8 @@ code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
 ## State
 
-Phase 7 of the ten in §10; the archivist and the packaged build remain. Familiars are files:
+Phases 0 to 8 of §10 are built, and Phase 9, the packaged build, is under way: releases are cut
+for macOS and Windows, and a week of real use on the owner's Mac is what remains. Familiars are files:
 drop a `.binding.md` in `~/.grimoire/bindings` and one appears, edit it and the change arrives
 without a restart, break it and it says what is wrong rather than vanishing. Give one a
 commission and it queues; summon it and the oldest starts, running a real agent CLI in a
@@ -24,14 +25,15 @@ pseudo-terminal with the binding's writ as its briefing. What it costs is record
 stopped halfway through is still there, correctly marked, after a restart. Five bindings ship
 and are placed on first run.
 
-**The floor is what it opens on.** A plan of the tower, inked on vellum, drawn top-down with
-every familiar on it at once: dormant ones resting at the hearth, working ones at their own
+**The floor is what it opens on.** The tower room painted from directly above, with every
+familiar standing in it at once: dormant ones resting at the hearth, working ones at their own
 order's desk with a thread of ink running to the lamp, and anything waiting on you standing in
 the ward circle with the circle lit brass around it. Summoning walks a familiar in through the
 door; banishing walks it out. Hover a mark for what it is doing and what it has spent, click it
-to open its workspace with the floor still in sight above. Every mark on it is drawn in code —
-there is not one image file in this repository — and there is a Roster toggle for when you would
-rather have the list.
+to open its workspace with the floor still in sight above. The painting is registered to the
+plan underneath, so what you click is where it is drawn; the states on top of it (rings, arcs, the
+thread of ink, the lit circle) are drawn in code, and if the art ever fails to load the plan is
+drawn in code too. There is a Roster toggle for when you would rather have the list.
 
 **Some of it happens without you.** A standing ward is a schedule, a prompt and a familiar: a
 morning brief, a weekly tidy, a nightly check. It fires with the window closed, because closing
@@ -102,8 +104,9 @@ Two things you do not need:
   is worth running once on a machine that can reach github.com, because that is where Junicode —
   the display face §7.3 actually asks for — lives, and it could not be fetched from the machine
   this was built on. See `DECISIONS.md` 0003.
-- `bun run icons` is **automatic**. The application mark is drawn in code, not committed, and
-  `bun run tauri dev` and `bun run dist` both draw it before anything compiles.
+- `bun run icons` is **automatic**. The icons are composed from `src/assets/higgsfield/app-mark.png`
+  into a gitignored folder, and `bun run tauri dev` and `bun run dist` both do it before anything
+  compiles.
 
 `VITE_IPC_MOCK=1 bun run dev` serves the interface alone, in a browser, against an in-memory
 backend — no Rust build. That is how the Playwright suite runs.
@@ -132,8 +135,8 @@ cargo test -p grimoire-core --test engine -- --ignored --nocapture
 bun run dist
 ```
 
-Which draws the application mark on the way past — see `DECISIONS.md` 0005 for what it draws and
-why there is no `.png` in this repository to draw it from.
+Which composes the application icons on the way past — see `DECISIONS.md` 0020 for what is
+generated and what is drawn.
 
 ## What to distrust
 
@@ -153,11 +156,13 @@ table and the reason for each; these are the ones most likely to surprise you in
 Nothing in that list is claimed as done anywhere in this repository. If one of them is broken,
 it is broken for a reason that is written down.
 
-## Everything you can see is drawn in code
+## Where the art comes from
 
-No art is vendored. Every mark in the interface — the familiars' sigils, the application icon —
-is generated from `src/ui/sigil-geometry.ts`, so `git status` should never show an image file.
-The two typefaces are OFL-1.1 and vendored with their licence texts. `THIRD-PARTY.md` lists
-every runtime dependency.
+No art is vendored. The sigils, the state marks and the plan are drawn in code from
+`src/ui/sigil-geometry.ts` and `src/scriptorium/floor/`. The painted floor, the five familiars
+and the application mark were generated for this project on the owner's Higgsfield account;
+each one's job id, prompt and post-processing is in `src/assets/higgsfield/PROVENANCE.md`, and
+`DECISIONS.md` 0020 is the ruling that makes them the owner's. The two typefaces are OFL-1.1
+and vendored with their licence texts. `THIRD-PARTY.md` lists every runtime dependency.
 
 Grimoire is MIT.

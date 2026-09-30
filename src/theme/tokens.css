@@ -193,15 +193,22 @@ select {
     #10101a;
 }
 
+/* The painted floor is drawn inside the canvas, registered to the plan, so it pans and zooms with
+   the room (DECISIONS 0020). Around it is the void its corners were feathered into. */
 .floor-canvas--higgs {
-  background:
-    radial-gradient(circle at 50% 50%, transparent 35%, rgba(7, 5, 14, 0.68) 100%),
-    url("../assets/higgsfield/tower-floor.png") center / cover no-repeat,
-    var(--ink-void);
+  background: var(--ink-void);
 }
 
-.floor-canvas--higgs canvas {
-  mix-blend-mode: screen;
+.floor-art-missing {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.6rem;
+  max-width: min(36rem, 60%);
+  margin: 0;
+  color: var(--bone-dim);
+  font-size: 0.75rem;
+  text-align: right;
+  pointer-events: none;
 }
 
 .connection-deck {
@@ -274,17 +281,15 @@ select {
 .floor-recovery__orbit--inner { width: min(44vw, 30rem); height: min(18vw, 12rem); transform: rotate(27deg); animation: orbit-breathe 7s ease-in-out -3.5s infinite reverse; }
 
 .floor-recovery__party { position: relative; z-index: 1; width: min(82vw, 44rem); height: min(31vw, 15rem); }
-.floor-recovery__familiar { --tone: var(--bone); position: absolute; left: calc(8% + var(--i) * 20%); bottom: calc(1rem + (var(--i) % 2) * 1.6rem); display: grid; width: clamp(72px, 10vw, 128px); height: clamp(105px, 14vw, 160px); place-items: end center; color: var(--tone); background-image: url("../assets/higgsfield/familiar-sheet.png"); background-size: 550% auto; background-position-y: 49%; background-repeat: no-repeat; filter: drop-shadow(0 12px 9px rgba(0, 0, 0, 0.5)); animation: familiar-bob 2.6s ease-in-out calc(var(--i) * -0.31s) infinite; }
+.floor-recovery__familiar { --tone: var(--bone); position: absolute; left: calc(8% + var(--i) * 20%); bottom: calc(1rem + (var(--i) % 2) * 1.6rem); display: grid; width: clamp(72px, 10vw, 128px); height: clamp(105px, 14vw, 160px); place-items: end center; color: var(--tone); filter: drop-shadow(0 12px 9px rgba(0, 0, 0, 0.5)); animation: familiar-bob 2.6s ease-in-out calc(var(--i) * -0.31s) infinite; }
+/* Absolutely placed: a percentage height on a grid item's image does not resolve in WebKitGTK,
+   and the figures spilled out of their boxes across the heading. */
+.floor-recovery__familiar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: bottom; user-select: none; }
+.floor-recovery__reason { font-size: 0.75rem; opacity: 0.85; overflow-wrap: anywhere; }
 .floor-recovery__familiar[data-order="quill"] { --tone: var(--brass); }
 .floor-recovery__familiar[data-order="lantern"] { --tone: var(--verdigris); }
 .floor-recovery__familiar[data-order="crucible"] { --tone: var(--oxblood-text); }
 .floor-recovery__familiar[data-order="compass"] { --tone: var(--slate-text); }
-.floor-recovery__familiar[data-order="quill"] { background-position-x: 0%; }
-.floor-recovery__familiar[data-order="lantern"] { background-position-x: 25%; }
-.floor-recovery__familiar[data-order="crucible"] { background-position-x: 50%; }
-.floor-recovery__familiar[data-order="compass"] { background-position-x: 75%; }
-.floor-recovery__familiar[data-order="ledger"] { background-position-x: 100%; }
-.floor-recovery__head, .floor-recovery__body { display: none; }
 .floor-recovery__familiar span { position: absolute; bottom: -1.55rem; margin-top: 0.45rem; font: 12px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.78; text-shadow: 0 2px 5px var(--ink-void); }
 
 .floor-recovery__copy { position: relative; z-index: 2; width: min(33rem, calc(100% - 2.5rem)); margin-top: min(28vw, 12rem); text-align: center; animation: floor-arrive 700ms var(--ease) both; }

@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["bun"],
+    "types": ["bun", "vite/client"],
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
