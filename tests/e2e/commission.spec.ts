@@ -4,8 +4,11 @@ import { expect, test } from "@playwright/test";
 
 type Page = import("@playwright/test").Page;
 
-/** Place a commission on the currently selected familiar. */
-async function place(page: Page, prompt: string, fill: Record<string, string> = {}) {
+/**
+ * Place a commission on the currently selected familiar. Queued for later by default, which is
+ * what these tests are about; `start` presses the main button instead.
+ */
+async function place(page: Page, prompt: string, fill: Record<string, string> = {}, start = false) {
   await page.locator('[data-tab="commission"]').click();
   await expect(page.getByTestId("intake")).toBeVisible();
   await page.getByTestId("intake-prompt").fill(prompt);
@@ -14,7 +17,7 @@ async function place(page: Page, prompt: string, fill: Record<string, string> = 
     if (await select.count()) await select.selectOption(value);
     else await page.locator(`[data-field="${field}"] input, [data-field="${field}"] textarea`).fill(value);
   }
-  await page.getByTestId("intake-submit").click();
+  await page.getByTestId(start ? "intake-submit" : "intake-queue").click();
 }
 
 const VELLUM = { piece: "The swimming essay", mode: "structural" };
@@ -157,4 +160,67 @@ test("the codex shows what a familiar has written, and an invitation when it has
   // A familiar that has written nothing gets an invitation rather than an empty box (§3).
   await page.locator('[data-familiar="anvil"]').click();
   await expect(page.getByTestId("codex-empty")).toContainText("has not written anything down yet");
+});
+
+test("one press summons a resting familiar and hands it the commission", async ({ page }) => {
+  // Found by the owner on first use: nothing said how to get a familiar to do anything. The
+  // commission tab queued work silently, and the header's Summon only changed tab.
+  await page.goto("/");
+  await expect(page.getByTestId("now-text")).toContainText("Vellum is resting");
+  await expect(page.getByTestId("intake-submit")).toHaveText("Summon and start");
+
+  await place(page, "Tighten the opening.", VELLUM, true);
+
+  // It opened the terminal, summoned, and the commission arrived as the first thing said.
+  await expect(page.locator('[data-tab="terminal"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
+  await expect(page.locator(".xterm-accessibility")).toContainText("Tighten the opening.");
+  // Not reattached to something else: this terminal is the one that summoned it.
+  await expect(page.locator(".xterm-accessibility")).not.toContainText("reattached");
+
+  await page.locator('[data-tab="commission"]').click();
+  await expect(page.getByTestId("queue").locator('[data-status="running"]')).toContainText("Tighten the opening.");
+  await expect(page.getByTestId("now-text")).toContainText("Vellum is working on");
+  await expect(page.getByTestId("intake-submit")).toHaveText("Add to queue");
+});
+
+test("a summoned familiar starts at once, and mark done hands it the next", async ({ page }) => {
+  await page.goto("/");
+  await place(page, "First.", VELLUM, true);
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
+
+  // Busy: the next waits, and says why.
+  await place(page, "Second.", VELLUM, true);
+  const queue = page.getByTestId("queue");
+  await expect(queue.locator('[data-status="queued"]')).toContainText("Second.");
+  await expect(page.getByTestId("commission-notice")).toContainText("when you mark the current one done");
+
+  // Done: the first is done — not banished — and the second is running in the same summoning.
+  await page.getByTestId("commission-done").click();
+  await expect(page.getByTestId("commission-notice")).toContainText("started on the next one");
+  await expect(queue.locator('[data-status="done"]')).toContainText("First.");
+  await expect(queue.locator('[data-status="running"]')).toContainText("Second.");
+
+  // And once the queue is empty, done leaves it summoned and free, and Start starts at once.
+  await page.getByTestId("commission-done").click();
+  await expect(page.getByTestId("now-text")).toContainText("summoned and free");
+  await expect(page.getByTestId("intake-submit")).toHaveText("Start");
+  await place(page, "Third.", VELLUM, true);
+  await expect(page.getByTestId("commission-notice")).toContainText("Started.");
+  await expect(queue.locator('[data-status="running"]')).toContainText("Third.");
+
+  await page.locator('[data-tab="terminal"]').click();
+  await expect(page.locator(".xterm-accessibility")).toContainText("Third.");
+});
+
+test("the header's Summon summons, and then offers to banish", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("summon")).toHaveText("Summon");
+  await page.getByTestId("summon").click();
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
+  await expect(page.getByTestId("summon")).toHaveText("Banish");
+
+  await page.getByTestId("summon").click();
+  await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "ended");
+  await expect(page.getByTestId("summon")).toHaveText("Summon");
 });

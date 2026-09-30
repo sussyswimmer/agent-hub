@@ -23,7 +23,7 @@ import ledger from "@/assets/higgsfield/familiars/ledger.png";
 /** One figure per order. Adding a sixth order means one more line here, as in `plan.ts`. */
 export const PORTRAIT_URLS: Record<Order, string> = { quill, lantern, crucible, compass, ledger };
 
-/** The room from directly above, registered so its 0..1 square is the plan's 0..1000 world. */
+/** The room from directly above, registered so its 0..1 square is the plan's 0..`WORLD` square. */
 export const FLOOR_PAINTING_URL = floorPainting;
 
 /**

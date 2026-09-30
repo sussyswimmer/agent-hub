@@ -99,6 +99,26 @@ export function Roster({ seals = 0 }: { seals?: number }) {
       <Rule />
       <button
         type="button"
+        onClick={() => setView(view === "help" ? "familiar" : "help")}
+        aria-pressed={view === "help"}
+        data-testid="help-toggle"
+        title="What every word means, and the tour again"
+        style={{ borderLeft: `2px solid ${view === "help" ? "var(--brass)" : "transparent"}` }}
+        className={`flex w-full items-center gap-2 py-1.5 pl-2.5 pr-3 text-left text-base transition-colors duration-150 ${
+          view === "help" ? "bg-void text-bone" : "text-bone-dim hover:text-bone"
+        }`}
+      >
+        <span
+          aria-hidden
+          className="mono flex h-4 w-4 items-center justify-center rounded-full border border-current text-[10px] leading-none"
+        >
+          ?
+        </span>
+        How it works
+      </button>
+      <Rule />
+      <button
+        type="button"
         onClick={() => setView(view === "workbench" ? "familiar" : "workbench")}
         aria-pressed={view === "workbench"}
         data-testid="workbench-toggle"

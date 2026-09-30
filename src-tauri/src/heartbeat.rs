@@ -77,7 +77,8 @@ impl Heart {
             // Tokens and turns come from the engine's own transcript (§6.5, DECISIONS.md 0008).
             // Absent is absent: a transcript that is not there yet means no turn has happened,
             // not that nothing has been spent.
-            let used = usage::for_session(&beat.engine_session).unwrap_or_default();
+            // Less whatever the session had spent before this commission was handed to it.
+            let used = usage::for_session(&beat.engine_session).unwrap_or_default().since(beat.baseline);
             let spend = Spend {
                 tokens: used.tokens,
                 turns: used.turns,
@@ -151,7 +152,17 @@ impl Heart {
                 WardRun::Skipped(Skip::Busy)
             } else {
                 match ward::store::commission(&self.db, &w) {
-                    Ok(id) => WardRun::Commissioned(id),
+                    Ok(id) => {
+                        // A familiar already summoned starts on it now; a dormant one finds it
+                        // waiting when it is next summoned.
+                        if self.summonings.is_live(&w.familiar_id)
+                            && let Ok(Some(next)) = commission::next_to_run(&self.db, &w.familiar_id)
+                            && let Err(e) = self.summonings.hand_over(&self.db, &w.familiar_id, &next)
+                        {
+                            tracing::warn!(ward = %w.id, error = %e, "a ward's commission could not be handed over");
+                        }
+                        WardRun::Commissioned(id)
+                    }
                     Err(e) => {
                         tracing::warn!(ward = %w.id, error = %e, "a ward could not be commissioned");
                         continue;

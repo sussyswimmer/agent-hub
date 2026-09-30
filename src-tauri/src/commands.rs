@@ -317,7 +317,7 @@ pub fn state_of(
 #[tauri::command]
 pub fn aether_for(state: State<'_, AppState>, id: String) -> R<Option<Aether>> {
     let Some(live) = state.summonings.aether_source(&id) else { return Ok(None) };
-    let used = grimoire_core::summon::usage::for_session(&live.engine_session).unwrap_or_default();
+    let used = grimoire_core::summon::usage::for_session(&live.engine_session).unwrap_or_default().since(live.baseline);
     let budget = state.roster.get(&id).and_then(|b| b.front).map(|f| f.aether).unwrap_or_default();
 
     Ok(Some(Aether {
@@ -449,16 +449,11 @@ pub fn ward_create(
     ensure_familiar(&state, &binding)?;
 
     // §4's one substitution, applied once and stored — a ward fires at three in the morning with
-    // nobody at the keyboard, so the answers have to be settled when it is written.
-    let answers: std::collections::BTreeMap<String, String> = intake
-        .as_object()
-        .map(|m| {
-            m.iter()
-                .map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())))
-                .collect()
-        })
-        .unwrap_or_default();
-    let (filled, _) = grimoire_core::commission::prompt::fill(&prompt, &answers);
+    // nobody at the keyboard, so the answers have to be settled when it is written. The answers
+    // the prompt does not place go in after it now, once, so §6.7's byte-identical rule still
+    // holds for every run after this.
+    let answers = answers_of(&intake);
+    let (filled, _) = grimoire_core::commission::prompt::brief(&prompt, &answers, &asked_of(&binding));
 
     grimoire_core::ward::store::create(&state.db, &id, &cron, &filled, &intake).map_err(|e| e.to_string())
 }
@@ -595,16 +590,9 @@ pub fn commission_create(
     let binding = state.roster.get(&id).ok_or_else(|| format!("There is no familiar called {id}."))?;
     ensure_familiar(&state, &binding)?;
 
-    // §4's one substitution, and the only one.
-    let answers: std::collections::BTreeMap<String, String> = intake
-        .as_object()
-        .map(|m| {
-            m.iter()
-                .map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())))
-                .collect()
-        })
-        .unwrap_or_default();
-    let (filled, missing) = grimoire_core::commission::prompt::fill(&prompt, &answers);
+    // §4's one substitution, and the only one, plus the answers the prompt did not place.
+    let answers = answers_of(&intake);
+    let (filled, missing) = grimoire_core::commission::prompt::brief(&prompt, &answers, &asked_of(&binding));
     if !missing.is_empty() {
         return Err(format!(
             "The commission asks for {} but nothing answered {}.",
@@ -612,8 +600,78 @@ pub fn commission_create(
             if missing.len() == 1 { "it" } else { "them" }
         ));
     }
+    if filled.trim().is_empty() {
+        return Err("The commission is empty. Say what the familiar should do.".into());
+    }
 
-    grimoire_core::commission::create(&state.db, &id, &filled, &intake).map_err(|e| e.to_string())
+    let placed = grimoire_core::commission::create(&state.db, &id, &filled, &intake).map_err(|e| e.to_string())?;
+
+    // A familiar that is summoned and has nothing in hand starts on it now, rather than when it
+    // is next summoned (§6.2: it starts when its familiar is next free, and it is free).
+    if state.summonings.is_live(&id) && state.summonings.commission_of(&id).is_none() {
+        start_next(&state, &id)?;
+    }
+    grimoire_core::commission::get(&state.db, &placed.id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("commission {} vanished as it was placed", placed.id))
+}
+
+/// Mark the commission a familiar is working on as done, and hand it the next in its queue.
+///
+/// Only the owner can say a commission is done: the engine has no way to say so that the
+/// application could trust, and a banished commission is not a finished one (§6.2). The familiar
+/// stays summoned, so the next commission goes to the same engine and it keeps what it learned
+/// on the way. Answers the commission it started next, if there was one.
+#[tauri::command]
+pub fn commission_done(state: State<'_, AppState>, id: String) -> R<Option<Commission>> {
+    let name = state
+        .roster
+        .get(&id)
+        .and_then(|b| b.front.map(|f| f.name))
+        .unwrap_or_else(|| id.clone());
+    let Some(cid) = state.summonings.commission_of(&id) else {
+        return Err(format!("{name} has no commission running."));
+    };
+    if let Ok(Some(c)) = grimoire_core::commission::get(&state.db, &cid)
+        && c.status == CommissionStatus::AwaitingSeal
+    {
+        return Err(format!("{name} is waiting on your seal. Seal or refuse it first."));
+    }
+    state.summonings.release(&state.db, &id);
+    state.seal.forget(&cid);
+    grimoire_core::commission::finish(&state.db, &cid, CommissionStatus::Done, Some("marked done"))
+        .map_err(|e| e.to_string())?;
+    start_next(&state, &id)
+}
+
+/// Hand a live familiar the oldest commission in its queue, if it has one.
+fn start_next(state: &State<'_, AppState>, id: &str) -> R<Option<Commission>> {
+    let Some(next) = grimoire_core::commission::next_to_run(&state.db, id).map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    state.summonings.hand_over(&state.db, id, &next)?;
+    grimoire_core::commission::get(&state.db, &next.id).map_err(|e| e.to_string())
+}
+
+/// Intake answers as the form sent them. A non-string answer is kept as its JSON text.
+fn answers_of(intake: &serde_json::Value) -> std::collections::BTreeMap<String, String> {
+    intake
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .map(|(k, v)| (k.clone(), v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The binding's intake questions, as `(id, question)` in the order it asks them.
+fn asked_of(binding: &grimoire_core::binding::Binding) -> Vec<(String, String)> {
+    binding
+        .front
+        .as_ref()
+        .map(|f| f.intake.iter().map(|q| (q.id.clone(), q.ask.clone())).collect())
+        .unwrap_or_default()
 }
 
 /// Every commission for one familiar, newest first (§6.2: the queue is visible).

@@ -7,11 +7,13 @@
 //! open if it is built carelessly. Phase 4 hangs off `hook_settings` below.
 
 pub mod binary;
+pub mod handover;
 pub mod lifecycle;
 pub mod pty;
 pub mod usage;
 
 pub use binary::{Resolved, Unavailable, resolve};
+pub use handover::{PasteMode, initial_prompt, keystrokes};
 pub use lifecycle::{Stopped, group_alive, stop, stop_with};
 pub use portable_pty::PtySize;
 pub use pty::{PtySession, Sink, Spawn, scrubbed_env};

@@ -25,6 +25,7 @@ import type { Order, SigilState } from "@/lib/types";
 import { arcAt, type Palette } from "./bake";
 import {
   CENTRE,
+  FIGURE_REACH,
   PLATE_ZOOM,
   type Point,
   SIGIL_SIZE,
@@ -36,9 +37,18 @@ import {
 } from "./plan";
 import { walk } from "./paths";
 import type { Portraits } from "./art";
+import { PAUSE_MIN, PAUSE_SPREAD, PERSONAL_SPACE, STROLL_SPEED, pick, seeded, wanderArea } from "./wander";
 
-/** §8.3: the walk is 1.1s, ease-in-out, along the waypoints. */
+/**
+ * §8.3: the walk is 1.1s, ease-in-out, along the waypoints — at least. In the bigger room
+ * (DECISIONS 0025) a crossing is long enough that 1.1s was a dash, so a walk goes at a walking
+ * pace and takes 1.1s only when it is short.
+ */
 const WALK_MS = 1100;
+const WALK_SPEED = 300;
+
+/** How far one step carries a familiar, in world units: sets the gait against the ground. */
+const STEP_LENGTH = 26;
 
 /** The gap left in the ring when a familiar is banished or misfired (§7.4). */
 const BREAK_DEGREES = 34;
@@ -47,8 +57,10 @@ const BREAK_DEGREES = 34;
  * How tall a portrait stands, in the sigil's 100-unit frame, and where its feet fall. The width
  * follows from each image's own proportions, so no figure is stretched to fit a box.
  */
-const PORTRAIT_HEIGHT = 150;
 const PORTRAIT_ANCHOR_Y = 0.72;
+/** Tall enough that its head reaches `FIGURE_REACH` above its feet, which the plan stands it by. */
+const PORTRAIT_HEIGHT = (FIGURE_REACH * 100) / SIGIL_SIZE / PORTRAIT_ANCHOR_Y;
+const PORTRAIT_REACH = FIGURE_REACH;
 
 /** What the floor needs to know about one familiar. Everything else is the room's business. */
 export interface ActorInput {
@@ -113,6 +125,18 @@ interface Actor {
   opacity: number;
   /** A stable offset so every familiar's small motions do not move in lockstep. */
   rhythm: number;
+  /** Whether the walk under way is a stroll about its own patch rather than a journey. */
+  strolling: boolean;
+  /** How long it stands before the next stroll, in ms. */
+  pause: number;
+  /** Its own random source, so its strolls are its own and repeat on a reload. */
+  rand: () => number;
+  /** Which way the figure faces: 1 as painted, -1 mirrored. It turns to face where it walks. */
+  facing: 1 | -1;
+  /** How far through its gait, in half-steps; advanced by distance walked, not by time. */
+  stride: number;
+  /** A drawn shadow under the portrait's feet, which stays on the ground when it steps. */
+  shadow: Graphics;
 }
 
 export interface Actors {
@@ -128,7 +152,7 @@ export interface Actors {
   positionOf(id: string): Point | null;
   /** Clockwise from the door, which is the order `Tab` walks (§8.5). */
   clockwise(): string[];
-  /** True while anything is mid-walk — the a11y mirror waits for the room to settle. */
+  /** True while anyone is on a journey between stations. A stroll about its own patch is not one. */
   moving(): boolean;
   destroy(): void;
 }
@@ -148,6 +172,9 @@ export function createActors(options: ActorsOptions): Actors {
   const byId = new Map<string, Actor>();
   const threadGraphics = new Graphics();
   threads.addChild(threadGraphics);
+  // Drawn nearest-last, so a familiar standing south of another is in front of it when their
+  // figures overlap in passing.
+  layer.sortableChildren = true;
   let zoom = 1;
 
   const colourOf = (a: Actor) =>
@@ -257,6 +284,84 @@ export function createActors(options: ActorsOptions): Actors {
     if (a.input.state === "misfired") rect(-2, -2, 4, 1, p.panel);
   }
 
+  /**
+   * The figure's own motion. A gait while it walks, and while it stands, something that says
+   * what it is doing: breathing when idle, a quick nod over the desk while it works, shifting
+   * its weight while it waits on a seal, slumped when bound. The figure only — the ring, the arc
+   * and the dot are marks on a plan and stay put (§8.3). All of it stops with motion reduced
+   * (§8.7), and none of it moves the familiar off where it stands.
+   */
+  function animate(a: Actor, now: number, ms: number) {
+    if (reducedMotion) {
+      a.figure.position.set(0, 0);
+      a.figure.rotation = 0;
+      a.figure.scale.set(1, 1);
+      a.shadow.scale.set(1, 1);
+      return;
+    }
+    if (a.legs.length > 0) {
+      // Two steps a stride, counted in distance so the feet keep pace with the ground: up on
+      // each step, a lean into it, a little squash as it lands.
+      const step = Math.sin(a.stride * Math.PI);
+      const lift = Math.abs(step);
+      a.figure.position.set(0, -lift * 7);
+      a.figure.rotation = step * 0.07;
+      a.figure.scale.set(a.facing * (1 - lift * 0.02), 1 + lift * 0.05);
+      a.shadow.scale.set(1 - lift * 0.18, 1);
+      return;
+    }
+    a.shadow.scale.set(1, 1);
+    const r = a.rhythm;
+    switch (a.input.state) {
+      case "working": {
+        // At the desk, turned to its lamp, nodding over the work as if writing.
+        const lamp = deskLamp(station(`desk-${a.input.order}`));
+        a.facing = lamp.x < a.at.x ? -1 : 1;
+        const nod = Math.abs(Math.sin(now * 5.2 + r));
+        a.figure.position.set(0, -nod * 2.4);
+        a.figure.rotation = a.facing * 0.05 + Math.sin(now * 2.6 + r) * 0.025;
+        a.figure.scale.set(a.facing, 1 - nod * 0.02);
+        return;
+      }
+      case "awaiting-seal": {
+        // Shifting its weight from foot to foot: waiting on you.
+        const sway = Math.sin(now * 2.2 + r);
+        a.figure.position.set(sway * 1.5, -Math.abs(sway) * 1.2);
+        a.figure.rotation = sway * 0.06;
+        a.figure.scale.set(a.facing, 1);
+        return;
+      }
+      case "bound": {
+        a.figure.position.set(0, 2);
+        a.figure.rotation = 0;
+        a.figure.scale.set(a.facing, 0.95);
+        return;
+      }
+      case "stalled": {
+        const drift = Math.sin(now * 0.7 + r);
+        a.figure.position.set(0, -drift);
+        a.figure.rotation = drift * 0.02;
+        a.figure.scale.set(a.facing, 1);
+        return;
+      }
+      case "misfired":
+      case "banished": {
+        a.figure.position.set(0, 0);
+        a.figure.rotation = 0;
+        a.figure.scale.set(a.facing, 1);
+        return;
+      }
+      default: {
+        // Idle or resting: breathing, and every so often a look the other way.
+        const breath = Math.sin(now * 1.7 + r);
+        a.figure.position.set(0, -breath * 0.8);
+        a.figure.rotation = 0;
+        a.figure.scale.set(a.facing, 1 + breath * 0.018);
+        if (a.rand() < ms / 9000) a.facing = a.facing === 1 ? -1 : 1;
+      }
+    }
+  }
+
   function hash(text: string): number {
     let value = 2166136261;
     for (let i = 0; i < text.length; i++) {
@@ -292,6 +397,7 @@ export function createActors(options: ActorsOptions): Actors {
     const body = new Graphics();
     const figure = new Container();
     figure.addChild(body);
+    const shadow = new Graphics();
     const texture = portraits[input.order];
     let portrait: Sprite | null = null;
     if (texture) {
@@ -302,6 +408,9 @@ export function createActors(options: ActorsOptions): Actors {
       // scale to 1 and draw the image at its native size across half the room.
       portrait.scale.set(PORTRAIT_HEIGHT / texture.height);
       figure.addChild(portrait);
+      // Where the painted feet are: the anchor, plus what of the figure lies below it.
+      const feet = 5 + PORTRAIT_HEIGHT * (1 - PORTRAIT_ANCHOR_Y) - 8;
+      shadow.ellipse(0, feet, 30, 8).fill({ color: p.void, alpha: 0.42 });
     }
     const arc = new Graphics();
     const dot = new Graphics();
@@ -312,9 +421,11 @@ export function createActors(options: ActorsOptions): Actors {
       // Outlined in the void so the name reads on lit flagstone as well as on the plain plan.
       style: {
         fontFamily: "Junicode, EB Garamond, Georgia, serif",
-        fontSize: 12,
+        // World units, like everything else here. 19 in the 1600-unit room reads as the 12 it
+        // was in the 1000-unit one (DECISIONS 0025).
+        fontSize: 19,
         fill: p.boneDim,
-        stroke: { color: p.void, width: 3, join: "round" },
+        stroke: { color: p.void, width: 4, join: "round" },
       },
     });
     plate.anchor.set(0.5, 0);
@@ -323,7 +434,7 @@ export function createActors(options: ActorsOptions): Actors {
     // The sigil is drawn in its own 100-unit frame and scaled to the 44 §8.3 asks for, so the
     // geometry module never has to know how big the floor draws things.
     const marks = new Container();
-    marks.addChild(figure, ring, arc, dot);
+    marks.addChild(shadow, figure, ring, arc, dot);
     marks.scale.set(SIGIL_SIZE / 100);
     container.addChild(marks);
 
@@ -353,7 +464,14 @@ export function createActors(options: ActorsOptions): Actors {
       spin: 0,
       opacity: input.state === "dormant" ? 0.4 : 1,
       rhythm: (hash(input.id) % 628) / 100,
+      strolling: false,
+      pause: 0,
+      rand: seeded(hash(input.id)),
+      facing: 1,
+      stride: 0,
+      shadow,
     };
+    actor.pause = firstPause(actor);
     layer.addChild(container);
     return actor;
   }
@@ -378,6 +496,7 @@ export function createActors(options: ActorsOptions): Actors {
 
   function send(a: Actor, fromStation: string) {
     const finish = slot(station(a.stationId), a.slotIndex);
+    a.strolling = false;
     if (reducedMotion) {
       // §8.7: no walking. It is standing where it belongs, with no journey in between.
       a.at = finish;
@@ -391,6 +510,43 @@ export function createActors(options: ActorsOptions): Actors {
       1,
       a.legs.reduce((sum, leg, i) => sum + distance(i === 0 ? a.at : a.legs[i - 1]!, leg), 0),
     );
+    // A moment to settle in before it starts pottering about.
+    a.pause = PAUSE_MIN + a.rand() * PAUSE_SPREAD;
+  }
+
+  /** A first stroll staggered per familiar, so a room that opens does not all set off at once. */
+  function firstPause(a: Actor): number {
+    return 600 + a.rand() * (PAUSE_MIN + PAUSE_SPREAD);
+  }
+
+  /**
+   * Set off on a stroll, if it has a patch to wander and somewhere in it is free.
+   *
+   * A third of the time it heads home, so over an afternoon it stays about its own place rather
+   * than drifting to one edge of its patch. Anywhere within arm's reach of another familiar, or
+   * of where another is heading, is passed over (§8.2: never overlap two sigils).
+   */
+  function stroll(a: Actor) {
+    const area = wanderArea(a.input.state, a.stationId, a.slotIndex);
+    if (!area) return;
+    const home = slot(station(a.stationId), a.slotIndex);
+    const others = [...byId.values()].filter((o) => o !== a);
+    const clear = (q: Point) =>
+      others.every(
+        (o) =>
+          distance(o.at, q) >= PERSONAL_SPACE &&
+          (o.legs.length === 0 || distance(o.legs[o.legs.length - 1]!, q) >= PERSONAL_SPACE),
+      );
+    for (let tries = 0; tries < 6; tries++) {
+      const target = tries === 0 && a.rand() < 0.33 ? home : pick(area, a.rand);
+      if (distance(target, a.at) < 14 || !clear(target)) continue;
+      a.legs = [target];
+      a.legFrom = a.at;
+      a.legElapsed = 0;
+      a.walkLength = distance(a.at, target);
+      a.strolling = true;
+      return;
+    }
   }
 
   return {
@@ -452,24 +608,46 @@ export function createActors(options: ActorsOptions): Actors {
     },
 
     tick(ms) {
+      const now = Date.now() / 1000;
       for (const a of byId.values()) {
+        // Standing about, until it is time for a stroll. Never with motion reduced (§8.7).
+        if (a.legs.length === 0 && !reducedMotion) {
+          a.pause -= ms;
+          if (a.pause <= 0) {
+            a.pause = PAUSE_MIN + a.rand() * PAUSE_SPREAD;
+            stroll(a);
+          }
+        }
+
         // Walking.
+        const was = a.at;
         if (a.legs.length > 0) {
           a.legElapsed += ms;
           const target = a.legs[0]!;
           const span = Math.max(1, distance(a.legFrom, target));
-          // Each leg gets a share of the 1.1s in proportion to its length, so a long crossing
-          // and a short shuffle move at the same speed rather than taking the same time.
-          const legMs = WALK_MS * (span / a.walkLength);
+          // Each leg gets a share of the whole walk's time in proportion to its length, so a
+          // long crossing and a short shuffle move at the same speed rather than taking the
+          // same time. A stroll goes at an amble.
+          const total = a.strolling
+            ? (a.walkLength / STROLL_SPEED) * 1000
+            : Math.max(WALK_MS, (a.walkLength / WALK_SPEED) * 1000);
+          const legMs = total * (span / a.walkLength);
           const t = Math.min(1, a.legElapsed / Math.max(1, legMs));
-          const e = easeInOut(t);
+          // A walk of one leg eases in and out. A journey of several keeps an even pace from
+          // leg to leg — easing each one stopped the familiar dead at every waypoint.
+          const e = a.walkLength - span < 1 ? easeInOut(t) : t;
           a.at = { x: a.legFrom.x + (target.x - a.legFrom.x) * e, y: a.legFrom.y + (target.y - a.legFrom.y) * e };
+          // Turn to face the way it is going, when that is more than straight up or down.
+          const dx = target.x - a.legFrom.x;
+          if (Math.abs(dx) > 4) a.facing = dx < 0 ? -1 : 1;
           if (t >= 1) {
             a.legFrom = target;
             a.legs.shift();
             a.legElapsed = 0;
+            if (a.legs.length === 0) a.strolling = false;
           }
         }
+        a.stride += distance(was, a.at) / STEP_LENGTH;
 
         // Fading in on arrival, and out on the way through the door (§8.3).
         const wanted = a.input.state === "dormant" ? 0.4 : a.input.state === "banished" && a.legs.length === 0 ? 0 : 1;
@@ -493,21 +671,10 @@ export function createActors(options: ActorsOptions): Actors {
           a.dot.circle(0, -RING_RADIUS, 8).fill({ color: p.brass, alpha: phase });
         }
 
-        // Pixel figures are alive even when their rings are still: a quiet breathing loop at
-        // the desks, a firmer bounce while working, and a quick two-step gait while walking.
-        // All of it is pinned to the reduced-motion preference in the same place as the sigil.
-        if (reducedMotion) {
-          a.figure.position.set(0, 0);
-          a.figure.scale.set(1);
-        } else {
-          const moving = a.legs.length > 0;
-          const speed = moving ? 11 : a.input.state === "working" ? 7 : 4;
-          const wave = Math.sin(Date.now() / 1000 * speed + a.rhythm);
-          a.figure.position.set(moving ? wave * 2 : 0, moving ? Math.abs(wave) * -5 : wave * -1.4);
-          a.figure.scale.set(1, moving ? 1 + Math.abs(wave) * 0.08 : 1);
-        }
+        animate(a, now, ms);
 
         a.container.position.set(a.at.x, a.at.y);
+        a.container.zIndex = a.at.y;
         a.plate.visible = zoom >= PLATE_ZOOM;
       }
     },
@@ -571,7 +738,12 @@ export function createActors(options: ActorsOptions): Actors {
       let best: { id: string; d: number } | null = null;
       for (const [id, a] of byId) {
         const d = distance(a.at, point);
-        if (d <= SIGIL_SIZE / 2 + 6 && (!best || d < best.d)) best = { id, d };
+        // The ring, or the figure standing in it: a portrait's head is well above the ring,
+        // and a click on a familiar's head that selected nothing would be a click wasted.
+        const dx = point.x - a.at.x;
+        const dy = point.y - a.at.y;
+        const onFigure = a.portrait !== null && Math.abs(dx) <= 24 && dy >= -PORTRAIT_REACH && dy <= 22;
+        if ((d <= SIGIL_SIZE / 2 + 6 || onFigure) && (!best || d < best.d)) best = { id, d };
       }
       return best?.id ?? null;
     },
@@ -593,7 +765,7 @@ export function createActors(options: ActorsOptions): Actors {
     },
 
     moving() {
-      return [...byId.values()].some((a) => a.legs.length > 0);
+      return [...byId.values()].some((a) => a.legs.length > 0 && !a.strolling);
     },
 
     destroy() {

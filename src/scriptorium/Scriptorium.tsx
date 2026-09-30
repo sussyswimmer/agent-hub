@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Rule } from "@/ui";
-import { useStore } from "@/store";
+import { tourSeen, useStore } from "@/store";
+import { Help } from "@/tutorial/Help";
+import { Tour } from "@/tutorial/Tour";
 import { FamiliarPane } from "@/familiar/FamiliarPane";
 import { Ledger } from "@/ledger/Ledger";
 import { Seals } from "@/seal/Seals";
@@ -49,6 +51,14 @@ export function Scriptorium() {
     void load();
   }, [load]);
 
+  // The tour opens by itself once: on the first launch that has familiars to show it with.
+  const offered = useRef(false);
+  useEffect(() => {
+    if (offered.current || !ready || error || familiars.length === 0) return;
+    offered.current = true;
+    if (!tourSeen()) useStore.getState().setTour(0);
+  }, [ready, error, familiars.length]);
+
   const familiar = familiars.find((f) => f.id === selected) ?? null;
 
   // §8.5: choosing a familiar from the floor does not put the floor away — it shrinks to a strip
@@ -59,7 +69,9 @@ export function Scriptorium() {
     <div className="flex h-screen w-screen overflow-hidden" data-backend={kind ?? "loading"}>
       <Roster seals={sealCount} />
       <Rule vertical />
-      {view === "seals" ? (
+      {view === "help" ? (
+        <Help />
+      ) : view === "seals" ? (
         <Seals />
       ) : view === "workbench" ? (
         <Workbench />
@@ -112,6 +124,7 @@ export function Scriptorium() {
         </main>
       )}
       <Quit />
+      <Tour />
       {error && (
         <div role="alert" className="fixed bottom-3 right-3 max-w-md bg-panel px-3 py-2 text-base text-oxblood-text" data-testid="error">
           {error}

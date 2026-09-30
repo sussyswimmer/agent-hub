@@ -682,3 +682,45 @@ layout. A run by hand for an existing tag now builds the tagged commit.
 - [ ] CLAUDE.md §1: the repository is public now, and §1 asks for a LICENSE and attribution pass
       when that happens. The README and `Cargo.toml` already say MIT; there is no LICENSE file
 
+
+---
+
+## Making it usable: delivery, one button, a tour, a bigger room
+
+The owner's first real use: "it's very confusing how to use the summons and how to actually do
+anything", and a bigger map with familiars that walk about. Asked, they chose a bigger room
+painted fresh, and strolling near each familiar's own spot.
+
+- [x] **A commission reaches its familiar.** It never did: it was written to the table, marked
+      running, and not sent. Now it is the engine's first message at summon (`claude … -- <task>`),
+      and typed in as a paste when handed to a familiar already running. Intake answers the task
+      does not place are sent after it. DECISIONS 0024
+- [x] **Mark done**, which hands the familiar the next in its queue in the same session, with
+      each commission metered from its own start (`Usage::since`)
+- [x] Tested through a real pty against a stand-in engine that prints its arguments and echoes
+      its input: the task after `--`, a busy familiar refusing a second, the next handed over as
+      one paste and then Enter, banish ending only the one in hand. `claude -p -- "-v …"`
+      confirmed the engine reads a dash-led task after `--` as words
+- [x] **One button** on the commission tab that says what it will do — *Summon and start*,
+      *Start*, *Add to queue* — with *Queue for later* beside it, and a sentence above it saying
+      what the familiar is doing with *Mark done* / *Watch it work* / *Open the seals*. The
+      header's Summon summons and its Banish banishes
+- [x] The terminal stays mounted while other tabs are open. Found by the new Playwright test:
+      a commission handed over from the commission tab went into a terminal nobody was keeping
+- [x] **The tour**, on first launch, and **How it works** in the rail: the six steps, every
+      noun explained, how to read the floor, the tour again. DECISIONS 0026
+- [x] **The bigger room**: 1600 units, painted by Higgsfield from a diagram of the new plan and
+      registered to it; the plan's radii and candles measured back off the painting.
+      PROVENANCE.md, DECISIONS 0025
+- [x] **Wandering and animation**: idle familiars stroll their side of their desk, dormant ones
+      the hearth; a gait counted in distance, turning to face the way they walk, breathing,
+      nodding over the desk while working, shifting weight while waiting on a seal. Checked by
+      unit tests that no patch reaches the ward circle, a desk, the wall or another's patch
+- [x] Found on looking at it: the figures stand up out of the plan, and at the two north desks
+      their heads were on the desktop. A test now fails if any figure reaches onto a desk
+- [ ] A real `claude` taking a pasted commission mid-session — the container's engine will not
+      run interactively. Try it on the Mac: give a summoned familiar a second commission
+
+**Release.** 1.0.3 was drafted from before any of this and never published, so this is 1.0.4:
+version bumped in all three places, `.github/release-notes/v1.0.4.md` carries 1.0.3's changes
+too for anyone on 1.0.2, and the README's download links point at v1.0.4.

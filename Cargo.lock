@@ -1515,7 +1515,7 @@ dependencies = [
 
 [[package]]
 name = "grimoire-app"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "grimoire-core",
  "libc",
@@ -1525,6 +1525,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1532,7 +1533,7 @@ dependencies = [
 
 [[package]]
 name = "grimoire-core"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "chrono",
  "cron",

@@ -62,7 +62,7 @@ test("a flood does not freeze the interface", async ({ page }) => {
     })
     .toBe(1);
   await page.locator('[data-tab="outputs"]').click();
-  await expect(page.getByTestId("tabpanel")).toContainText("Outputs arrive");
+  await expect(page.getByTestId("tabpanel")).toContainText("is written into its workspace");
 });
 
 test("switching familiars does not show one familiar's scrollback under another's name", async ({ page }) => {

@@ -770,3 +770,118 @@ stops if there are not exactly four. And because a re-run keeps the workflow the
 with, a run by hand for a tag that already exists now builds that tag's commit with the current
 workflow, which is how a release is rebuilt after a fix to this file.
 
+
+## 0024 — A commission reaches its familiar, and a summoning takes one after another
+
+**Status:** accepted · **Date:** 2026-09-30 · **Concerns:** §6.2, §6.5, §4 · **Replaces:** a
+commission that was only ever a row
+
+**Context.** The owner, using it for the first time, could not work out how to get a familiar to
+do anything. Reading the code for why turned up a fault underneath the confusion: a commission
+was written to the table, marked `running` when a summoning picked it up, and never shown to the
+engine. The familiar sat at an empty prompt while the rail said it was working. Around that:
+
+- the answers to a binding's intake questions were stored and sent nowhere unless the commission
+  text happened to contain `{{intake.*}}`, which no one typing a task writes;
+- nothing could mark a commission done — it ran until its familiar was banished, and was then
+  recorded as banished — so a summoned familiar could never take a second;
+- a commission placed on a familiar that was already summoned waited for a summon that had
+  already happened;
+- a summoning with no commission has every seal request refused (§6.4 scopes seals to a
+  commission), so "summon it and type to it" failed on its first write;
+- and the header's Summon button only switched to the terminal tab, where a second Summon waited.
+
+**Decision.**
+
+- **Delivery.** At summon, the commission is the engine's first message: `claude [options] --
+  <prompt>`, which starts an interactive session with the prompt submitted. After `--`, so a task
+  beginning with a dash is words. A commission handed to a familiar that is already running is
+  typed into its terminal — the one channel a terminal program has — as a bracketed paste when
+  the engine has asked for them (`ESC [?2004h`, watched in its output) and as one flattened line
+  when it has not, so no newline submits half of it. Control characters are dropped. The Enter
+  follows a moment later on its own. `summon/handover.rs`.
+- **Answers.** `prompt::brief` fills the placeholders as before and then appends every answer the
+  prompt did not place, as "question answer" lines in the binding's order. The substitution rule
+  for the writ is untouched; this is the commission text. Wards get it once, when written, so
+  §6.7's byte-identical rule still holds for every run after.
+- **Done.** `commission_done` finishes the running commission as `done` — only the owner can say
+  so; the engine has no way to say it that the application could trust — and hands the familiar
+  the next in its queue in the same engine session. A commission placed on a summoned familiar
+  with nothing in hand starts at once, and so does a ward's.
+- **Metering.** The engine's transcript counts the whole session, so each commission is metered
+  from a reading taken when it was handed over (`Usage::since`). The second commission is not
+  charged for the first, and the breaker, the meters and the ledger read the same subtraction.
+- **The interface.** One button, labelled with what it will do: *Summon and start* for a resting
+  familiar (it opens the terminal, which summons, so nothing the engine says on the way up is
+  lost), *Start* for a free one, *Add to queue* for a busy one, with *Queue for later* beside
+  the first. A sentence above the form says what the familiar is doing and offers *Mark done*,
+  *Watch it work* or *Open the seals*. The header's button summons and banishes. The terminal
+  stays mounted, hidden, while other tabs are looked at: a pty is a stream, and a commission
+  handed over from the commission tab was otherwise typed into a terminal nobody was keeping.
+
+**Consequence.** Tested against a stand-in engine through a real pty: the first commission
+arrives after `--`, a second is refused while the first is in hand, marking done hands the next
+over as one paste followed by Enter, and banishing ends only the one in hand
+(`summonings::tests`). What is not proven here is a real `claude` taking a pasted commission
+mid-session: this container's engine will not run interactively (TASKS.md, Phase 1), and the
+flag parsing was checked with `claude -p -- "-v …"` only.
+
+## 0025 — A bigger room, and familiars that walk about in it
+
+**Status:** accepted · **Date:** 2026-09-30 · **Concerns:** §8.2, §8.3, §8.6, §8.7 · **Replaces:**
+the 1000-unit room of 0020, and §8.3's fixed 1.1s walk
+
+**Context.** The owner asked for a bigger map with familiars that "walk around like normal,
+casually, and have animations". Asked where, they chose a bigger room painted fresh, and idle
+familiars strolling near their own spot rather than across the whole floor.
+
+**Decision.**
+
+- **The room** is 1600 units across, up from 1000. The figures kept their size and the room grew
+  around them. It was painted by Higgsfield from a layout diagram drawn from the new numbers,
+  with the old painting as the reference for materials and light, registered by its ward ring
+  and not scaled; every radius in `plan.ts` — the wall, the ward circle, the furniture, the
+  Ledger desk, the five candles — was then measured off it. PROVENANCE.md has the jobs and the
+  measurements. The baked layer is capped at 4096 texels a side, which the bigger room would
+  otherwise have exceeded on a large display.
+- **Wandering** (`wander.ts`). A familiar that is idle at its desk strolls about its own side of
+  the desk; a dormant one mills about in front of the hearth. Working, waiting on a seal, bound,
+  stalled, misfired and queued familiars stand where they are, because where they stand is
+  the information §8.4 reads. The patches are checked to stay out of the ward circle, off every
+  desk, apart from each other and inside the room, and nobody sets off for a spot within arm's
+  reach of another familiar. A stroll is not a journey: the a11y mirror, which follows states,
+  never hears of it.
+- **Walking pace.** §8.3 says a walk is 1.1s. Across the bigger room that was a dash, so a
+  journey goes at a walking pace and takes 1.1s only when it is short; one of several legs
+  keeps an even speed rather than easing to a stop at every waypoint.
+- **Animation.** The figure — not the ring, the arc or the dot, which are marks on a plan and
+  stay put, as §8.3 has it — steps as it walks, with its stride counted in distance so the feet
+  keep pace with the ground; turns to face where it is going; breathes and now and then looks
+  the other way when idle; nods over the desk, turned to its lamp, while it works; shifts its
+  weight while it waits on a seal; slumps when bound. A drawn shadow stays on the ground. Nearer
+  figures draw in front of farther ones.
+- **Standing clear of a desk.** The figures stand up out of the plan, head north of the feet, so
+  at the two desks on the north side the first attempt stood them with their heads on the
+  desktop. A familiar now stands further off a desk by as much of its height as points at it.
+
+**Consequence.** `prefers-reduced-motion` still stops all of it: no strolls, no gait, no turns,
+nothing but the familiar standing where its state puts it. At the default window size the
+figures are small; name plates and station labels were scaled with the room so they read at the
+same size on screen as before.
+
+## 0026 — A tour on first launch, and a page that says what every word means
+
+**Status:** accepted · **Date:** 2026-09-30 · **Concerns:** §3, §7.4
+
+**Context.** "It's very confusing how to use the summons and how to actually do anything." §3's
+nouns are deliberate, and there is one word per thing from the screen to the code. Nothing in
+the interface said what any of them meant.
+
+**Decision.** The nouns stay. A ten-step tour opens by itself on the first launch that has
+familiars to show — a ring around one thing and a card saying what it is and what to do — and
+walks from the roster to giving a familiar a task, marking it done, the seals and the aether.
+Steps with nothing on screen to point at are passed over. *How it works*, in the rail, lists the
+six steps of getting something done, explains every noun in a sentence, says how to read the
+floor, and replays the tour. Tab names say what they are for on hover. The tour moves only when
+a button is pressed, so reduced motion has nothing to take away; its "seen" is kept in the
+window's own storage, like the Floor/Roster choice.

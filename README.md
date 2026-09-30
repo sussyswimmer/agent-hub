@@ -14,22 +14,39 @@ and no network calls of its own — only what the agent CLIs make for themselves
 The specification is `CLAUDE.md`. It is the source of truth: where it and the code disagree, the
 code is wrong. Deviations are argued in `DECISIONS.md` rather than made quietly.
 
+## Using it
+
+1. Pick a familiar in the rail, or click one on the floor.
+2. On its **commission** tab, say what you want done in plain words, and answer any questions it
+   asks.
+3. Press **Summon and start**. It opens in its terminal and starts on the task. If it is already
+   working, the same button puts the task in its queue.
+4. Watch it on the **terminal** tab, or leave it. Anything that needs your say waits in **Seals**.
+5. When the work is finished, press **Mark done**. It stays summoned and takes the next task in
+   its queue. **Banish**, at the top, stops it.
+
+A short tour opens on first launch, and **How it works** in the rail explains every word the
+interface uses and replays it.
+
 ## State
 
 Phases 0 to 8 of §10 are built, and Phase 9, the packaged build, is under way: releases are cut
 for macOS and Windows, and a week of real use on the owner's Mac is what remains. Familiars are files:
 drop a `.binding.md` in `~/.grimoire/bindings` and one appears, edit it and the change arrives
 without a restart, break it and it says what is wrong rather than vanishing. Give one a
-commission and it queues; summon it and the oldest starts, running a real agent CLI in a
-pseudo-terminal with the binding's writ as its briefing. What it costs is recorded, and what it
+commission and press Summon and start: a real agent CLI starts in a pseudo-terminal with the
+binding's writ as its briefing and the commission as its first message. Mark it done and the
+next in its queue is handed to the same session. What it costs is recorded, and what it
 stopped halfway through is still there, correctly marked, after a restart. Five bindings ship
 and are placed on first run.
 
-**The floor is what it opens on.** The tower room painted from directly above, with every
-familiar standing in it at once: dormant ones resting at the hearth, working ones at their own
-order's desk with a thread of ink running to the lamp, and anything waiting on you standing in
-the ward circle with the circle lit brass around it. Summoning walks a familiar in through the
-door; banishing walks it out. Hover a mark for what it is doing and what it has spent, click it
+**The floor is what it opens on.** A wide tower hall painted from directly above, with every
+familiar standing in it at once: dormant ones milling about in front of the hearth, summoned
+ones strolling near their own order's desk, working ones at the desk with a thread of ink running
+to the lamp, and anything waiting on you standing in the ward circle with the circle lit brass
+around it. Summoning walks a familiar in through the door; banishing walks it out. They step as
+they walk, turn to face where they are going, and nod over the desk while they work; with
+reduced motion none of it moves. Hover a mark for what it is doing and what it has spent, click it
 to open its workspace with the floor still in sight above. The painting is registered to the
 plan underneath, so what you click is where it is drawn; the states on top of it (rings, arcs, the
 thread of ink, the lit circle) are drawn in code, and if the art ever fails to load the plan is
@@ -64,11 +81,11 @@ check and why.
 
 ### Download for macOS
 
-[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.3/Grimoire_1.0.3_aarch64.dmg)
+[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_aarch64.dmg)
 
-[Download Grimoire for Intel Macs](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.3/Grimoire_1.0.3_x64.dmg)
+[Download Grimoire for Intel Macs](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_x64.dmg)
 
-[Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.3/Grimoire_1.0.3_x64-setup.exe)
+[Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_x64-setup.exe)
 
 This preview build is unsigned and not notarized, so macOS may ask you to approve it in Privacy
 & Security the first time you open it. [See all releases](https://github.com/sussyswimmer/agent-hub/releases).
@@ -165,6 +182,7 @@ table and the reason for each; these are the ones most likely to surprise you in
 | Native window chrome, traffic lights over the overlay title bar | The macOS window server |
 | Dragging the window to resize a live terminal | `Xvfb` has no window manager. The pty resize is tested directly instead |
 | A full model turn through the interactive terminal | The container's engine could never log in |
+| A commission typed into a running `claude` as a paste | Proven against a stand-in engine only, for the same reason |
 | The floor's real frame rate | Measured on a software rasteriser, which is not a measurement |
 
 Nothing in that list is claimed as done anywhere in this repository. If one of them is broken,

@@ -16,10 +16,8 @@ async function raiseOne(page: Page) {
   await page.locator('[data-tab="commission"]').click();
   await page.getByTestId("intake-prompt").fill("Plan the week.");
   await page.locator('[data-field="horizon"] select').selectOption("this week");
+  // One press: Summon and start summons it in the terminal with the commission in hand.
   await page.getByTestId("intake-submit").click();
-
-  await page.locator('[data-tab="terminal"]').click();
-  await page.getByTestId("terminal-toggle").click();
   await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
 }
 
