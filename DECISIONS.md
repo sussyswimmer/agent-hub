@@ -761,3 +761,12 @@ first run of the new CI proved the block is account-wide rather than about macOS
 `ubuntu-24.04`, refused in two seconds with no step run (run 36700903857), the same way every
 macOS and Windows job had been refused since 14 September.
 
+**Amended 2026-09-30, after the first real run.** The owner made the repository public, and
+runners came back at once: the version check, both disk images and the Windows installers all
+built on the first attempt. The last step failed. The Windows artifact keeps its `nsis/` and
+`msi/` folders, the upload was given `installers/*`, and `gh` refused a folder — after it had
+already made the draft and attached both `.dmg`s. The step now finds the four files by name and
+stops if there are not exactly four. And because a re-run keeps the workflow the tag was made
+with, a run by hand for a tag that already exists now builds that tag's commit with the current
+workflow, which is how a release is rebuilt after a fix to this file.
+

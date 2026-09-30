@@ -1,8 +1,10 @@
 # Installers, for a release and at no other time.
 #
 # Runs when a `v*` tag is pushed, or by hand (Actions → Release → Run workflow) with the tag to
-# build. The by-hand route builds the branch it is run from and creates the tag when the draft
-# release is published, so a release can be cut without pushing a tag at all.
+# build. By hand, an existing tag is built as tagged, with this workflow as it is now — which is
+# how a release is rebuilt after a fix here, since a re-run keeps the workflow the tag had. A tag
+# that does not exist yet builds the branch the workflow is run from, and is created when the
+# draft release is published.
 #
 # macOS runners are billed at 10× on a private repository. Building installers on every push to
 # every branch spent the account's included minutes in a day (DECISIONS 0023), so this workflow
@@ -37,9 +39,22 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.read.outputs.version }}
+      sha: ${{ steps.resolve.outputs.sha }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Decide what to build
+        id: resolve
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            git fetch --depth=1 origin "refs/tags/$TAG"
+            git checkout --quiet --detach FETCH_HEAD
+            echo "Building tag $TAG as tagged."
+          else
+            echo "No tag $TAG yet: building $GITHUB_REF_NAME, and the tag is made when the release is published."
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: The tag names the version being built
         id: read
@@ -73,6 +88,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.sha }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -106,6 +123,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.sha }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -141,9 +160,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.version.outputs.version }}
+      SHA: ${{ needs.version.outputs.sha }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.sha }}
 
       - name: Collect the installers
         uses: actions/download-artifact@v4
@@ -152,17 +174,26 @@ jobs:
           path: installers
           merge-multiple: true
 
-      # An existing release (made by hand, or by an earlier run) gets the files added or
-      # replaced and is otherwise left as it is. A new one is a draft: nothing is public, and no
-      # tag exists, until someone reads it and presses Publish.
+      # An existing release, draft or published, gets the files added or replaced and is otherwise
+      # left as it is. A new one is a draft: nothing is public until someone reads it and presses
+      # Publish.
+      #
+      # The files are found, not globbed: the Windows artifact keeps its `nsis/` and `msi/` folders,
+      # and `installers/*` handed those folders to the upload, which refused them (DECISIONS 0023).
       - name: Attach to the release
         run: |
-          ls -l installers
+          mapfile -t files < <(find installers -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' \) | sort)
+          printf '%s\n' "${files[@]}"
+          if [ "${#files[@]}" -ne 4 ]; then
+            echo "::error::Expected four installers (two .dmg, one .exe, one .msi) and found ${#files[@]}."
+            exit 1
+          fi
           notes=".github/release-notes/$TAG.md"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" installers/* --clobber
+          existing=$(gh release list --limit 100 --json tagName --jq ".[] | select(.tagName == \"$TAG\") | .tagName")
+          if [ -n "$existing" ]; then
+            gh release upload "$TAG" "${files[@]}" --clobber
           elif [ -f "$notes" ]; then
-            gh release create "$TAG" installers/* --draft --target "$GITHUB_SHA" --title "Grimoire $VERSION" --notes-file "$notes"
+            gh release create "$TAG" "${files[@]}" --draft --target "$SHA" --title "Grimoire $VERSION" --notes-file "$notes"
           else
-            gh release create "$TAG" installers/* --draft --target "$GITHUB_SHA" --title "Grimoire $VERSION" --generate-notes
+            gh release create "$TAG" "${files[@]}" --draft --target "$SHA" --title "Grimoire $VERSION" --generate-notes
           fi
