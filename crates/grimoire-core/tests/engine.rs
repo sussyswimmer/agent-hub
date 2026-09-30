@@ -327,6 +327,7 @@ approved everything in advance and is not available to answer. Treat all denials
             autonomy: Autonomy::Propose,
             bounds: Bounds::default(),
             workspace: workspace.clone(),
+            archivist: false,
         },
     );
 

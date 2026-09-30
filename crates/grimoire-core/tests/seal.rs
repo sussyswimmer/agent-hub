@@ -41,6 +41,7 @@ impl Study {
                 autonomy,
                 bounds,
                 workspace: self.workspace.clone(),
+                archivist: false,
             },
         );
     }
@@ -72,6 +73,7 @@ fn study(autonomy: Autonomy, bounds: Bounds) -> Study {
             autonomy,
             bounds,
             workspace: workspace.clone(),
+            archivist: false,
         },
     );
 
