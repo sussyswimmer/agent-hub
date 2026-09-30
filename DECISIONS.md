@@ -720,3 +720,44 @@ and a zoom in and out that stays above 0.9× leave `data-bakes` where it was, an
 adds exactly one. Against the old stage it failed, 4 bakes becoming 17 and 19. The count is
 `stage.stats.bakes`, written to the floor's readout beside the frame counter.
 
+---
+
+## 0023 — Installers are built for a release, and every push is checked on Linux
+
+**Status:** accepted · **Concerns:** §10 Phase 9, §12 · **Replaces:** `macos-build.yml`
+
+**Context.** The only workflow built installers — two macOS jobs, and later a Windows one — on
+every push to every branch. This repository is private, and on a private repository GitHub bills
+a macOS minute as ten and a Windows minute as two. Nine runs on 14 September cost roughly what an
+account's monthly allowance holds; from the tenth on, every job has failed within seconds with no
+runner assigned and no log, which is how GitHub refuses a job it will not pay for. Nothing was
+built or tested in CI from then on, and releases 1.0.1 and 1.0.2 were built and attached by hand.
+The minutes are an account setting and cannot be changed from here; what spent them can.
+
+**Decision.** Two workflows.
+
+- **CI** (`ci.yml`) runs on every push and pull request, on Linux only: typecheck, unit tests,
+  the Rust suite, clippy, the generated-files checks and Playwright — everything a contributor
+  runs locally. It composes the icons and builds the interface first, because the icons are a
+  gitignored build product that `generate_context!()` embeds at compile time. A newer push
+  cancels an older run on the same branch, and a change to Markdown alone does not run it.
+- **Release** (`release.yml`) runs on a `v*` tag or by hand with a tag name. A Linux job first
+  checks that the tag, `tauri.conf.json`, `package.json` and `Cargo.toml` all name the same
+  version, so a mismatch costs a Linux minute rather than two Macs. Then the two macOS disk
+  images and the Windows installers are built, and one last job attaches them to the release:
+  added to it if it exists, otherwise a new **draft**, with its notes from
+  `.github/release-notes/<tag>.md`. Nothing is public, and no tag exists, until the owner
+  publishes it. Running it by hand is also how a release is cut from a session that may not
+  push tags.
+
+**Consequence.** A push costs Linux minutes only — about a quarter of an hour at 1×. A release
+costs roughly 26 macOS minutes and 15 Windows minutes, about 290 at the multipliers, so the
+allowance holds several releases a month beside everyday CI. Installers are kept seven days as
+artifacts, and only the `.dmg`, `.exe` and `.msi`, not the unpacked `.app`.
+
+**Not done here.** Nothing runs until the account can pay for it again: when the allowance
+resets, or when a spending budget for Actions is set in the account's billing settings. The
+first run of the new CI proved the block is account-wide rather than about macOS: one job, on
+`ubuntu-24.04`, refused in two seconds with no step run (run 36700903857), the same way every
+macOS and Windows job had been refused since 14 September.
+
