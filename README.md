@@ -96,8 +96,9 @@ allow it once:
    **Open Anyway** beside the line about Grimoire. Confirm, and it opens. After that it opens
    normally.
 
-If macOS instead says Grimoire **is damaged and can't be opened** (1.0.3, which was not signed),
-drag it to Applications and run this once in Terminal, then open it:
+If macOS instead says Grimoire **is damaged and can't be opened** (1.0.3, and 1.0.4 downloaded
+before 07:10 UTC on 1 October 2026, which were not signed), drag it to Applications and run this
+once in Terminal, then open it:
 
 ```
 xattr -dr com.apple.quarantine /Applications/Grimoire.app

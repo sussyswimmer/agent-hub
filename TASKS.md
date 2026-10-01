@@ -742,4 +742,8 @@ The owner downloaded 1.0.4 and macOS called it damaged. It had never been signed
 - [x] Rebuild 1.0.4 (Release run 36825962032): the check failed on both Macs — Tauri never
       signed, despite the config — and nothing was attached. The workflow now runs `codesign`
       itself and remakes the `.dmg`
-- [ ] Rebuild again, and open the new `.dmg` on the Mac
+- [x] Rebuild again (Release run 36827706657): both Macs passed the check — "valid on disk",
+      `Signature=adhoc`, `Sealed Resources version=2` — and the four installers replaced those on
+      v1.0.4, which the owner had published in the meantime; so this run built the tagged commit
+      (06973a4) with the fixed workflow. The published notes were left as they were
+- [ ] Open the new `.dmg` on the Mac
