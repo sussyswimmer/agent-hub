@@ -107,6 +107,23 @@ jobs:
       - name: Build the application
         run: bun run dist
 
+      # An unsigned bundle downloaded from the internet is refused by macOS as "damaged", with no
+      # way past it but the command line — which is what 1.0.3 and the first 1.0.4 build did
+      # (DECISIONS 0027). The app is ad-hoc signed (tauri.conf.json, signingIdentity "-"); this
+      # checks the copy a person will actually open, the one inside the disk image, and stops the
+      # release if its signature does not seal the whole bundle.
+      - name: The app in the disk image is signed
+        run: |
+          dmg=$(ls target/release/bundle/dmg/*.dmg)
+          mnt=$(mktemp -d)
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mnt"
+          trap 'hdiutil detach "$mnt" -force > /dev/null' EXIT
+          codesign --verify --deep --strict --verbose=2 "$mnt/Grimoire.app"
+          details=$(codesign --display --verbose=2 "$mnt/Grimoire.app" 2>&1)
+          echo "$details"
+          echo "$details" | grep -q "^Signature=adhoc" || { echo "::error::Grimoire.app is not ad-hoc signed."; exit 1; }
+          echo "$details" | grep -q "^Sealed Resources version=" || { echo "::error::Grimoire.app's signature does not seal its resources."; exit 1; }
+
       - name: Keep the disk image
         uses: actions/upload-artifact@v4
         with:

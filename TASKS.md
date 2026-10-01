@@ -729,3 +729,14 @@ The first 1.0.4 notes said 1.0.3 had never been published and repeated its chang
 the owner published it at 11:55 on 30 September, while this work was under way, and nothing here
 checked the release's state again before writing the notes. Corrected in the notes file; the
 draft's own copy is edited on the release page, which no tool in this session can change.
+
+---
+
+## The Mac app would not open
+
+The owner downloaded 1.0.4 and macOS called it damaged. It had never been signed; DECISIONS 0027.
+
+- [x] Ad-hoc signing (`signingIdentity: "-"`), per Tauri's documentation
+- [x] The Release workflow verifies the app inside each `.dmg` before attaching anything
+- [x] README and the 1.0.4 notes say how to open it the first time, and how to open 1.0.3
+- [ ] Rebuild 1.0.4's installers with the fix, and open the new `.dmg` on the Mac

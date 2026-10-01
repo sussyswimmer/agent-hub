@@ -885,3 +885,29 @@ six steps of getting something done, explains every noun in a sentence, says how
 floor, and replays the tour. Tab names say what they are for on hover. The tour moves only when
 a button is pressed, so reduced motion has nothing to take away; its "seen" is kept in the
 window's own storage, like the Floor/Roster choice.
+
+## 0027 — The Mac app is ad-hoc signed, and the release checks it
+
+**Status:** accepted · **Date:** 2026-10-01 · **Concerns:** §10 Phase 9 · **Replaces:** an
+unsigned bundle
+
+**Context.** The owner downloaded the 1.0.4 disk image and macOS refused the app: it "is damaged
+and can't be opened. You should eject the disk image." The bundle had never been signed — the
+Release log shows Tauri bundling the `.app` and the `.dmg` with no signing step — so the only
+signature on it was the one the linker puts on an arm64 executable, which seals nothing else in
+the bundle. A file downloaded through a browser is quarantined, and macOS treats a quarantined
+bundle without a valid signature as damaged, offering no way past it but `xattr` in a terminal.
+1.0.3 was built the same way. 1.0.1 and 1.0.2 were built by hand on the Mac and never downloaded.
+
+**Decision.** `bundle.macOS.signingIdentity` is `"-"`, Tauri's ad-hoc signing: the whole bundle
+is signed and sealed, with no Apple certificate and no cost. macOS still cannot say who made it,
+so on first launch it asks once, and **Open Anyway** in Privacy & Security lets it through — the
+path the README and the release notes now describe step by step, with the `xattr` line kept for
+1.0.3. The Release workflow mounts each disk image it builds and runs `codesign --verify --deep
+--strict` on the app inside, and requires `Signature=adhoc` and a sealed-resources line, so an
+unsigned app can no longer reach a release.
+
+**Not done.** Notarization, which would remove the first-launch question entirely, needs a paid
+Apple Developer account and its certificate in the repository's secrets. That is the owner's
+call. Nothing here has been opened on a Mac yet; the first proof is the owner downloading the
+rebuilt 1.0.4.
