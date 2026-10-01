@@ -907,6 +907,12 @@ path the README and the release notes now describe step by step, with the `xattr
 --strict` on the app inside, and requires `Signature=adhoc` and a sealed-resources line, so an
 unsigned app can no longer reach a release.
 
+A rebuild of a release that is still a draft now also moves the draft to the commit just built
+and gives it the notes file as it stands. A draft has no tag until it is published, and before
+this a rebuild swapped its files and nothing else: publishing the fixed 1.0.4 would have tagged
+the commit without the fix, under the notes with the wrong line about 1.0.3 still in them. A
+published release is never touched beyond its files.
+
 **Not done.** Notarization, which would remove the first-launch question entirely, needs a paid
 Apple Developer account and its certificate in the repository's secrets. That is the owner's
 call. Nothing here has been opened on a Mac yet; the first proof is the owner downloading the

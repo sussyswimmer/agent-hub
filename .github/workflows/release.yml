@@ -191,9 +191,11 @@ jobs:
           path: installers
           merge-multiple: true
 
-      # An existing release, draft or published, gets the files added or replaced and is otherwise
-      # left as it is. A new one is a draft: nothing is public until someone reads it and presses
-      # Publish.
+      # A published release gets the files replaced and is otherwise left as it is. A draft has no
+      # tag yet, so a rebuild moves it to the commit just built and gives it the notes file as it
+      # now stands — otherwise publishing it would tag a commit without the fix it was rebuilt for,
+      # under notes nobody had corrected (DECISIONS 0027). A new release is a draft: nothing is
+      # public until someone reads it and presses Publish.
       #
       # The files are found, not globbed: the Windows artifact keeps its `nsis/` and `msi/` folders,
       # and `installers/*` handed those folders to the upload, which refused them (DECISIONS 0023).
@@ -206,9 +208,16 @@ jobs:
             exit 1
           fi
           notes=".github/release-notes/$TAG.md"
-          existing=$(gh release list --limit 100 --json tagName --jq ".[] | select(.tagName == \"$TAG\") | .tagName")
-          if [ -n "$existing" ]; then
+          existing=$(gh release list --limit 100 --json tagName,isDraft --jq ".[] | select(.tagName == \"$TAG\") | if .isDraft then \"draft\" else \"published\" end")
+          if [ "$existing" = "published" ]; then
             gh release upload "$TAG" "${files[@]}" --clobber
+          elif [ "$existing" = "draft" ]; then
+            gh release upload "$TAG" "${files[@]}" --clobber
+            if [ -f "$notes" ]; then
+              gh release edit "$TAG" --target "$SHA" --notes-file "$notes"
+            else
+              gh release edit "$TAG" --target "$SHA"
+            fi
           elif [ -f "$notes" ]; then
             gh release create "$TAG" "${files[@]}" --draft --target "$SHA" --title "Grimoire $VERSION" --notes-file "$notes"
           else
