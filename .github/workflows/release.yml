@@ -107,11 +107,32 @@ jobs:
       - name: Build the application
         run: bun run dist
 
+      # Ad-hoc signed here, by hand, and the disk image remade around the signed app. Tauri's own
+      # ad-hoc signing (signingIdentity "-" in tauri.conf.json) did not run on these runners: the
+      # first build that asked for it logged no signing step, and the check below found the app
+      # unsigned on both architectures (DECISIONS 0027). codesign is the same tool Tauri would
+      # have called, run where this file can see it.
+      - name: Sign the app and remake the disk image
+        run: |
+          app=target/release/bundle/macos/Grimoire.app
+          dmg=$(ls target/release/bundle/dmg/*.dmg)
+          xattr -cr "$app"
+          codesign --force --deep --sign - "$app"
+          stage=$(mktemp -d)
+          ditto "$app" "$stage/Grimoire.app"
+          ln -s /Applications "$stage/Applications"
+          rm "$dmg"
+          # hdiutil on hosted runners now and then answers "Resource busy"; a second try is enough.
+          for attempt in 1 2 3; do
+            hdiutil create -volname Grimoire -srcfolder "$stage" -fs HFS+ -format UDZO -ov "$dmg" && break
+            if [ "$attempt" = 3 ]; then exit 1; fi
+            sleep 5
+          done
+
       # An unsigned bundle downloaded from the internet is refused by macOS as "damaged", with no
       # way past it but the command line — which is what 1.0.3 and the first 1.0.4 build did
-      # (DECISIONS 0027). The app is ad-hoc signed (tauri.conf.json, signingIdentity "-"); this
-      # checks the copy a person will actually open, the one inside the disk image, and stops the
-      # release if its signature does not seal the whole bundle.
+      # (DECISIONS 0027). This checks the copy a person will actually open, the one inside the
+      # disk image, and stops the release if its signature does not seal the whole bundle.
       - name: The app in the disk image is signed
         run: |
           dmg=$(ls target/release/bundle/dmg/*.dmg)
