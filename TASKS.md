@@ -721,6 +721,11 @@ painted fresh, and strolling near each familiar's own spot.
 - [ ] A real `claude` taking a pasted commission mid-session — the container's engine will not
       run interactively. Try it on the Mac: give a summoned familiar a second commission
 
-**Release.** 1.0.3 was drafted from before any of this and never published, so this is 1.0.4:
-version bumped in all three places, `.github/release-notes/v1.0.4.md` carries 1.0.3's changes
-too for anyone on 1.0.2, and the README's download links point at v1.0.4.
+**Release.** 1.0.3 was built from before any of this, so these changes are 1.0.4: version bumped
+in all three places, notes in `.github/release-notes/v1.0.4.md`, and the README's download links
+pointing at v1.0.4. Built by Release run 36720186684 into a draft with all four installers.
+
+The first 1.0.4 notes said 1.0.3 had never been published and repeated its changes. It had been:
+the owner published it at 11:55 on 30 September, while this work was under way, and nothing here
+checked the release's state again before writing the notes. Corrected in the notes file; the
+draft's own copy is edited on the release page, which no tool in this session can change.
