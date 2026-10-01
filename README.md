@@ -87,8 +87,23 @@ check and why.
 
 [Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_x64-setup.exe)
 
-This preview build is unsigned and not notarized, so macOS may ask you to approve it in Privacy
-& Security the first time you open it. [See all releases](https://github.com/sussyswimmer/agent-hub/releases).
+**Opening it the first time on a Mac.** Grimoire is not notarized by Apple, so macOS asks you to
+allow it once:
+
+1. Open the `.dmg` and drag **Grimoire** into **Applications**, then eject the disk image.
+2. Open Grimoire from Applications. macOS says it cannot check it for malware; press **Done**.
+3. Open **System Settings → Privacy & Security**, scroll down to **Security**, and press
+   **Open Anyway** beside the line about Grimoire. Confirm, and it opens. After that it opens
+   normally.
+
+If macOS instead says Grimoire **is damaged and can't be opened** (1.0.3, which was not signed),
+drag it to Applications and run this once in Terminal, then open it:
+
+```
+xattr -dr com.apple.quarantine /Applications/Grimoire.app
+```
+
+[See all releases](https://github.com/sussyswimmer/agent-hub/releases).
 
 On a Mac, from nothing. You need Rust stable, [Bun](https://bun.sh), and the Xcode command line
 tools — Tauri builds against the system webview, and `xcode-select --install` is what puts the
