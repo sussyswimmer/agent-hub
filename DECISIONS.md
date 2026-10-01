@@ -917,3 +917,14 @@ published release is never touched beyond its files.
 Apple Developer account and its certificate in the repository's secrets. That is the owner's
 call. Nothing here has been opened on a Mac yet; the first proof is the owner downloading the
 rebuilt 1.0.4.
+
+**Amended the same day, after the first signed build.** It was not signed. The check did its
+job: on both architectures it found the app in the disk image unsigned ("code has no resources
+but signature indicates they must be present" on Apple Silicon, "not signed at all" on Intel),
+stopped the release, and attached nothing. Tauri's log had no signing step at all, although the
+built commit carried `signingIdentity: "-"` and the bundler's source (2.9.4, the version CLI
+2.11.4 uses) signs whenever an identity reaches it. Why it did not reach it was not found from
+here. Rather than guess again, the workflow now signs the app itself — `codesign --force --deep
+--sign -`, the call Tauri would have made — and remakes the disk image around the signed app
+with `hdiutil`, with the usual link to Applications beside it. The config line stays: if Tauri
+does sign, signing again is harmless. The check is unchanged.
