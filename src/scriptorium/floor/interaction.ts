@@ -33,6 +33,10 @@ export interface Interaction {
   /** Drawn each frame, because the sigil it rings may be walking. */
   drawFocus(): void;
   focused(): string | null;
+  /** Zoom about the middle of the view, for the buttons over the floor. */
+  zoomBy(factor: number): void;
+  /** Back to the whole room, fitted. */
+  fit(): void;
   destroy(): void;
 }
 
@@ -162,7 +166,17 @@ export function attachInteraction(
   }
 
   function step(by: number) {
+    // About the middle of the view rather than the room's centre, so zooming in on a corner
+    // that has been panned to keeps that corner in view.
+    const box = host.getBoundingClientRect();
+    const middle = new PixiPoint(box.width / 2, box.height / 2);
+    const before = stage.world.toLocal(middle);
     stage.setView({ zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, stage.view.zoom * by)) });
+    const after = stage.world.toLocal(middle);
+    stage.setView({
+      panX: stage.view.panX + (after.x - before.x) * stage.scale(),
+      panY: stage.view.panY + (after.y - before.y) * stage.scale(),
+    });
     actors.setZoom(stage.view.zoom);
   }
 
@@ -246,6 +260,8 @@ export function attachInteraction(
       }
     },
     focused: () => focused,
+    zoomBy: step,
+    fit: reset,
     destroy() {
       if (hoverTimer) clearTimeout(hoverTimer);
       host.removeEventListener("pointermove", onPointerMove);

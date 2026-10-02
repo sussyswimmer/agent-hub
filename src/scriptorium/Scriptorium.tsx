@@ -5,6 +5,7 @@ import { tourSeen, useStore } from "@/store";
 import { Help } from "@/tutorial/Help";
 import { Tour } from "@/tutorial/Tour";
 import { FamiliarPane } from "@/familiar/FamiliarPane";
+import { NewFamiliar } from "@/familiar/Setup";
 import { Ledger } from "@/ledger/Ledger";
 import { Seals } from "@/seal/Seals";
 import { Workbench } from "@/workbench/Workbench";
@@ -71,6 +72,8 @@ export function Scriptorium() {
       <Rule vertical />
       {view === "help" ? (
         <Help />
+      ) : view === "new" ? (
+        <NewFamiliar />
       ) : view === "seals" ? (
         <Seals />
       ) : view === "workbench" ? (

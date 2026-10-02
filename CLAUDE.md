@@ -98,7 +98,9 @@ A desktop app where you can:
 
 - Not a hosted service. No auth, no multi-tenant, no sync.
 - Not a model provider. It drives CLIs you already have installed and already pay for.
-- Not an agent-builder GUI. Familiars are files, edited in your editor. (§4)
+- Not an agent-builder GUI. Familiars are files, edited in your editor. (§4) At the owner's request
+  there is one small form that writes those same files — *New familiar* and each familiar's settings
+  tab (DECISIONS 0028). The file stays the source of truth.
 - Not an orchestrator in v1. You pick which familiar does what. Routing comes in Phase 6,
   and even then it proposes rather than decides.
 - Not a code editor, not a chat app, not a note-taking app.
@@ -164,14 +166,17 @@ preamble. Orders are a labelling and defaults system — they grant no special p
 - Empty states are invitations: "No familiars bound yet. Drop a `.binding.md` in `~/.grimoire/bindings`."
 - The theme lives in the nouns, not in the sentence structure. Don't write faux-archaic
   English. "Summon Vellum" is right; "Wouldst thou summon Vellum?" is not.
+- A plain gloss may sit beside a themed noun — *Summon · start it*, a tab's two words under its
+  name — but never replaces it (DECISIONS 0028). The owner asked for both.
 
 ---
 
 ## 4. Familiars are files
 
 A familiar is a markdown file with YAML frontmatter in `~/.grimoire/bindings/`. The app watches
-that folder and hot-reloads. There is no in-app editor for bindings; there is a "Reveal in
-Finder" button and a "Reload bindings" button.
+that folder and hot-reloads. The file is the source of truth. The app's *New familiar* form and
+each familiar's settings tab write that same file, editing only the keys they change (DECISIONS
+0028); anything they do not cover is edited in the file.
 
 `~/.grimoire/bindings/vellum.binding.md`
 
@@ -601,7 +606,7 @@ queue behind it in a short line. Never overlap two sigils.
 
 ### 8.3 What a familiar looks like on the floor
 
-The sigil from §7.4, at 44 world units, plus:
+The sigil from §7.4, at 80 world units (44 was set for the 1000-unit room; DECISIONS 0028), plus:
 
 - A **name plate** below it in Junicode 12, `--bone-dim`, drawn only at zoom ≥ 0.9×.
 - A **thread of ink** — a 1px `--brass` line from the sigil to its desk lamp while it works.

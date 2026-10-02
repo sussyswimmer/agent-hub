@@ -6,7 +6,8 @@ import { describe, expect, test } from "bun:test";
 import type { SigilState } from "@/lib/types";
 
 import { CENTRE, ORDERS, SIGIL_SIZE, WALL_INNER, WARD_RADIUS, deskCorners, distance, slot, station } from "../plan";
-import { PERSONAL_SPACE, pick, seeded, wanderArea } from "../wander";
+import { PERSONAL_SPACE, contains, pick, seeded, wanderArea } from "../wander";
+import { reachesDesk } from "./figure";
 
 /** Whether a point is on a desk, or within a sigil's half-width of one. */
 function onDesk(p: { x: number; y: number }, order: (typeof ORDERS)[number]): boolean {
@@ -85,14 +86,20 @@ describe("where they go", () => {
   test("a familiar's own resting place is inside the patch it wanders", () => {
     // So a stroll never has to leave the patch to get home.
     for (const [state, id, index] of cases) {
+      expect(contains(wanderArea(state, id, index)!, slot(station(id), index))).toBe(true);
+    }
+  });
+
+  test("nobody strolls with its head on a desk", () => {
+    for (const [state, id, index] of cases) {
+      for (const p of samples(state, id, index, 200)) expect(reachesDesk(p)).toBe(false);
+    }
+  });
+
+  test("the patch is where it says it is", () => {
+    for (const [state, id, index] of cases) {
       const area = wanderArea(state, id, index)!;
-      const home = slot(station(id), index);
-      const bearing = ((Math.atan2(home.x - CENTRE.x, CENTRE.y - home.y) * 180) / Math.PI + 360) % 360;
-      const r = distance(home, CENTRE);
-      expect(r).toBeGreaterThanOrEqual(area.inner - 0.01);
-      expect(r).toBeLessThanOrEqual(area.outer + 0.01);
-      const within = bearing >= area.from - 0.01 && bearing <= area.to + 0.01;
-      expect(within).toBe(true);
+      for (const p of samples(state, id, index, 50)) expect(contains(area, p)).toBe(true);
     }
   });
 

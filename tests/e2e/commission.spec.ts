@@ -215,12 +215,12 @@ test("a summoned familiar starts at once, and mark done hands it the next", asyn
 
 test("the header's Summon summons, and then offers to banish", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("summon")).toHaveText("Summon");
+  await expect(page.getByTestId("summon")).toHaveText(/^Summon\b/);
   await page.getByTestId("summon").click();
   await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "live");
-  await expect(page.getByTestId("summon")).toHaveText("Banish");
+  await expect(page.getByTestId("summon")).toHaveText(/^Banish\b/);
 
   await page.getByTestId("summon").click();
   await expect(page.getByTestId("terminal-pane")).toHaveAttribute("data-status", "ended");
-  await expect(page.getByTestId("summon")).toHaveText("Summon");
+  await expect(page.getByTestId("summon")).toHaveText(/^Summon\b/);
 });

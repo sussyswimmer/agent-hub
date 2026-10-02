@@ -36,6 +36,13 @@ export function Now({
 
   if (familiar.cannot_summon) {
     text = `${name} cannot be summoned: ${familiar.cannot_summon}`;
+  } else if (!live && familiar.workspace_missing) {
+    text = (
+      <>
+        {name} is resting, and needs a folder to work in before it can be summoned. Anything you give it now waits in
+        its queue.{line}
+      </>
+    );
   } else if (!live) {
     text = (
       <>
@@ -57,7 +64,8 @@ export function Now({
         <q className="text-bone" title={current.prompt}>
           {short(current.prompt)}
         </q>
-        . When it has finished, mark it done and {name} starts on the next one.{line}
+        . Tell it something below to steer it. When it has finished, mark it done and {name} starts on the next
+        one.{line}
       </>
     );
     actions = (

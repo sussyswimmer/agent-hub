@@ -22,6 +22,7 @@ grimoire-core = { path = "../crates/grimoire-core" }
 tauri = { version = "2.11", features = ["tray-icon"] }
 tauri-plugin-notification = "2.4"
 tauri-plugin-opener = "2.5"
+tauri-plugin-dialog = "2.7"
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

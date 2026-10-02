@@ -6,7 +6,6 @@ import { describe, expect, test } from "bun:test";
 import {
   CENTRE,
   DESK_RADIUS,
-  FIGURE_REACH,
   ORDERS,
   SIGIL_SIZE,
   STATIONS,
@@ -20,6 +19,8 @@ import {
   station,
 } from "../plan";
 import { approach, route, walk } from "../paths";
+
+import { reachesDesk } from "./figure";
 
 /** The closest a line segment comes to a point — the question both wall and ward checks ask. */
 function nearest(a: { x: number; y: number }, b: { x: number; y: number }, p: { x: number; y: number }) {
@@ -87,35 +88,33 @@ describe("where familiars stand", () => {
     expect(after).toEqual(before);
   });
 
-  test("a familiar standing at a desk does not reach onto it", () => {
+  test("a familiar standing at a desk or the hearth does not reach onto any desk", () => {
     // The figures stand up out of the plan, head to the north of the feet. At the two desks on
-    // the north side the first version stood them with their heads on the desktop.
+    // the north side the first version stood them with their heads on the desktop, and when the
+    // figures grew (DECISIONS 0028) the hearth's did the same to the Ledger desk.
+    const places = [
+      ...ORDERS.flatMap((o) => Array.from({ length: 6 }, (_, i) => slot(station(`desk-${o}`), i))),
+      ...Array.from({ length: 6 }, (_, i) => slot(station("hearth"), i)),
+    ];
+    for (const p of places) expect(reachesDesk(p)).toBe(false);
+  });
+
+  test("a crowd at a desk stays out of the ward circle", () => {
+    // Six of one order is more than anyone will bind, and still none of them is stood where a
+    // familiar waiting on a seal would be.
     for (const o of ORDERS) {
-      const desk = station(`desk-${o}`);
-      const [a, b, , d] = deskCorners(desk);
-      const along = { x: b.x - a.x, y: b.y - a.y };
-      const across = { x: d.x - a.x, y: d.y - a.y };
-      const onDesk = (q: { x: number; y: number }) => {
-        const u = ((q.x - a.x) * along.x + (q.y - a.y) * along.y) / (along.x ** 2 + along.y ** 2);
-        const v = ((q.x - a.x) * across.x + (q.y - a.y) * across.y) / (across.x ** 2 + across.y ** 2);
-        return u > 0 && u < 1 && v > 0 && v < 1;
-      };
-      for (let i = 0; i < 4; i++) {
-        const p = slot(desk, i);
-        // The figure, as a box from its feet up to the top of its head, 36 units wide.
-        for (let dx = -18; dx <= 18; dx += 6) {
-          for (let up = 0; up <= FIGURE_REACH; up += 4) {
-            expect(onDesk({ x: p.x + dx, y: p.y - up })).toBe(false);
-          }
-        }
+      for (let i = 0; i < 6; i++) {
+        expect(distance(slot(station(`desk-${o}`), i), CENTRE) - SIGIL_SIZE / 2).toBeGreaterThan(WARD_RADIUS);
       }
     }
   });
 
-  test("everyone waiting on a seal is inside the ward circle", () => {
+  test("everyone waiting on a seal stands in the ward circle", () => {
+    // Feet inside and most of the ring with them. Five figures this size do not all fit inside
+    // the painted line, so a second may stand with the edge of its ring across it.
     const ward = station("ward");
     for (let i = 0; i < 5; i++) {
-      expect(distance(slot(ward, i), CENTRE) + SIGIL_SIZE / 2).toBeLessThanOrEqual(WARD_RADIUS);
+      expect(distance(slot(ward, i), CENTRE) + SIGIL_SIZE / 4).toBeLessThanOrEqual(WARD_RADIUS);
     }
   });
 

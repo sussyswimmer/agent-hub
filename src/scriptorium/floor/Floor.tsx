@@ -295,6 +295,20 @@ export function Floor({ familiars }: { familiars: FamiliarSummary[] }) {
           at={hovered.at}
         />
       )}
+      {ready && (
+        // §8.7 has zoom on the wheel and on + - 0; neither says it is there. These do.
+        <div className="floor-zoom" role="group" aria-label="Zoom the floor" data-testid="floor-zoom">
+          <button type="button" onClick={() => interaction.current?.zoomBy(1 / 1.25)} title="Zoom out (−)" aria-label="Zoom out">
+            −
+          </button>
+          <button type="button" onClick={() => interaction.current?.zoomBy(1.25)} title="Zoom in (+)" aria-label="Zoom in" data-testid="floor-zoom-in">
+            +
+          </button>
+          <button type="button" onClick={() => interaction.current?.fit()} title="The whole room (0)" data-testid="floor-zoom-fit">
+            Fit
+          </button>
+        </div>
+      )}
       <div ref={readout} data-testid="floor-stats" className="hidden" aria-hidden="true" />
       <FloorMirror familiars={shown} aether={aether} />
       {import.meta.env.DEV && <StateOverride familiars={familiars} value={override} onChange={setOverride} />}

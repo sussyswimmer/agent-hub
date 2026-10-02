@@ -22,7 +22,7 @@ request for type. Each licence text sits beside its files.
 | EB Garamond | OFL-1.1 | `src/theme/fonts/eb-garamond.LICENSE.txt` |
 | Iosevka | OFL-1.1 | `src/theme/fonts/iosevka.LICENSE.txt` |
 
-## Rust crates (528)
+## Rust crates (531)
 
 | Package | Version | Licence |
 | --- | --- | --- |
@@ -338,6 +338,7 @@ request for type. Each licence text sits beside its files.
 | `regex-automata` | 0.4.18 | MIT OR Apache-2.0 |
 | `regex-syntax` | 0.8.11 | MIT OR Apache-2.0 |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 |
+| `rfd` | 0.16.0 | MIT |
 | `rsqlite-vfs` | 0.1.1 | MIT |
 | `rusqlite` | 0.40.2 | MIT |
 | `rustc-hash` | 2.1.3 | Apache-2.0 OR MIT |
@@ -397,6 +398,8 @@ request for type. Each licence text sits beside its files.
 | `tauri` | 2.11.5 | Apache-2.0 OR MIT |
 | `tauri-codegen` | 2.6.3 | Apache-2.0 OR MIT |
 | `tauri-macros` | 2.6.3 | Apache-2.0 OR MIT |
+| `tauri-plugin-dialog` | 2.7.3 | Apache-2.0 OR MIT |
+| `tauri-plugin-fs` | 2.5.2 | Apache-2.0 OR MIT |
 | `tauri-plugin-notification` | 2.4.0 | Apache-2.0 OR MIT |
 | `tauri-plugin-opener` | 2.5.5 | Apache-2.0 OR MIT |
 | `tauri-runtime` | 2.11.3 | Apache-2.0 OR MIT |
@@ -555,12 +558,13 @@ request for type. Each licence text sits beside its files.
 | `zvariant_derive` | 5.15.0 | MIT |
 | `zvariant_utils` | 4.2.0 | MIT |
 
-## npm packages (24)
+## npm packages (25)
 
 | Package | Version | Licence |
 | --- | --- | --- |
 | `@pixi/colord` | 2.9.6 | MIT |
 | `@tauri-apps/api` | 2.11.1 | Apache-2.0 OR MIT |
+| `@tauri-apps/plugin-dialog` | 2.7.3 | MIT OR Apache-2.0 |
 | `@tauri-apps/plugin-notification` | 2.4.0 | MIT OR Apache-2.0 |
 | `@tauri-apps/plugin-opener` | 2.5.5 | MIT OR Apache-2.0 |
 | `@types/earcut` | 3.0.0 | MIT |

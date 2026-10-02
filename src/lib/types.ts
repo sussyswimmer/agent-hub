@@ -2,6 +2,9 @@
 import type { Engine } from "./generated/Engine";
 
 export type { Aether } from "./generated/Aether";
+export type { AetherBudget } from "./generated/AetherBudget";
+export type { BindingForm } from "./generated/BindingForm";
+export type { OnExceed } from "./generated/OnExceed";
 export type { Autonomy } from "./generated/Autonomy";
 export type { Commission } from "./generated/Commission";
 export type { DaySpend } from "./generated/DaySpend";
@@ -23,6 +26,13 @@ export type { Isolation } from "./generated/Isolation";
 export type { Order } from "./generated/Order";
 export type { SigilState } from "./generated/SigilState";
 export type { Ward } from "./generated/Ward";
+
+/** Whether a folder a familiar is pointed at is there (`folder_status`). */
+export interface FolderStatus {
+  /** `~` expanded, relatives resolved against the bindings folder. */
+  expanded: string;
+  exists: boolean;
+}
 
 export interface HomeInfo {
   home: string;
@@ -52,7 +62,7 @@ export interface WorkbenchSettings {
 }
 
 /** Which tab of the familiar pane is showing (§7.5). */
-export type Tab = "commission" | "terminal" | "outputs" | "codex" | "wards";
+export type Tab = "commission" | "terminal" | "outputs" | "codex" | "wards" | "settings";
 
 /** What the interface shows of a familiar's codex (§6.6). */
 export interface CodexView {

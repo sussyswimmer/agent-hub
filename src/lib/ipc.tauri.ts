@@ -1,5 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import type { z } from "zod";
+import { z } from "zod";
 
 import type { Backend, Emission, SummonRequest } from "./ipc";
 import * as S from "./schemas";
@@ -65,6 +65,16 @@ export function createTauriBackend(): Backend {
 
     commissionCreate: (id, prompt, intake) => call("commission_create", S.commission, { id, prompt, intake }),
     commissionDone: (id) => call("commission_done", S.commission.nullable(), { id }),
+    bindingForm: (id) => call("binding_form", S.bindingForm, { id }),
+    bindingSave: (id, form) => call("binding_save", z.string(), { id, form }),
+    bindingRemove: (id) => call("binding_remove", z.string(), { id }),
+    folderStatus: (path) => call("folder_status", S.folderStatus, { path }),
+    async pickFolder(start) {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const chosen = await open({ directory: true, multiple: false, ...(start ? { defaultPath: start } : {}) });
+      return typeof chosen === "string" ? chosen : null;
+    },
+    say: (id, text) => invoke("summoning_say", { id, text }).then(() => undefined),
     commissionsFor: (id) => call("commissions_for", S.commission.array(), { id }),
     wardsFor: (id) => call("wards_for", S.ward.array(), { id }),
     wardCreate: (id, cron, prompt, intake) => call("ward_create", S.ward, { id, cron, prompt, intake }),

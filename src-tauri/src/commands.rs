@@ -1,6 +1,7 @@
 //! IPC surface. Thin wrappers over grimoire-core; errors become strings the UI can show.
 
 use grimoire_core::binding::schema::IntakeField;
+use grimoire_core::binding::write::BindingForm;
 use grimoire_core::commission::Commission;
 use grimoire_core::ledger::{Event, LedgerSummary};
 use grimoire_core::commission::Status as CommissionStatus;
@@ -867,4 +868,72 @@ mod tests {
         let (state, _) = state_of(Some(&commission(CommissionStatus::Done)), false, None);
         assert_eq!(state, SigilState::Dormant);
     }
+}
+
+// ── Setting familiars up from inside the app (DECISIONS 0028) ──────────────────────────
+
+/// What the settings page fills its form with. A binding that does not load has nothing to
+/// fill it with, and says so: it is fixed in the file, where its error points.
+#[tauri::command]
+pub fn binding_form(state: State<'_, AppState>, id: String) -> R<BindingForm> {
+    let binding = state.roster.get(&id).ok_or_else(|| format!("There is no familiar called {id}."))?;
+    grimoire_core::binding::write::form_of(&binding).ok_or_else(|| {
+        format!(
+            "{}'s binding has an error, so its settings cannot be shown here: {}. Fix it in the file.",
+            binding.display_name(),
+            binding.error.as_deref().unwrap_or("it could not be read")
+        )
+    })
+}
+
+/// Save the form: a new familiar when `id` is `None`, otherwise that familiar's binding changed
+/// to match. Either way the file is what changes, and the roster is re-read from it at once
+/// rather than waiting for the watcher, so the rail shows the save before the button is let go.
+/// Answers the familiar's id.
+#[tauri::command]
+pub fn binding_save(state: State<'_, AppState>, id: Option<String>, form: BindingForm) -> R<String> {
+    let folder = state.paths.bindings();
+    let binding = match id {
+        None => grimoire_core::binding::write::create(&folder, &form)?,
+        Some(id) => {
+            let current = state.roster.get(&id).ok_or_else(|| format!("There is no familiar called {id}."))?;
+            grimoire_core::binding::write::update(&current.path, &form)?
+        }
+    };
+    state.roster.refresh(std::slice::from_ref(&binding.path));
+    Ok(binding.id)
+}
+
+/// Put a familiar away: its binding is renamed so it no longer loads, and can be renamed back.
+#[tauri::command]
+pub fn binding_remove(state: State<'_, AppState>, id: String) -> R<String> {
+    if state.summonings.is_live(&id) {
+        return Err(format!("{id} is summoned. Banish it before putting it away."));
+    }
+    let binding = state.roster.get(&id).ok_or_else(|| format!("There is no familiar called {id}."))?;
+    let kept = grimoire_core::binding::write::retire(&binding.path)?;
+    state.roster.refresh(std::slice::from_ref(&binding.path));
+    Ok(kept.display().to_string())
+}
+
+#[derive(serde::Serialize)]
+pub struct FolderStatus {
+    /// What the path means on this machine: `~` expanded, a relative path resolved against the
+    /// bindings folder (§4).
+    pub expanded: String,
+    pub exists: bool,
+}
+
+/// Whether a folder a familiar is pointed at is there, for the settings page to say so as it
+/// is typed rather than at the summon.
+#[tauri::command]
+pub fn folder_status(state: State<'_, AppState>, path: String) -> R<FolderStatus> {
+    let expanded = grimoire_core::paths::expand(&path, &state.paths.bindings());
+    Ok(FolderStatus { exists: expanded.is_dir(), expanded: expanded.display().to_string() })
+}
+
+/// Say something to a summoned familiar, as one message, without opening its terminal.
+#[tauri::command]
+pub fn summoning_say(state: State<'_, AppState>, id: String, text: String) -> R<()> {
+    state.summonings.say(&id, &text)
 }
