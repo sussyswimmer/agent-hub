@@ -928,3 +928,67 @@ here. Rather than guess again, the workflow now signs the app itself — `codesi
 --sign -`, the call Tauri would have made — and remakes the disk image around the signed app
 with `hdiutil`, with the usual link to Applications beside it. The config line stays: if Tauri
 does sign, signing again is harmless. The check is unchanged.
+
+## 0028 — Familiars are set up in the app, figures are bigger, and plain words sit beside the themed ones
+
+**Status:** accepted · **Date:** 2026-10-02 · **Concerns:** §2, §3, §4, §7.4, §8.2, §8.3 ·
+**Replaces:** "there is no in-app editor for bindings"; a 44-unit sigil in a 1600-unit room
+
+**Context.** The owner, using 1.0.4: "the characters are too small and its still too confusing how
+to setup agents and contorl them to do waht i want". Three things were true. When the room grew
+to 1600 units (0025) the familiars kept their size, so on a laptop a figure was about 35 pixels
+tall and its name about 9 — unreadable. The only way to make a familiar, or change one, was to
+write YAML in a `.binding.md` by hand, which §2 and §4 required. And the starter familiars point
+at the owner's own folders (`~/work/essays` and the like), which no other machine has, so on a
+fresh install Summon failed until a file was edited — with nothing in the app saying so before
+the press. Asked, the owner chose setup inside the app, and the themed words kept with plain ones
+beside them rather than replaced.
+
+**Decision.**
+
+- **Setup in the app.** *New familiar* in the rail and a *settings* tab on every familiar edit a
+  binding through a form: name, order (said as what it is for), the folder it works in with the
+  system's folder picker, autonomy in plain words, standing instructions, intake questions,
+  engine and model, and the aether budget. `binding::write` writes the file. **The file is still
+  the source of truth**: the form writes the same `.binding.md` a person would, into the same
+  folder, and the watcher reads it like any hand edit. An edit is surgical — only the top-level
+  keys the form changed are rewritten, so comments and keys the form does not cover survive —
+  every file is parsed back before it replaces anything, and it is written to a hidden temporary
+  file and moved into place, so the watcher never reads half a binding. A new familiar never
+  overwrites an existing file. *Put away* renames the binding to `.binding.md.removed` rather than
+  deleting it. `bounded` from the form means the familiar's own folder (`bounds.write` set to it
+  when it has none). The writ is still passed verbatim; the form edits the file, not the prompt.
+- **A missing folder is said, and fixed in one press.** `FamiliarSummary.workspace_missing`. The
+  rail reads "needs a folder", Summon is disabled with the reason, and the commission tab offers
+  *Choose a folder*, which writes the choice into the binding.
+- **Talking to a running familiar.** A *Tell it something* box on the commission tab while a
+  familiar is summoned: the text goes into its terminal as one message, the same way a commission
+  is handed over (0024), with two one-press messages for stopping and wrapping up.
+- **Plain words beside the canonical ones** (§3 amended in practice, not in its nouns): each tab
+  has a two-word gloss under it, *Summon · start it*, *Banish · stop it*, *Seals · waiting for
+  your OK*, *Workbench · settings*, *Ledger of ink · history and costs*, *Aether · budget for this
+  task*. The tour gains steps for New familiar and the settings tab.
+- **Bigger figures.** `SIGIL_SIZE` 44 → 80 and the figure's reach 57 → 104, about 1.8×; name
+  plates 19 → 32. Everything a familiar stands by was re-set from the figure's size: places at a
+  desk ±70 along it and a crowd behind in rows of two (a line of four used to reach the ward
+  circle), a second familiar in the ward circle 84 from the middle, the hearth's familiars either
+  side of the Ledger desk rather than between it and the fire (a figure is taller than that gap),
+  and the wandering patches set out along their desks. New tests: no familiar at a desk or the
+  hearth, standing or strolling, has its head on any desk; a crowd of six at a desk stays out of
+  the ward circle. Zoom buttons (− + Fit) sit over the floor, since the wheel and the keys never
+  said they were there.
+
+- **Buttons look like what they are.** A base rule in `tokens.css` sat outside Tailwind's layers,
+  and unlayered CSS beats layered CSS whatever its specificity: every `text-*` and `rounded-*`
+  class on every button and field was ignored. Disabled buttons never dimmed (a disabled Summon
+  looked pressable), dim ones were full bone, `text-xs` ones came out at body size. Found by
+  looking at the disabled Summon in the running binary. The rule is in `@layer base` now, and a
+  test reads the disabled button's colour.
+
+**Given up.** §7.4's sigil at 44 units. A second familiar in the ward circle may now stand with the
+edge of its ring across the painted line — its feet are well inside. §2's "familiars are files,
+edited in your editor" holds for the files, but not for "not an agent-builder GUI": this is a
+small one, by request.
+
+**Not done.** The form does not edit `bounds` lists beyond the folder, `isolation`, `resume`,
+`codex`, `reliquary` or `archivist`; those stay in the file, which the settings tab names.

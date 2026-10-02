@@ -32,6 +32,14 @@ export const STEPS: Step[] = [
     anchor: "[data-testid='roster']",
   },
   {
+    id: "setup",
+    title: "Make one of your own",
+    body:
+      "New familiar sets one up in a minute: a name, what it is for, the folder it works in, its instructions, and how " +
+      "much it may do without asking you. The five already here are examples; change them or put them away.",
+    anchor: "[data-testid='new-familiar']",
+  },
+  {
     id: "floor",
     title: "The floor",
     body:
@@ -62,8 +70,9 @@ export const STEPS: Step[] = [
     id: "now",
     title: "What it is doing, and what to do next",
     body:
-      "This line always says what the familiar is doing. While it works, Mark done appears here: press it when the " +
-      "work is finished, and it moves on to the next commission in its queue.",
+      "This line always says what the familiar is doing. While it works, a box appears below it to tell it something — " +
+      "steer it, answer it, stop it — and Mark done appears here: press that when the work is finished, and it moves on " +
+      "to the next commission in its queue.",
     anchor: "[data-testid='now']",
     needs: "familiar",
   },
@@ -74,6 +83,15 @@ export const STEPS: Step[] = [
       "The terminal tab is the familiar itself, running. Watch it, or type to it directly as you would in any terminal. " +
       "Banish, at the top, stops it.",
     anchor: "[data-tab='terminal']",
+    needs: "familiar",
+  },
+  {
+    id: "settings",
+    title: "Change how it works",
+    body:
+      "The settings tab is everything about a familiar: its folder, its instructions, the questions it asks before a " +
+      "task, its budget, and how much it may do without asking. Saving writes its binding file for you.",
+    anchor: "[data-tab='settings']",
     needs: "familiar",
   },
   {
@@ -98,8 +116,8 @@ export const STEPS: Step[] = [
     id: "help",
     title: "That is all of it",
     body:
-      "How it works explains every word Grimoire uses and replays this tour. New familiars are markdown files in your " +
-      "bindings folder; the workbench shows where that is.",
+      "How it works explains every word Grimoire uses and replays this tour. The themed words always have plain ones " +
+      "beside them, and New familiar, in the rail, makes another.",
     anchor: "[data-testid='help-toggle']",
   },
 ];

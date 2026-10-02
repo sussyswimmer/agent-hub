@@ -24,9 +24,11 @@ type Covers<T extends readonly string[], U extends string> =
   [Exclude<U, T[number]>] extends [never] ? true : { missing: Exclude<U, T[number]> };
 type Exhaustive<T extends true> = T;
 
+import type { Autonomy } from "./generated/Autonomy";
 import type { Engine } from "./generated/Engine";
 import type { EventKind } from "./generated/EventKind";
 import type { IntakeKind } from "./generated/IntakeKind";
+import type { OnExceed } from "./generated/OnExceed";
 import type { Order } from "./generated/Order";
 import type { Resolution } from "./generated/Resolution";
 import type { SealKind } from "./generated/SealKind";
@@ -58,6 +60,7 @@ export const familiarSummary = z.object({
   warnings: z.array(z.string()),
   cannot_summon: z.string().nullable(),
   binding_path: z.string(),
+  workspace_missing: z.boolean(),
 });
 
 export const homeInfo = z.object({
@@ -122,6 +125,35 @@ export const intakeField = z.object({
   options: z.array(z.string()),
   required: z.boolean(),
 });
+
+// ── Setting familiars up (DECISIONS 0028) ─────────────────────────────────────────────
+
+const AUTONOMIES = ["propose", "bounded", "free"] as const satisfies readonly Autonomy[];
+type _CoversAutonomy = Exhaustive<Covers<typeof AUTONOMIES, Autonomy>>;
+export const autonomy = z.enum(AUTONOMIES);
+const ON_EXCEED = ["steer", "bind", "banish"] as const satisfies readonly OnExceed[];
+type _CoversOnExceed = Exhaustive<Covers<typeof ON_EXCEED, OnExceed>>;
+export const onExceed = z.enum(ON_EXCEED);
+
+/** Mirrors `BindingForm` in crates/grimoire-core/src/binding/write.rs. */
+export const bindingForm = z.object({
+  name: z.string(),
+  order,
+  engine,
+  model: z.string().nullable(),
+  workspace: z.string(),
+  autonomy,
+  aether: z.object({
+    tokens: z.number().nullable(),
+    turns: z.number().nullable(),
+    minutes: z.number().nullable(),
+    on_exceed: onExceed,
+  }),
+  intake: z.array(intakeField),
+  writ: z.string(),
+});
+
+export const folderStatus = z.object({ expanded: z.string(), exists: z.boolean() });
 
 // ── Commissions and the ledger (§6.2, §6.9) ────────────────────────────────────────────
 

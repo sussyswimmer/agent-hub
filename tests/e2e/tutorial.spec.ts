@@ -21,6 +21,14 @@ test("the tour opens by itself on a first launch and walks through giving a fami
   await expect(tour).toHaveAttribute("data-step", "roster");
   await expect(page.getByTestId("tour-ring")).toBeVisible();
 
+  // Making one's own comes straight after the list of them, pointing at the button that does it.
+  await page.getByTestId("tour-next").click();
+  await expect(tour).toHaveAttribute("data-step", "setup");
+  await expect(page.getByRole("dialog")).toContainText("New familiar");
+  const ringAt = await page.getByTestId("tour-ring").boundingBox();
+  const button = await page.getByTestId("new-familiar").boundingBox();
+  expect(ringAt && button && ringAt.y <= button.y && ringAt.y + ringAt.height >= button.y + button.height).toBe(true);
+
   // The floor is put away in this window, so its step is passed over rather than pointing at
   // nothing.
   await page.getByTestId("tour-next").click();
@@ -39,10 +47,10 @@ test("the tour opens by itself on a first launch and walks through giving a fami
   await page.getByTestId("tour-back").click();
   await expect(tour).toHaveAttribute("data-step", "commission");
   await page.getByTestId("tour-back").click();
-  await expect(tour).toHaveAttribute("data-step", "roster");
+  await expect(tour).toHaveAttribute("data-step", "setup");
 
   // To the end.
-  for (let i = 0; i < 12 && (await tour.count()) > 0; i++) {
+  for (let i = 0; i < 14 && (await tour.count()) > 0; i++) {
     const done = (await page.getByTestId("tour-next").innerText()) === "Done";
     await page.getByTestId("tour-next").click();
     if (done) break;
@@ -74,6 +82,7 @@ test("How it works explains every word and replays the tour", async ({ page }) =
   await expect(help).toBeVisible();
   await expect(page.getByTestId("help-steps")).toContainText("Summon and start");
   await expect(page.getByTestId("help-steps")).toContainText("Mark it done");
+  await expect(page.getByTestId("help-steps")).toContainText("New familiar");
 
   // The canonical nouns the interface uses, each explained.
   for (const word of ["familiar", "binding", "commission", "summon", "banish", "seal", "aether", "codex", "standing ward"]) {

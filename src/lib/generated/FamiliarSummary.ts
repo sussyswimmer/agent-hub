@@ -26,4 +26,9 @@ warnings: Array<string>,
 /**
  * `None` when the familiar can be summoned; otherwise why the button is disabled (§6.1).
  */
-cannot_summon: string | null, binding_path: string, };
+cannot_summon: string | null, binding_path: string, 
+/**
+ * The workspace is not a folder on this machine, so a summon would fail. The pane offers
+ * to choose one (DECISIONS 0028).
+ */
+workspace_missing: boolean, };

@@ -27,11 +27,16 @@ test("the scriptorium draws the §7.5 layout: 240px rail, roster, pane, seals, a
   );
   expect(shouted).toEqual([]);
 
-  // §7.5's four, plus the standing wards Phase 7 added. Aether pinned below the panel.
-  await expect(page.getByRole("tab")).toHaveCount(5);
-  for (const t of ["commission", "terminal", "outputs", "codex"]) {
+  // §7.5's four, plus the standing wards Phase 7 added and the settings DECISIONS 0028 did.
+  // Aether pinned below the panel.
+  await expect(page.getByRole("tab")).toHaveCount(6);
+  for (const t of ["commission", "terminal", "outputs", "codex", "wards", "settings"]) {
     await expect(page.locator(`[data-tab="${t}"]`)).toBeVisible();
   }
+  // Each tab says what it is for in plain words, under the canonical one, without changing the
+  // name a screen reader reads.
+  await expect(page.locator('[data-tab="codex"]')).toContainText("its memory");
+  await expect(page.getByRole("tab", { name: "codex", exact: true })).toHaveCount(1);
   const panel = await page.getByTestId("tabpanel").boundingBox();
   const aether = await page.getByTestId("aether").boundingBox();
   expect(aether!.y).toBeGreaterThan(panel!.y);

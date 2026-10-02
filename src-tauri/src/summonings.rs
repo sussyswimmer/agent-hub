@@ -490,16 +490,19 @@ impl Summonings {
             summoned.commission_id = Some(next.id.clone());
         }
 
-        let bracketed = l.paste.lock().is_ok_and(|m| m.on());
-        l.session.write(&keystrokes(&next.prompt, bracketed)).map_err(|e| e.to_string())?;
-        // Enter a moment later, on its own: in the same read as a paste it can be taken as part
-        // of the paste rather than as the key that submits it.
-        let session = Arc::clone(&l.session);
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(250));
-            let _ = session.write(b"\r");
-        });
-        Ok(())
+        type_in(l, &next.prompt)
+    }
+
+    /// Say something to a familiar mid-commission, as if it had been typed into its terminal and
+    /// sent: a steer, an answer to its question, "stop and summarise". It goes in as one message
+    /// however many lines it has, the way a commission does.
+    pub fn say(&self, id: &str, text: &str) -> Result<(), String> {
+        if text.trim().is_empty() {
+            return Err("There is nothing to say.".into());
+        }
+        let live = self.live.lock().map_err(poisoned)?;
+        let l = live.get(id).ok_or_else(|| format!("{id} is not summoned. Summon it first."))?;
+        type_in(l, text)
     }
 
     /// Take the commission out of a familiar's hands, leaving it summoned. Records what it cost
@@ -591,6 +594,21 @@ impl Summonings {
         let entry = live.get(id).ok_or_else(|| format!("{id} is not summoned."))?;
         f(&entry.session)
     }
+}
+
+/// Type a message into the engine and send it: as one bracketed paste where the engine has
+/// turned that on, so a newline inside it is not taken as Enter (summon::handover).
+fn type_in(l: &Live, text: &str) -> Result<(), String> {
+    let bracketed = l.paste.lock().is_ok_and(|m| m.on());
+    l.session.write(&keystrokes(text, bracketed)).map_err(|e| e.to_string())?;
+    // Enter a moment later, on its own: in the same read as a paste it can be taken as part
+    // of the paste rather than as the key that submits it.
+    let session = Arc::clone(&l.session);
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let _ = session.write(b"\r");
+    });
+    Ok(())
 }
 
 /// Read the engine's transcript and write what it says onto the commission (§6.5, §6.9).

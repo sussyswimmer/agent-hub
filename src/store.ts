@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { backend } from "./lib/ipc";
 import type { Aether, FamiliarSummary, HomeInfo, Tab } from "./lib/types";
 
-type View = "familiar" | "ledger" | "seals" | "workbench" | "help";
+type View = "familiar" | "ledger" | "seals" | "workbench" | "help" | "new";
 
 interface State {
   ready: boolean;
@@ -205,7 +205,16 @@ export const useStore = create<State>((set, get) => ({
         before.length === next.length &&
         before.every((f, i) => {
           const n = next[i]!;
-          return f.id === n.id && f.state === n.state && f.status === n.status && f.error === n.error;
+          return (
+            f.id === n.id &&
+            f.state === n.state &&
+            f.status === n.status &&
+            f.error === n.error &&
+            f.name === n.name &&
+            f.order === n.order &&
+            f.workspace === n.workspace &&
+            f.workspace_missing === n.workspace_missing
+          );
         });
       if (!same) set({ familiars: next });
     } catch {

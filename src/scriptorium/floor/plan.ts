@@ -4,12 +4,17 @@
 // and tested without a canvas. `bake.ts` draws what this describes; `paths.ts` routes across it.
 //
 // **World units, not pixels.** The room is 1600 × 1600 and the viewport letterboxes to fit, so
-// nothing in this file changes when the window does. A sigil is 44 units wherever it stands.
+// nothing in this file changes when the window does. A sigil is 80 units wherever it stands.
 //
 // It was 1000 until the owner asked for a bigger room with familiars that walk about in it
 // (DECISIONS 0025). The familiars kept their size and the room grew around them, so there is
 // floor to wander on. Every radius below was then measured off the painting it is registered
 // to, `floor-plan.jpg`, rather than the other way round.
+//
+// That left a familiar about 35 pixels tall on a laptop, with a name nobody could read, and the
+// owner said so. The figures were scaled up about 1.8 times (DECISIONS 0028), and every place a
+// familiar stands was re-set from the figure's size rather than from fixed numbers, so the next
+// change of size is one constant.
 //
 // §8.8 asks that adding a sixth order later mean editing one array rather than redrawing the
 // room. It does: add to `ORDER_BEARINGS` and the desk, its waypoints and its routes follow.
@@ -39,15 +44,30 @@ export const DESK_DEPTH = 54;
 /** The ring familiars walk along. Between the ward circle and the desks, so neither is crossed. */
 export const CONCOURSE_RADIUS = 300;
 
-/** §8.3: the sigil is drawn at 44 world units. */
-export const SIGIL_SIZE = 44;
+/**
+ * The sigil's diameter in world units. §8.3 set it at 44 in the 1000-unit room; in this room 44
+ * was about 20 pixels across, and the figure standing in it about 35 tall (DECISIONS 0028).
+ */
+export const SIGIL_SIZE = 80;
 
 /**
  * How far above where it stands a familiar's figure reaches, in world units. The figures are
  * painted standing, seen a little from the front, so a familiar's head is north of its feet —
  * and one standing just south of a desk has its head on the desk unless it stands further off.
  */
-export const FIGURE_REACH = 57;
+export const FIGURE_REACH = 104;
+
+/** Half the width of a figure's body, without the odd quill or lantern held out to one side. */
+export const FIGURE_HALF_WIDTH = 30;
+
+/** How far a familiar keeps from a desk's edge, from the middle of its ring. */
+const DESK_CLEARANCE = SIGIL_SIZE / 2 + 18;
+
+/** Two familiars sharing a desk stand this far either side of its middle, along it. */
+export const DESK_SIDE = 70;
+
+/** How far apart familiars queueing at a station stand, one behind another. */
+const QUEUE_STEP = SIGIL_SIZE + 12;
 
 /** Below this zoom the name plates come off, as §8.3 asks. */
 export const PLATE_ZOOM = 0.9;
@@ -103,8 +123,8 @@ export interface Station {
  */
 export const WALL_FURNITURE = { reliquary: 622, hearth: 650, lectern: 660 } as const;
 
-/** Where familiars stand in front of the furniture against the wall, and wait at the hearth. */
-export const BEFORE_FURNITURE = 60;
+/** Where familiars stand in front of the furniture against the wall. */
+export const BEFORE_FURNITURE = 70;
 
 /**
  * A desk the painting set nearer the centre than the plan's radius. The Ledger desk is painted
@@ -194,7 +214,7 @@ export function deskLamp(s: Station): Point {
  * arriving somewhere moves only the one arriving.
  *
  * §8.2: two of an order share a desk by standing either side of it; three or more queue behind.
- * Nothing overlaps: a sigil is 44 units across and the closest two slots are 84 apart.
+ * Nothing overlaps: every two places at a station are at least a sigil's width apart.
  */
 export function slot(s: Station, index: number): Point {
   switch (s.kind) {
@@ -202,35 +222,42 @@ export function slot(s: Station, index: number): Point {
       const inboard = deskInboard(s);
       if (index < 2) {
         // Either side of the desk, along its length.
-        const offset = index === 0 ? -50 : 50;
-        const spread = (Math.atan2(offset, inboard) * 180) / Math.PI;
-        return at(s.bearing + spread, Math.hypot(offset, inboard));
+        return alongDesk(s, index === 0 ? -DESK_SIDE : DESK_SIDE, inboard);
       }
-      // A short line, inboard, one behind another, a figure's height apart. Wider would say
-      // more of each name and, with a long enough line, stand the last in the ward circle.
-      return at(s.bearing, inboard - 64 * (index - 1));
+      // Behind them, two to a row, so a desk with a crowd at it keeps it near the desk rather
+      // than in a line reaching into the ward circle — which is where the second version's line
+      // of four ended once the figures grew.
+      const row = Math.floor(index / 2);
+      return alongDesk(s, index % 2 === 0 ? -DESK_SIDE * 0.7 : DESK_SIDE * 0.7, inboard - QUEUE_STEP * row);
     }
     case "ward": {
       // One familiar stands in the middle of the circle, which is the image §8.4 wants to be
-      // unmistakable. A second stands beside it rather than displacing it.
+      // unmistakable. A second stands beside it rather than displacing it, still in the circle.
       if (index === 0) return CENTRE;
-      return at(((index - 1) * 72) % 360, 62);
+      return at(((index - 1) * 72) % 360, WARD_SECOND);
     }
     case "hearth": {
-      // Spread along the south arc between the Ledger desk and the fire, alternating out from
-      // due south. The step is set by the name plates rather than by the sigils: marks that
-      // clear each other with names that run together are worse than useless on the one
-      // station where every dormant familiar ends up at once.
-      const step = 10;
-      const n = Math.floor((index + 1) / 2);
-      const offset = index % 2 === 0 ? -n * step : n * step;
-      return at(180 + offset, HEARTH_ARC);
+      // Either side of the Ledger desk, in front of the fire, alternating out from it. Not in
+      // the gap between the desk and the fire: a figure is taller than that gap is deep, and
+      // stood there it has its head on the desk.
+      const side = index % 2 === 0 ? -1 : 1;
+      return at(180 + side * (HEARTH_FIRST + HEARTH_STEP * Math.floor(index / 2)), HEARTH_ARC);
     }
     default: {
       // Cabinet, lectern, door: stand in front of it, and queue inboard.
-      return at(s.bearing, distance(s.at, CENTRE) - BEFORE_FURNITURE - 50 * index);
+      return at(s.bearing, distance(s.at, CENTRE) - BEFORE_FURNITURE - QUEUE_STEP * index);
     }
   }
+}
+
+/**
+ * A point by a desk, `u` along it (clockwise is positive) and `v` out from the room's centre on
+ * its bearing. The coordinates a desk's own places and its wandering patch are set out in.
+ */
+export function alongDesk(s: Station, u: number, v: number): Point {
+  const t = (s.bearing * Math.PI) / 180;
+  const base = at(s.bearing, v);
+  return { x: base.x + Math.cos(t) * u, y: base.y + Math.sin(t) * u };
 }
 
 /**
@@ -239,11 +266,19 @@ export function slot(s: Station, index: number): Point {
  */
 export function deskInboard(s: Station): number {
   const north = Math.max(0, Math.cos((s.bearing * Math.PI) / 180));
-  return distance(s.at, CENTRE) - DESK_DEPTH / 2 - 40 - FIGURE_REACH * north;
+  return distance(s.at, CENTRE) - DESK_DEPTH / 2 - DESK_CLEARANCE - FIGURE_REACH * north;
 }
 
-/** The arc the hearth's familiars stand along: in front of the fire, behind the Ledger desk. */
-export const HEARTH_ARC = 562;
+/** How far from the centre a second familiar waiting on a seal stands: in the circle, beside the first. */
+const WARD_SECOND = SIGIL_SIZE + 4;
+
+/**
+ * The arc the hearth's familiars stand along, and where on it: the first pair a little either
+ * side of due south, clear of the Ledger desk, and each pair after that further round.
+ */
+export const HEARTH_ARC = 575;
+const HEARTH_FIRST = 18;
+const HEARTH_STEP = 14;
 
 /** The door is a gap in the wall, not a line across it. Degrees of arc it takes out. */
 export const DOOR_ARC = 15;

@@ -747,3 +747,41 @@ The owner downloaded 1.0.4 and macOS called it damaged. It had never been signed
       v1.0.4, which the owner had published in the meantime; so this run built the tagged commit
       (06973a4) with the fixed workflow. The published notes were left as they were
 - [ ] Open the new `.dmg` on the Mac
+
+---
+
+## Bigger familiars, setup in the app, and talking to one that is working
+
+The owner, on 1.0.4: "the characters are too small and its still too confusing how to setup agents
+and contorl them to do waht i want". Asked, they chose setup inside the app, and the themed words
+kept with plain ones beside them. DECISIONS 0028.
+
+- [x] **Bigger figures**: about 1.8×, names readable at 1280×800. Every place a familiar stands
+      re-set from the figure's size; a crowd at a desk now stands in rows of two behind it, the
+      hearth's familiars either side of the Ledger desk. New tests: no familiar, standing or
+      strolling, has its head on a desk; six of one order stay out of the ward circle
+- [x] **Zoom buttons** over the floor (− + Fit)
+- [x] **New familiar** in the rail and a **settings** tab: name, what it is for, the folder with
+      the system's picker, how much it may do alone, instructions, questions, engine, model,
+      budget. Writes the binding file, changing only the keys that changed; never overwrites a
+      file; **Put away** renames rather than deletes. 12 Rust tests on the writer, one of them a
+      hand-written layout the edit cannot follow, which it refuses rather than mangles
+- [x] **Needs a folder**: the seeds point at the owner's folders, so on a fresh machine all five
+      said nothing until Summon failed. Now the rail says *needs a folder*, Summon is disabled with
+      the reason, and **Choose a folder** on the commission tab fixes it in one press
+- [x] **Tell it something**: a box on the commission tab while a familiar is summoned, sent into
+      its terminal as one message, plus two one-press messages (stop and report; wrap up)
+- [x] **Plain words beside the themed ones**: a two-word gloss under each tab; *Summon · start
+      it*, *Banish · stop it*, *Seals · waiting for your OK*, *Workbench · settings*, *Ledger of
+      ink · history and costs*, *Aether · budget for this task*. Two new tour steps
+- [x] Found in the binary: a disabled Summon looked exactly like an enabled one. A base rule
+      outside Tailwind's layers had been overriding every colour and size class on every button
+      since Phase 0. Moved into `@layer base`; a test reads the colour
+- [x] **Checked in the binary** (`tauri dev` under `Xvfb`, scratch `GRIMOIRE_HOME`, a stand-in
+      `claude` that logs what it is sent): all five seeds read *needs a folder*; New familiar
+      wrote `nib.binding.md` exactly as a person would, the native picker opened and chose a
+      folder, Summon and start ran the engine in that folder with the writ and the task; two
+      messages from the box arrived as bracketed pastes; Choose a folder on Vellum changed one
+      line of its binding and nothing else; banishing left no process behind
+- [ ] On the Mac: the folder picker is the system's own there, and the seeds will all say *needs a
+      folder* until each is given one — that is expected, not a fault

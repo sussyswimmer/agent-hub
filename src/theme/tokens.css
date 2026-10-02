@@ -104,13 +104,18 @@ body {
   box-sizing: border-box;
 }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
-  color: inherit;
-  border-radius: var(--radius);
+/* In the base layer, so a utility on the element wins. Unlayered, this beat every `text-*` and
+   `rounded-*` class on every button and field in the app: disabled buttons never dimmed, "dim"
+   buttons were full bone, and `text-xs` buttons came out at body size (DECISIONS 0028). */
+@layer base {
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+    border-radius: var(--radius);
+  }
 }
 
 /* Prose keeps to a readable measure (§7.3). */
@@ -209,6 +214,36 @@ select {
   font-size: 0.75rem;
   text-align: right;
   pointer-events: none;
+}
+
+/* Zoom, over the top right of the floor. Hairlines and the 2px control radius, as everywhere. */
+.floor-zoom {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 1px;
+  border: 1px solid var(--ink-rule);
+  background: var(--ink-rule);
+}
+
+.floor-zoom button {
+  min-width: 2.25rem;
+  height: 2rem;
+  padding: 0 0.6rem;
+  background: var(--ink-panel);
+  color: var(--bone);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.floor-zoom button:hover {
+  background: var(--ink-void);
+}
+
+.floor-zoom button:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: -2px;
 }
 
 .connection-deck {

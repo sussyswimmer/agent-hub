@@ -8,6 +8,9 @@ import { backend } from "@/lib/ipc";
 function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary; selected: boolean; onSelect: () => void }) {
   const broken = familiar.error !== null;
   const warned = familiar.warnings.length > 0;
+  // A dormant familiar pointed at a folder this machine does not have cannot be summoned until
+  // it is given one, so the rail says that instead of "dormant" (DECISIONS 0028).
+  const needsFolder = familiar.workspace_missing && familiar.state === "dormant";
   return (
     <button
       type="button"
@@ -15,7 +18,7 @@ function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary
       aria-current={selected ? "page" : undefined}
       data-familiar={familiar.id}
       data-state={familiar.state}
-      title={broken ? familiar.error! : familiar.status}
+      title={broken ? familiar.error! : needsFolder ? `${familiar.workspace} is not on this machine` : familiar.status}
       style={{ borderLeft: `2px solid ${selected ? "var(--brass)" : "transparent"}` }}
       className={`flex w-full items-start gap-2 py-1.5 pl-2.5 pr-3 text-left transition-colors duration-150 ${
         selected ? "bg-void" : "hover:bg-void/60"
@@ -40,8 +43,11 @@ function RosterRow({ familiar, selected, onSelect }: { familiar: FamiliarSummary
             </span>
           )}
         </span>
-        <span className={`block truncate text-xs ${broken ? "text-oxblood-text" : "text-bone-dim"}`} data-status>
-          {broken ? familiar.error : familiar.status}
+        <span
+          className={`block truncate text-xs ${broken ? "text-oxblood-text" : needsFolder ? "text-brass-text" : "text-bone-dim"}`}
+          data-status
+        >
+          {broken ? familiar.error : needsFolder ? "needs a folder" : familiar.status}
         </span>
       </span>
     </button>
@@ -95,6 +101,27 @@ export function Roster({ seals = 0 }: { seals?: number }) {
             {restoreError && <p role="alert" className="mt-2 text-xs text-oxblood-text">{restoreError}</p>}
           </div>
         )}
+        {ready && (
+          <button
+            type="button"
+            onClick={() => setView("new")}
+            aria-pressed={view === "new"}
+            data-testid="new-familiar"
+            title="Make a new familiar: a name, a folder, instructions"
+            style={{ borderLeft: `2px solid ${view === "new" ? "var(--brass)" : "transparent"}` }}
+            className={`mt-1 flex w-full items-center gap-2 py-1.5 pl-2.5 pr-3 text-left text-base transition-colors duration-150 ${
+              view === "new" ? "bg-void text-bone" : "text-bone-dim hover:text-bone"
+            }`}
+          >
+            <span
+              aria-hidden
+              className="flex h-[22px] w-[22px] items-center justify-center rounded-full border border-dashed border-current text-base leading-none"
+            >
+              +
+            </span>
+            New familiar
+          </button>
+        )}
       </div>
       <Rule />
       <button
@@ -127,7 +154,7 @@ export function Roster({ seals = 0 }: { seals?: number }) {
           view === "workbench" ? "bg-void text-bone" : "text-bone-dim hover:text-bone"
         }`}
       >
-        Workbench
+        Workbench <span className="text-xs text-bone-dim">· settings</span>
       </button>
       <Rule />
       {/* §6.9's ledger is reached from the lectern on the floor in Phase 5; until then the rail
@@ -142,7 +169,7 @@ export function Roster({ seals = 0 }: { seals?: number }) {
           view === "ledger" ? "bg-void text-bone" : "text-bone-dim hover:text-bone"
         }`}
       >
-        Ledger of ink
+        Ledger of ink <span className="text-xs text-bone-dim">· history and costs</span>
       </button>
       <Rule />
       <button
@@ -155,7 +182,7 @@ export function Roster({ seals = 0 }: { seals?: number }) {
           view === "seals" ? "bg-void" : "hover:bg-void/60"
         }`}
       >
-        <span className="mb-1 block text-xs text-bone-dim">Seals</span>
+        <span className="mb-1 block text-xs text-bone-dim">Seals · waiting for your OK</span>
         <span
           className={`block text-base ${seals > 0 ? "text-brass-text" : "text-bone-dim"}`}
           data-seal-count={seals}

@@ -32,8 +32,11 @@ interface uses and replays it.
 
 Phases 0 to 8 of §10 are built, and Phase 9, the packaged build, is under way: releases are cut
 for macOS and Windows, and a week of real use on the owner's Mac is what remains. Familiars are files:
-drop a `.binding.md` in `~/.grimoire/bindings` and one appears, edit it and the change arrives
-without a restart, break it and it says what is wrong rather than vanishing. Give one a
+press **New familiar** in the rail and fill in a form — a name, what it is for, the folder it works
+in, its instructions, how much it may do without asking — or drop a `.binding.md` in
+`~/.grimoire/bindings` yourself; either way one appears. Change one on its settings tab or in the
+file and the change arrives without a restart; break it and it says what is wrong rather than
+vanishing. While one works, the box on its commission tab tells it something mid-task. Give one a
 commission and press Summon and start: a real agent CLI starts in a pseudo-terminal with the
 binding's writ as its briefing and the commission as its first message. Mark it done and the
 next in its queue is handed to the same session. What it costs is recorded, and what it
@@ -81,11 +84,11 @@ check and why.
 
 ### Download for macOS
 
-[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_aarch64.dmg)
+[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.5/Grimoire_1.0.5_aarch64.dmg)
 
-[Download Grimoire for Intel Macs](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_x64.dmg)
+[Download Grimoire for Intel Macs](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.5/Grimoire_1.0.5_x64.dmg)
 
-[Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_x64-setup.exe)
+[Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.5/Grimoire_1.0.5_x64-setup.exe)
 
 **Opening it the first time on a Mac.** Grimoire is not notarized by Apple, so macOS asks you to
 allow it once:
@@ -123,7 +126,9 @@ does not start.
 
 **The first run** creates `~/.grimoire`, places the five seed bindings in
 `~/.grimoire/bindings`, and opens on the floor with all five dormant at the hearth. Nothing runs
-until you summon it.
+until you summon it. The seeds point at the owner's own folders, so on any other machine each one
+says *needs a folder* in the rail: open it and press **Choose a folder**, or make your own with
+**New familiar**.
 
 **Summoning needs `claude` on your `PATH`.** Without it the Summon button is disabled with the
 reason on hover rather than failing when pressed — that is the design (§6.1), not a fault. The

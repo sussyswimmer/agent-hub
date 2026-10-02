@@ -33,7 +33,7 @@ export function AetherBar({ aether }: { aether: Aether | null }) {
     <div className="shrink-0" data-testid="aether" data-pressure={spent.toFixed(3)}>
       <Rule className={rule} />
       <div className="flex items-center gap-4 overflow-hidden px-4 py-2">
-        <span className="shrink-0 text-xs text-bone-dim">Aether</span>
+        <span className="shrink-0 text-xs text-bone-dim">Aether · budget for this task</span>
         {aether ? (
           <>
             <Meter label="tokens" value={aether.tokens} max={aether.tokens_max} format={thousands} />

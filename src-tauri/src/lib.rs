@@ -48,6 +48,9 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        // The folder picker on the settings page (DECISIONS 0028). Opening a folder is all it is
+        // allowed to do; see capabilities/default.json.
+        .plugin(tauri_plugin_dialog::init())
         .setup({
             let summonings = Arc::clone(&summonings);
             move |app| {
@@ -169,6 +172,11 @@ pub fn run() {
             commands::ward_delete,
             commands::seals_pending,
             commands::seal_decide,
+            commands::binding_form,
+            commands::binding_save,
+            commands::binding_remove,
+            commands::folder_status,
+            commands::summoning_say,
         ])
         .build(tauri::generate_context!())
         .expect("Grimoire failed to start");

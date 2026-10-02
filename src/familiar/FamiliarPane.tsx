@@ -12,10 +12,12 @@ import { Codex } from "./Codex";
 import { Intake, type Answers, type How } from "./Intake";
 import { Now } from "./Now";
 import { Queue } from "./Queue";
+import { FolderFix, Settings } from "./Setup";
+import { Say } from "./Say";
 import { Terminal } from "./Terminal";
 import { Wards } from "./Wards";
 
-const TABS: Tab[] = ["commission", "terminal", "outputs", "codex", "wards"];
+const TABS: Tab[] = ["commission", "terminal", "outputs", "codex", "wards", "settings"];
 
 /** What each tab is for, in plain words. Shown on hover and read out with the tab (§3: the nouns
  * stay canonical; this says what they mean). */
@@ -25,6 +27,18 @@ export const TAB_HINTS: Record<Tab, string> = {
   outputs: "Where what it makes ends up",
   codex: "What it remembers between commissions",
   wards: "Commissions that repeat on a schedule",
+  settings: "Its name, folder, instructions, and how much it may do without asking",
+};
+
+/** The same, in two or three words, under each tab — the owner asked for plain words beside the
+ * themed ones rather than in a tooltip they would have to find (DECISIONS 0028). */
+export const TAB_GLOSS: Record<Tab, string> = {
+  commission: "give it a task",
+  terminal: "watch it work",
+  outputs: "what it made",
+  codex: "its memory",
+  wards: "schedules",
+  settings: "set it up",
 };
 
 function Header({
@@ -62,17 +76,22 @@ function Header({
         <button
           type="button"
           onClick={live ? onBanish : onSummon}
-          disabled={!live && (familiar.cannot_summon !== null || familiar.error !== null)}
+          disabled={!live && (familiar.cannot_summon !== null || familiar.error !== null || familiar.workspace_missing)}
           title={
             live
               ? `Stop ${familiar.name}. A commission it is working on ends as banished.`
-              : (familiar.cannot_summon ?? familiar.error ?? `Start ${familiar.name} in a terminal`)
+              : (familiar.cannot_summon ??
+                familiar.error ??
+                (familiar.workspace_missing
+                  ? `${familiar.name}'s folder is not on this machine. Choose one first.`
+                  : `Start ${familiar.name} in a terminal`))
           }
           data-testid="summon"
           data-live={live || undefined}
           className="h-7 rounded-mark border border-rule px-3 text-base text-bone transition-colors duration-150 hover:bg-void disabled:cursor-not-allowed disabled:text-bone-dim disabled:hover:bg-transparent"
         >
           {live ? "Banish" : "Summon"}
+          <span className="text-xs text-bone-dim"> · {live ? "stop it" : "start it"}</span>
         </button>
       </div>
     </header>
@@ -133,7 +152,7 @@ export function FamiliarPane({
 
   const current = commissions.find((c) => c.status === "running" || c.status === "awaiting_seal") ?? null;
   const waiting = commissions.filter((c) => c.status === "queued").length;
-  const summonable = familiar.cannot_summon === null && familiar.error === null;
+  const summonable = familiar.cannot_summon === null && familiar.error === null && !familiar.workspace_missing;
   // The button says what pressing it does, for this familiar, now.
   const primary = !live ? (summonable ? "Summon and start" : "Queue it") : current ? "Add to queue" : "Start";
   const secondary = !live && summonable ? "Queue for later" : undefined;
@@ -212,24 +231,25 @@ export function FamiliarPane({
         {...(showToggle ? { toggle: <FloorToggle /> } : {})}
       />
       <Rule />
-      <div role="tablist" aria-label="Familiar" className="flex shrink-0 items-center gap-1 px-4 py-2">
-        {TABS.map((t, i) => (
-          <span key={t} className="flex items-center gap-1">
-            {i > 0 && <span className="px-1 text-bone-dim">·</span>}
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === t}
-              title={TAB_HINTS[t]}
-              data-tab={t}
-              onClick={() => setTab(t)}
-              className={`rounded-mark px-1 text-base transition-colors duration-150 ${
-                tab === t ? "text-bone underline underline-offset-4" : "text-bone-dim hover:text-bone"
-              }`}
-            >
-              {t}
-            </button>
-          </span>
+      <div role="tablist" aria-label="Familiar" className="flex shrink-0 flex-wrap items-start gap-x-4 gap-y-1 px-4 py-2">
+        {TABS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            title={TAB_HINTS[t]}
+            data-tab={t}
+            onClick={() => setTab(t)}
+            className={`flex flex-col items-start rounded-mark px-1 text-left transition-colors duration-150 ${
+              tab === t ? "text-bone" : "text-bone-dim hover:text-bone"
+            }`}
+          >
+            <span className={`text-base leading-tight ${tab === t ? "underline underline-offset-4" : ""}`}>{t}</span>
+            <span className="text-xs leading-tight text-bone-dim" aria-hidden="true">
+              {TAB_GLOSS[t]}
+            </span>
+          </button>
         ))}
       </div>
       <section
@@ -252,8 +272,11 @@ export function FamiliarPane({
             <p className="text-base text-oxblood-text">{familiar.error}</p>
             <p className="mono text-xs text-bone-dim">{familiar.binding_path}</p>
           </div>
-        ) : tab === "terminal" ? null : tab === "commission" ? (
+        ) : tab === "terminal" ? null : tab === "settings" ? (
+          <Settings familiar={familiar} live={live} />
+        ) : tab === "commission" ? (
           <>
+            {familiar.workspace_missing && !live && <FolderFix familiar={familiar} />}
             <Now
               familiar={familiar}
               live={live}
@@ -273,6 +296,7 @@ export function FamiliarPane({
                 {notice}
               </p>
             )}
+            {live && <Say familiar={familiar} />}
             <Intake
               key={familiar.id}
               familiar={familiar}

@@ -8,7 +8,7 @@ import { useStore } from "@/store";
  */
 export const GLOSSARY: { word: string; means: string }[] = [
   { word: "familiar", means: "An AI agent — a command-line tool such as claude — with its own name, working folder, memory and rules." },
-  { word: "binding", means: "The markdown file that defines a familiar. Drop one into your bindings folder and it appears in the rail within two seconds." },
+  { word: "binding", means: "The markdown file that defines a familiar. New familiar and the settings tab write it for you; you can also edit it by hand, and a change appears in the rail within two seconds." },
   { word: "writ", means: "A familiar's standing instructions: everything in its binding after the settings at the top." },
   { word: "commission", means: "A task you give a familiar. It works on one at a time; the rest wait in its queue." },
   { word: "summon", means: "Start a familiar running, in a terminal. Summon and start does this and hands it a commission in one press." },
@@ -23,12 +23,16 @@ export const GLOSSARY: { word: string; means: string }[] = [
   { word: "standing ward", means: "A commission that repeats on a schedule, such as every weekday morning, and runs with the window closed." },
   { word: "ledger of ink", means: "The record of everything done and what it cost. Costs are estimates and are always marked so." },
   { word: "misfire", means: "A run that went wrong. The reason is shown on the familiar and in the ledger." },
-  { word: "workbench", means: "Settings: where each engine is installed, signing in, the spend cap, and saved transcripts." },
+  { word: "workbench", means: "Settings for Grimoire itself: where each engine is installed, signing in, the spend cap, and saved transcripts. A familiar's own settings are on its settings tab." },
+  { word: "order", means: "What a familiar is for — writing, research, code, planning or numbers. It sets the familiar's colour and its desk on the floor, nothing more." },
   { word: "the floor", means: "The map of the tower with every familiar on it, so you can see who is working, who is resting and who needs you." },
 ];
 
 const STEPS: { title: string; body: string }[] = [
-  { title: "Pick a familiar", body: "Click one in the rail on the left, or on the floor." },
+  {
+    title: "Set one up, or pick one",
+    body: "New familiar, in the rail, makes one: a name, what it is for, the folder it works in, its instructions. Or click one already in the rail or on the floor.",
+  },
   {
     title: "Say what you want done",
     body: "On its commission tab, write the task in plain words and answer any questions it asks.",
@@ -39,13 +43,17 @@ const STEPS: { title: string; body: string }[] = [
   },
   {
     title: "Leave it, or watch it",
-    body: "The terminal tab shows it working, and you can type to it there. If it wants to do something risky it stops and waits in Seals until you answer.",
+    body: "While it works, the box under its status line sends it a message — steer it, answer it, tell it to stop. The terminal tab shows it working. If it wants to do something risky it stops and waits in Seals until you answer.",
   },
   {
     title: "Mark it done",
     body: "When the work is finished, press Mark done on the commission tab. It moves on to the next task in its queue, or waits for another.",
   },
   { title: "Banish it when you are finished", body: "Banish, at the top of the familiar's pane, stops it running." },
+  {
+    title: "Change how it works",
+    body: "Its settings tab changes its folder, its instructions, the questions it asks, its budget and how much it may do without asking. Saving writes its binding file.",
+  },
 ];
 
 const FLOOR: { where: string; means: string }[] = [
@@ -124,7 +132,8 @@ export function Help() {
           <section className="flex flex-col gap-3 pb-6">
             <h2 className="display text-md text-bone">Adding a familiar</h2>
             <p className="text-base text-bone-dim">
-              Copy a <span className="mono text-xs">.binding.md</span> file into your bindings folder
+              Press New familiar in the rail and fill in the form. Or, by hand: copy a{" "}
+              <span className="mono text-xs">.binding.md</span> file into your bindings folder
               {home ? (
                 <>
                   , <span className="mono text-xs">{home.bindings}</span>

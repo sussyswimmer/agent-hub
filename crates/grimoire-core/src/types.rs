@@ -104,6 +104,9 @@ pub struct FamiliarSummary {
     /// `None` when the familiar can be summoned; otherwise why the button is disabled (§6.1).
     pub cannot_summon: Option<String>,
     pub binding_path: String,
+    /// The workspace is not a folder on this machine, so a summon would fail. The pane offers
+    /// to choose one (DECISIONS 0028).
+    pub workspace_missing: bool,
 }
 
 /// The three aether meters (§6.5). `max` is `None` when the binding sets no budget.

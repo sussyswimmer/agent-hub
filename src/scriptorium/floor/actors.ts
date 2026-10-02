@@ -25,6 +25,7 @@ import type { Order, SigilState } from "@/lib/types";
 import { arcAt, type Palette } from "./bake";
 import {
   CENTRE,
+  FIGURE_HALF_WIDTH,
   FIGURE_REACH,
   PLATE_ZOOM,
   type Point,
@@ -45,10 +46,10 @@ import { PAUSE_MIN, PAUSE_SPREAD, PERSONAL_SPACE, STROLL_SPEED, pick, seeded, wa
  * pace and takes 1.1s only when it is short.
  */
 const WALK_MS = 1100;
-const WALK_SPEED = 300;
+const WALK_SPEED = 340;
 
 /** How far one step carries a familiar, in world units: sets the gait against the ground. */
-const STEP_LENGTH = 26;
+const STEP_LENGTH = 44;
 
 /** The gap left in the ring when a familiar is banished or misfired (§7.4). */
 const BREAK_DEGREES = 34;
@@ -421,9 +422,9 @@ export function createActors(options: ActorsOptions): Actors {
       // Outlined in the void so the name reads on lit flagstone as well as on the plain plan.
       style: {
         fontFamily: "Junicode, EB Garamond, Georgia, serif",
-        // World units, like everything else here. 19 in the 1600-unit room reads as the 12 it
-        // was in the 1000-unit one (DECISIONS 0025).
-        fontSize: 19,
+        // World units, like everything else here. 19 read as about 9 pixels on a laptop, which is
+        // to say it did not read; 32 is about 15 (DECISIONS 0028).
+        fontSize: 32,
         fill: p.boneDim,
         stroke: { color: p.void, width: 4, join: "round" },
       },
@@ -438,7 +439,7 @@ export function createActors(options: ActorsOptions): Actors {
     marks.scale.set(SIGIL_SIZE / 100);
     container.addChild(marks);
 
-    plate.position.set(0, SIGIL_SIZE / 2 + 4);
+    plate.position.set(0, SIGIL_SIZE / 2 + 6);
     container.addChild(plate);
 
     const stationId = stationFor(input.state, input.order);
@@ -742,7 +743,8 @@ export function createActors(options: ActorsOptions): Actors {
         // and a click on a familiar's head that selected nothing would be a click wasted.
         const dx = point.x - a.at.x;
         const dy = point.y - a.at.y;
-        const onFigure = a.portrait !== null && Math.abs(dx) <= 24 && dy >= -PORTRAIT_REACH && dy <= 22;
+        const onFigure =
+          a.portrait !== null && Math.abs(dx) <= FIGURE_HALF_WIDTH && dy >= -PORTRAIT_REACH && dy <= SIGIL_SIZE / 2;
         if ((d <= SIGIL_SIZE / 2 + 6 || onFigure) && (!best || d < best.d)) best = { id, d };
       }
       return best?.id ?? null;

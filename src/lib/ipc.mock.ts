@@ -2,6 +2,7 @@
 import type { Backend, Emission, SummonRequest } from "./ipc";
 import type {
   Aether,
+  BindingForm,
   CodexView,
   Commission,
   Event,
@@ -15,11 +16,11 @@ import type {
 } from "./types";
 
 const roster: FamiliarSummary[] = [
-  { id: "vellum", workspace: "~/work/essays", name: "Vellum", order: "quill", engine: "claude", state: "idle", status: "idle", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/vellum.binding.md" },
-  { id: "sconce", workspace: "~/work/research", name: "Sconce", order: "lantern", engine: "claude", state: "working", status: "reading · 6 sources", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/sconce.binding.md" },
-  { id: "astrolabe", workspace: "~/work/planning", name: "Astrolabe", order: "compass", engine: "claude", state: "awaiting-seal", status: "waiting on your seal", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/astrolabe.binding.md" },
-  { id: "anvil", workspace: "~/src/grimoire", name: "Anvil", order: "crucible", engine: "claude", state: "dormant", status: "dormant", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/anvil.binding.md" },
-  { id: "tally", workspace: "~/work/numbers", name: "Tally", order: "ledger", engine: "claude", state: "dormant", status: "dormant", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/tally.binding.md" },
+  { id: "vellum", workspace: "~/work/essays", name: "Vellum", order: "quill", engine: "claude", state: "idle", status: "idle", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/vellum.binding.md", workspace_missing: false },
+  { id: "sconce", workspace: "~/work/research", name: "Sconce", order: "lantern", engine: "claude", state: "working", status: "reading · 6 sources", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/sconce.binding.md", workspace_missing: false },
+  { id: "astrolabe", workspace: "~/work/planning", name: "Astrolabe", order: "compass", engine: "claude", state: "awaiting-seal", status: "waiting on your seal", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/astrolabe.binding.md", workspace_missing: false },
+  { id: "anvil", workspace: "~/src/grimoire", name: "Anvil", order: "crucible", engine: "claude", state: "dormant", status: "dormant", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/anvil.binding.md", workspace_missing: false },
+  { id: "tally", workspace: "~/work/numbers", name: "Tally", order: "ledger", engine: "claude", state: "dormant", status: "dormant", error: null, warnings: [], cannot_summon: null, binding_path: "~/.grimoire/bindings/tally.binding.md", workspace_missing: false },
 ];
 
 const aether: Record<string, Aether> = {
@@ -63,6 +64,12 @@ class FakeSummoning {
   commission(text: string) {
     this.say(`${text.replace(/\n/g, "\r\n  ")}\r\n`);
     this.say("\u001b[2m(the mock has no engine; a real familiar would start on this now)\u001b[0m\r\n");
+    this.prompt();
+  }
+
+  /** A message from the box on the commission tab, the way a real engine shows one it was sent. */
+  said(text: string) {
+    this.say(`${text.replace(/\n/g, "\r\n  ")}\r\n`);
     this.prompt();
   }
 
@@ -142,6 +149,7 @@ function crowd(): FamiliarSummary[] {
       warnings: [],
       cannot_summon: null,
       binding_path: `~/.grimoire/bindings/made-${i}.binding.md`,
+      workspace_missing: false,
     });
   }
   return [...roster, ...made];
@@ -388,6 +396,135 @@ class Seals {
   }
 }
 
+/**
+ * A stand-in for the bindings folder as the setup screens see it (DECISIONS 0028): a form per
+ * familiar, familiars made from the form, and familiars put away. Mirrors `binding::write`'s
+ * rules and its refusals, word for word where a test reads them.
+ */
+class Bindings {
+  private forms = new Map<string, BindingForm>();
+  private made: FamiliarSummary[] = [];
+  private removed = new Set<string>();
+  private listeners = new Set<() => void>();
+
+  /** Apply what has been made, edited and put away to the roster the mock started with. */
+  rows(base: FamiliarSummary[]): FamiliarSummary[] {
+    return [...base, ...this.made]
+      .filter((f) => !this.removed.has(f.id))
+      .map((f) => {
+        const form = this.forms.get(f.id);
+        const workspace = form?.workspace ?? f.workspace;
+        return {
+          ...f,
+          name: form?.name ?? f.name,
+          order: form?.order ?? f.order,
+          workspace,
+          workspace_missing: !folderExists(workspace),
+        };
+      });
+  }
+
+  form(f: FamiliarSummary): BindingForm {
+    return structuredClone(
+      this.forms.get(f.id) ?? {
+        name: f.name,
+        order: f.order,
+        engine: f.engine,
+        model: null,
+        workspace: f.workspace,
+        autonomy: "propose",
+        aether: { tokens: 250_000, turns: 40, minutes: 30, on_exceed: "bind" },
+        intake: structuredClone(intake[f.id] ?? []),
+        writ: `# Writ\n\nYou are ${f.name}.`,
+      },
+    );
+  }
+
+  intake(id: string): IntakeField[] | null {
+    const form = this.forms.get(id);
+    return form ? structuredClone(form.intake) : null;
+  }
+
+  save(id: string | null, raw: BindingForm, existing: FamiliarSummary[]): string {
+    const form = check(raw);
+    if (id === null) {
+      const made = slug(form.name);
+      if (existing.some((f) => f.id === made) || this.removed.has(made)) {
+        throw new Error(`There is already a familiar file called ${made}.binding.md. Choose another name, or open that one.`);
+      }
+      this.made.push({
+        id: made,
+        name: form.name,
+        order: form.order,
+        engine: form.engine,
+        state: "dormant",
+        status: "dormant",
+        workspace: form.workspace,
+        error: null,
+        warnings: [],
+        cannot_summon: null,
+        binding_path: `~/.grimoire/bindings/${made}.binding.md`,
+        workspace_missing: false,
+      });
+      id = made;
+    } else if (!existing.some((f) => f.id === id)) {
+      throw new Error(`There is no familiar called ${id}.`);
+    }
+    this.forms.set(id, form);
+    this.changed();
+    return id;
+  }
+
+  remove(id: string) {
+    this.removed.add(id);
+    this.changed();
+  }
+
+  watch(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private changed() {
+    for (const fn of this.listeners) fn();
+  }
+}
+
+/** The mock's file system: everything is there, except a path that says it is not. */
+function folderExists(path: string): boolean {
+  return !/nowhere|missing/.test(path);
+}
+
+function slug(name: string): string {
+  const s = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return s || "familiar";
+}
+
+/** `binding::write::check`, for the refusals a test reads. */
+function check(raw: BindingForm): BindingForm {
+  const form = structuredClone(raw);
+  form.name = form.name.trim();
+  if (!form.name) throw new Error("Give the familiar a name.");
+  form.workspace = form.workspace.trim();
+  if (!form.workspace) throw new Error(`Choose the folder ${form.name} works in.`);
+  form.model = form.model?.trim() || null;
+  form.writ = form.writ.trimEnd();
+  const seen = new Set<string>();
+  form.intake = form.intake
+    .map((q) => ({ ...q, ask: q.ask.trim(), options: q.options.map((o) => o.trim()).filter(Boolean) }))
+    .filter((q) => q.ask)
+    .map((q) => {
+      if (q.type === "select" && q.options.length === 0) {
+        throw new Error(`“${q.ask}” is a pick-one question with nothing to pick. Add its choices.`);
+      }
+      let id = q.id.trim() || slug(q.ask).replace(/-/g, "_");
+      for (let n = 2; seen.has(id); n++) id = `${q.id.trim() || slug(q.ask).replace(/-/g, "_")}_${n}`;
+      seen.add(id);
+      return { ...q, id, options: q.type === "select" ? q.options : [] };
+    });
+  return form;
+}
+
 /** Milliseconds a mock call should stall for, read from localStorage. Zero when unset. */
 async function held(key: string): Promise<void> {
   let ms = 0;
@@ -404,6 +541,8 @@ export function createMockBackend(): Backend {
   const wards = new Wards();
   const commissions = new Commissions();
   const seals = new Seals();
+  const bindings = new Bindings();
+  const familiars = () => bindings.rows(crowd());
   const events: Event[] = [];
   let spendCap = 10;
   const enginePaths = new Map<string, string>();
@@ -453,7 +592,7 @@ export function createMockBackend(): Backend {
         // The real backend overlays what is actually happening onto the binding's own row
         // (see `list_familiars`). The mock does the one part a test can observe: a familiar
         // with a live summoning is not dormant.
-        crowd().map((f) => {
+        familiars().map((f) => {
           // A pending request is not always "waiting on your seal": §6.5's `extend` means the
           // breaker has bound it, and `stalled` means nothing has moved for ten minutes. The
           // real `list_familiars` reads the kind; so does this.
@@ -466,9 +605,9 @@ export function createMockBackend(): Backend {
         }),
       ),
     aetherFor: async (id) => aether[id] ?? null,
-    intakeFor: async (id) => structuredClone(intake[id] ?? []),
-    // The mock backend has no folder to watch, so nothing ever changes under it.
-    onBindingsChanged: async () => () => {},
+    intakeFor: async (id) => bindings.intake(id) ?? structuredClone(intake[id] ?? []),
+    // No folder to watch: the only changes are the ones the setup screens make.
+    onBindingsChanged: async (fn) => bindings.watch(fn),
 
     async summon({ id, onEmission }: SummonRequest) {
       if (live.has(id)) throw new Error(`${id} is already summoned.`);
@@ -565,7 +704,7 @@ export function createMockBackend(): Backend {
       return commissions.for(id).find((c) => c.id === row.id) ?? row;
     },
     async commissionDone(id) {
-      const name = roster.find((f) => f.id === id)?.name ?? id;
+      const name = familiars().find((f) => f.id === id)?.name ?? id;
       const current = live.has(id) ? commissions.running(id) : null;
       if (!current) throw new Error(`${name} has no commission running.`);
       if (current.status === "awaiting_seal") throw new Error(`${name} is waiting on your seal. Seal or refuse it first.`);
@@ -610,6 +749,38 @@ export function createMockBackend(): Backend {
     },
     async onSealsChanged(fn) {
       return seals.watch(fn);
+    },
+    async bindingForm(id) {
+      const f = familiars().find((f) => f.id === id);
+      if (!f) throw new Error(`There is no familiar called ${id}.`);
+      return bindings.form(f);
+    },
+    async bindingSave(id, form) {
+      return bindings.save(id, form, familiars());
+    },
+    async bindingRemove(id) {
+      if (live.has(id)) throw new Error(`${id} is summoned. Banish it before putting it away.`);
+      bindings.remove(id);
+      return `~/.grimoire/bindings/${id}.binding.md.removed`;
+    },
+    async folderStatus(path) {
+      return { expanded: path.trim().replace(/^~(?=\/|$)/, "/Users/you"), exists: folderExists(path) };
+    },
+    async pickFolder() {
+      // What the system picker would answer, set by a test; a folder that exists otherwise.
+      try {
+        const set = localStorage.getItem("grimoire.mock.pickFolder");
+        if (set !== null) return set === "" ? null : set;
+      } catch {
+        // No storage: fall through to the default.
+      }
+      return "~/work/chosen";
+    },
+    async say(id, text) {
+      const s = live.get(id);
+      if (!s) throw new Error(`${id} is not summoned. Summon it first.`);
+      if (!text.trim()) throw new Error("There is nothing to say.");
+      s.said(text);
     },
     async codexFor(id) {
       return codex[id] ?? { path: `~/.grimoire/codex/${id}.md`, text: "", words: 0, needs_condense: false };

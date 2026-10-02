@@ -1,13 +1,15 @@
 //! Bindings: familiars are files (§4).
 //!
-//! A familiar is a markdown file with YAML frontmatter in `~/.grimoire/bindings/`. There is no
-//! in-app editor and there is not meant to be one — the file is the source of truth, the folder
-//! is watched, and an edit reaches the rail without a restart.
+//! A familiar is a markdown file with YAML frontmatter in `~/.grimoire/bindings/`. The file is the
+//! source of truth, the folder is watched, and an edit reaches the rail without a restart. The
+//! app can write one too (`write`, DECISIONS 0028), and when it does it writes the same file a
+//! person would.
 
 pub mod parse;
 pub mod schema;
 pub mod seed;
 pub mod watch;
+pub mod write;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -56,6 +58,7 @@ pub fn summarise(binding: &Binding) -> FamiliarSummary {
             warnings: binding.warnings.clone(),
             cannot_summon: Some("Fix the binding before summoning this familiar.".into()),
             binding_path: binding.path.display().to_string(),
+            workspace_missing: false,
         };
     };
 
@@ -84,6 +87,13 @@ pub fn summarise(binding: &Binding) -> FamiliarSummary {
         warnings: binding.warnings.clone(),
         cannot_summon,
         binding_path: binding.path.display().to_string(),
+        // The commonest reason a summon fails, and the starter familiars' folders are the owner's
+        // own and will not be on another machine. Said in the rail rather than at the button.
+        workspace_missing: !binding
+            .path
+            .parent()
+            .map(|dir| expand(&front.workspace, dir))
+            .is_some_and(|p| p.is_dir()),
     }
 }
 

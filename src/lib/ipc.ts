@@ -3,6 +3,8 @@
 import type {
   Ward,
   Aether,
+  BindingForm,
+  FolderStatus,
   CodexView,
   Commission,
   Engine,
@@ -101,6 +103,21 @@ export interface Backend {
   sealDecide(id: string, resolution: Resolution): Promise<Seal>;
   /** Called when the queue moves. Returns an unsubscribe. */
   onSealsChanged(fn: () => void): Promise<() => void>;
+
+  // Setting familiars up from inside the app (DECISIONS 0028). The binding file is still what
+  // changes; these write it.
+  /** The settings page's form for one familiar. Refuses for a binding that does not load. */
+  bindingForm(id: string): Promise<BindingForm>;
+  /** A new familiar for `id === null`, otherwise that one changed. Resolves to its id. */
+  bindingSave(id: string | null, form: BindingForm): Promise<string>;
+  /** Put a familiar away. Its file is renamed, not deleted; resolves to where it went. */
+  bindingRemove(id: string): Promise<string>;
+  /** Whether a folder is there, as it is typed. */
+  folderStatus(path: string): Promise<FolderStatus>;
+  /** The system's folder picker. Null if it was closed without choosing. */
+  pickFolder(start?: string): Promise<string | null>;
+  /** Say something to a summoned familiar, as one message, as if typed and sent. */
+  say(id: string, text: string): Promise<void>;
 }
 
 declare global {
