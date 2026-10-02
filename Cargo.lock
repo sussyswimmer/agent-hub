@@ -1515,7 +1515,7 @@ dependencies = [
 
 [[package]]
 name = "grimoire-app"
-version = "1.0.4"
+version = "1.0.5"
 dependencies = [
  "grimoire-core",
  "libc",
@@ -1534,7 +1534,7 @@ dependencies = [
 
 [[package]]
 name = "grimoire-core"
-version = "1.0.4"
+version = "1.0.5"
 dependencies = [
  "chrono",
  "cron",

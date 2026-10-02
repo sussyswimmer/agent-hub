@@ -84,11 +84,11 @@ check and why.
 
 ### Download for macOS
 
-[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_aarch64.dmg)
+[Download Grimoire for Apple Silicon (M1 and later)](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.5/Grimoire_1.0.5_aarch64.dmg)
 
-[Download Grimoire for Intel Macs](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_x64.dmg)
+[Download Grimoire for Intel Macs](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.5/Grimoire_1.0.5_x64.dmg)
 
-[Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.4/Grimoire_1.0.4_x64-setup.exe)
+[Download Grimoire for Windows](https://github.com/sussyswimmer/agent-hub/releases/download/v1.0.5/Grimoire_1.0.5_x64-setup.exe)
 
 **Opening it the first time on a Mac.** Grimoire is not notarized by Apple, so macOS asks you to
 allow it once:
