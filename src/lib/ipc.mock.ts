@@ -445,8 +445,11 @@ class Bindings {
     return form ? structuredClone(form.intake) : null;
   }
 
-  save(id: string | null, raw: BindingForm, existing: FamiliarSummary[]): string {
-    const form = check(raw);
+  save(id: string | null, raw: BindingForm, existing: FamiliarSummary[], read?: BindingForm): string {
+    // `binding::write::update_since`: what the page changed since it was filled, over the file as
+    // it is now, field by field.
+    const now = id === null ? null : existing.find((f) => f.id === id);
+    const form = check(read && now ? since(raw, read, this.form(now)) : raw);
     if (id === null) {
       const made = slug(form.name);
       if (existing.some((f) => f.id === made) || this.removed.has(made)) {
@@ -475,6 +478,12 @@ class Bindings {
     return id;
   }
 
+  /** Someone editing the binding file by hand while the app is open. Tests drive it. */
+  editFile(f: FamiliarSummary, change: Partial<BindingForm>) {
+    this.forms.set(f.id, { ...this.form(f), ...change });
+    this.changed();
+  }
+
   remove(id: string) {
     this.removed.add(id);
     this.changed();
@@ -488,6 +497,14 @@ class Bindings {
   private changed() {
     for (const fn of this.listeners) fn();
   }
+}
+
+function since(page: BindingForm, read: BindingForm, file: BindingForm): BindingForm {
+  const out = structuredClone(file);
+  for (const key of Object.keys(page) as (keyof BindingForm)[]) {
+    if (JSON.stringify(page[key]) !== JSON.stringify(read[key])) (out as Record<string, unknown>)[key] = structuredClone(page[key]);
+  }
+  return out;
 }
 
 /** The mock's file system: everything is there, except a path that says it is not. */
@@ -508,7 +525,7 @@ function check(raw: BindingForm): BindingForm {
   form.workspace = form.workspace.trim();
   if (!form.workspace) throw new Error(`Choose the folder ${form.name} works in.`);
   form.model = form.model?.trim() || null;
-  form.writ = form.writ.trimEnd();
+  form.writ = form.writ.replace(/\r\n/g, "\n").replace(/^\n+/, "").trimEnd();
   const seen = new Set<string>();
   form.intake = form.intake
     .map((q) => ({ ...q, ask: q.ask.trim(), options: q.options.map((o) => o.trim()).filter(Boolean) }))
@@ -517,8 +534,10 @@ function check(raw: BindingForm): BindingForm {
       if (q.type === "select" && q.options.length === 0) {
         throw new Error(`“${q.ask}” is a pick-one question with nothing to pick. Add its choices.`);
       }
-      let id = q.id.trim() || slug(q.ask).replace(/-/g, "_");
-      for (let n = 2; seen.has(id); n++) id = `${q.id.trim() || slug(q.ask).replace(/-/g, "_")}_${n}`;
+      // Made-up ids are kept short; one a person wrote is kept whole.
+      const base = q.id.trim() || slug(q.ask).replace(/-/g, "_").slice(0, 32);
+      let id = base;
+      for (let n = 2; seen.has(id); n++) id = `${base}_${n}`;
       seen.add(id);
       return { ...q, id, options: q.type === "select" ? q.options : [] };
     });
@@ -543,6 +562,12 @@ export function createMockBackend(): Backend {
   const seals = new Seals();
   const bindings = new Bindings();
   const familiars = () => bindings.rows(crowd());
+  // A test editing a binding file by hand while the app is open, which has no other way in.
+  addEventListener("grimoire:mock-file-edit", (e) => {
+    const { id, change } = (e as CustomEvent<{ id: string; change: Partial<BindingForm> }>).detail;
+    const f = familiars().find((x) => x.id === id);
+    if (f) bindings.editFile(f, change);
+  });
   const events: Event[] = [];
   let spendCap = 10;
   const enginePaths = new Map<string, string>();
@@ -755,8 +780,8 @@ export function createMockBackend(): Backend {
       if (!f) throw new Error(`There is no familiar called ${id}.`);
       return bindings.form(f);
     },
-    async bindingSave(id, form) {
-      return bindings.save(id, form, familiars());
+    async bindingSave(id, form, read) {
+      return bindings.save(id, form, familiars(), read);
     },
     async bindingRemove(id) {
       if (live.has(id)) throw new Error(`${id} is summoned. Banish it before putting it away.`);

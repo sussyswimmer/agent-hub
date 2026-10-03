@@ -150,3 +150,48 @@ test("a running familiar can be told something from its commission tab", async (
   await page.locator('[data-tab="terminal"]').click();
   await expect(page.locator(".xterm-accessibility")).toContainText("Keep the second paragraph as it is.");
 });
+
+test("a save from the settings tab keeps an edit made to the file while it was open", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-familiar="vellum"]').click();
+  await page.locator('[data-tab="settings"]').click();
+  await expect(page.getByTestId("setup-name")).toHaveValue("Vellum");
+
+  // Someone rewords the writ in an editor while the page is open.
+  await page.evaluate(() =>
+    dispatchEvent(new CustomEvent("grimoire:mock-file-edit", { detail: { id: "vellum", change: { writ: "Edited in the file." } } })),
+  );
+  // The page changes only the model, and saves.
+  await page.getByTestId("setup-model").fill("opus");
+  await page.getByTestId("setup-save").click();
+  await expect(page.getByTestId("setup-saved")).toHaveText("Saved.");
+
+  // Both are in the file, and the page now shows what the file says.
+  await expect(page.getByTestId("setup-writ")).toHaveValue("Edited in the file.");
+  await expect(page.getByTestId("setup-model")).toHaveValue("opus");
+  await page.locator('[data-tab="commission"]').click();
+  await page.locator('[data-tab="settings"]').click();
+  await expect(page.getByTestId("setup-writ")).toHaveValue("Edited in the file.");
+  await expect(page.getByTestId("setup-model")).toHaveValue("opus");
+});
+
+test("a question added on the settings tab keeps its id when it is reworded and saved again", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-familiar="anvil"]').click();
+  await page.locator('[data-tab="settings"]').click();
+  await page.getByTestId("setup-add-question").click();
+  const added = page.getByTestId("setup-question").last();
+  await added.getByRole("textbox").first().fill("Which branch?");
+  await page.getByTestId("setup-save").click();
+  await expect(page.getByTestId("setup-saved")).toHaveText("Saved.");
+
+  // Reworded in the same tab, without leaving it.
+  await page.getByTestId("setup-question").last().getByRole("textbox").first().fill("Which branch, exactly?");
+  await page.getByTestId("setup-save").click();
+  await expect(page.getByTestId("setup-saved")).toHaveText("Saved.");
+
+  // The id it was given the first time is the one it keeps, so a writ naming it still fills in.
+  await page.locator('[data-tab="commission"]').click();
+  await expect(page.locator('[data-field="which_branch"]')).toContainText("Which branch, exactly?");
+  await expect(page.locator('[data-field="which_branch_exactly"]')).toHaveCount(0);
+});

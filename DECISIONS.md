@@ -992,3 +992,21 @@ small one, by request.
 
 **Not done.** The form does not edit `bounds` lists beyond the folder, `isolation`, `resume`,
 `codex`, `reliquary` or `archivist`; those stay in the file, which the settings tab names.
+
+**Amended 2026-10-03, after a review of what shipped in 1.0.5.** Five fixes, each with a test
+that failed before it:
+
+- A save from the settings tab writes only what was changed **on the page** since it was filled
+  (`binding::write::update_since`, the command's `read` argument). The page reads a binding once;
+  saving used to write every field it held, so a writ reworded in an editor while the tab was
+  open was quietly put back by a save that changed only the model. After a save the page is
+  filled again from the file.
+- A question id written by hand is kept whole. Ids were cut to 32 characters on every save, so
+  a writ's `{{intake.…}}` naming a longer one stopped filling in. Only made-up ids are cut.
+- A question added on the page keeps the id it was given on its first save (the refill above);
+  reworded and saved again in the same tab, it used to be given a new one.
+- Messages typed into a running familiar go through one queue per summoning, each one's Enter
+  before the next one's text. Two sent within a quarter of a second — a quick message pressed
+  twice — used to arrive as one message run together, then an empty one.
+- A writ that starts with blank lines, or has `\r\n` in it, is saved as written. It could never
+  match what the file reads back, and the save was refused as a layout it could not edit.

@@ -887,17 +887,26 @@ pub fn binding_form(state: State<'_, AppState>, id: String) -> R<BindingForm> {
 }
 
 /// Save the form: a new familiar when `id` is `None`, otherwise that familiar's binding changed
-/// to match. Either way the file is what changes, and the roster is re-read from it at once
-/// rather than waiting for the watcher, so the rail shows the save before the button is let go.
-/// Answers the familiar's id.
+/// to match. `read` is the form as the page was filled, when it has one: then only what was
+/// changed on the page is written, and an edit made in the file meanwhile is kept. Either way the
+/// file is what changes, and the roster is re-read from it at once rather than waiting for the
+/// watcher, so the rail shows the save before the button is let go. Answers the familiar's id.
 #[tauri::command]
-pub fn binding_save(state: State<'_, AppState>, id: Option<String>, form: BindingForm) -> R<String> {
+pub fn binding_save(
+    state: State<'_, AppState>,
+    id: Option<String>,
+    form: BindingForm,
+    read: Option<BindingForm>,
+) -> R<String> {
     let folder = state.paths.bindings();
     let binding = match id {
         None => grimoire_core::binding::write::create(&folder, &form)?,
         Some(id) => {
             let current = state.roster.get(&id).ok_or_else(|| format!("There is no familiar called {id}."))?;
-            grimoire_core::binding::write::update(&current.path, &form)?
+            match &read {
+                Some(read) => grimoire_core::binding::write::update_since(&current.path, &form, read)?,
+                None => grimoire_core::binding::write::update(&current.path, &form)?,
+            }
         }
     };
     state.roster.refresh(std::slice::from_ref(&binding.path));

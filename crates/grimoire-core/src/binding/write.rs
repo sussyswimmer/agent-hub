@@ -75,7 +75,10 @@ pub fn slug(name: &str) -> String {
 /// Tidy a form and say what is wrong with it, in words that say what to do.
 pub fn check(form: &BindingForm) -> Result<BindingForm, String> {
     let mut f = form.clone();
-    f.writ = f.writ.trim_end().to_string();
+    // As the file will read back: `\r\n` as `\n`, and no blank lines before or after. Kept as
+    // typed, a writ starting with a blank line could never match what was written, and the save
+    // was refused as a layout this could not edit.
+    f.writ = f.writ.replace("\r\n", "\n").trim_start_matches('\n').trim_end().to_string();
     f.name = f.name.trim().to_string();
     if f.name.is_empty() {
         return Err("Give the familiar a name.".into());
@@ -113,8 +116,12 @@ pub fn check(form: &BindingForm) -> Result<BindingForm, String> {
         }
         // The id is what a writ or a commission's `{{intake.id}}` refers to. Kept where it was
         // set, made from the question where it was not, and never the same as another's.
-        let base = if q.id.trim().is_empty() { slug(&q.ask).replace('-', "_") } else { q.id.trim().to_string() };
-        let base: String = base.chars().take(32).collect();
+        // Made-up ids are kept short; one a person wrote is theirs, and a writ may name it whole.
+        let base = if q.id.trim().is_empty() {
+            slug(&q.ask).replace('-', "_").chars().take(32).collect()
+        } else {
+            q.id.trim().to_string()
+        };
         let mut id = base.clone();
         let mut n = 2;
         while seen.contains(&id) {
@@ -154,7 +161,18 @@ pub fn create(folder: &Path, form: &BindingForm) -> Result<Binding, String> {
 /// Change an existing familiar's binding to match the form, leaving everything the form does
 /// not cover exactly as it is in the file.
 pub fn update(path: &Path, form: &BindingForm) -> Result<Binding, String> {
-    let form = check(form)?;
+    write_form(path, form, None)
+}
+
+/// As `update`, for a form that was filled from the file as it was at `read`: only what changed
+/// on the page since then is written. The settings page reads a binding once, and the file is
+/// still the source of truth — a writ reworded in an editor while the page was open is kept by
+/// a save that changed only the model, rather than quietly put back.
+pub fn update_since(path: &Path, form: &BindingForm, read: &BindingForm) -> Result<Binding, String> {
+    write_form(path, form, Some(read))
+}
+
+fn write_form(path: &Path, form: &BindingForm, read: Option<&BindingForm>) -> Result<Binding, String> {
     let original = std::fs::read_to_string(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
     let id = id_for(path);
     let current = parse(&id, path, &original);
@@ -164,6 +182,11 @@ pub fn update(path: &Path, form: &BindingForm) -> Result<Binding, String> {
             current.error.as_deref().unwrap_or("it could not be read")
         ));
     };
+    let form = match (read, form_of(&current)) {
+        (Some(read), Some(now)) => since(&check(form)?, &check(read).unwrap_or_else(|_| read.clone()), now),
+        _ => form.clone(),
+    };
+    let form = check(&form)?;
     let Some((mut yaml, rest)) = split(&original) else {
         return Err("This binding has no frontmatter to change.".into());
     };
@@ -215,6 +238,20 @@ pub fn update(path: &Path, form: &BindingForm) -> Result<Binding, String> {
         put(path, &text)?;
     }
     Ok(binding)
+}
+
+/// Each field as the page left it if the page changed it since `read`, and as the file has it
+/// now if not. A list or the budget counts as one field.
+fn since(page: &BindingForm, read: &BindingForm, mut file: BindingForm) -> BindingForm {
+    macro_rules! take {
+        ($($field:ident),*) => {$(
+            if page.$field != read.$field {
+                file.$field = page.$field.clone();
+            }
+        )*};
+    }
+    take!(name, order, engine, model, workspace, autonomy, aether, intake, writ);
+    file
 }
 
 /// Put a familiar away. The file is renamed rather than deleted, so a familiar removed by
@@ -558,6 +595,64 @@ mod tests {
         let e = update(&path, &f).unwrap_err();
         assert!(e.contains("Change them in the file"), "{e}");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+    }
+
+    #[test]
+    fn instructions_with_blank_lines_round_them_save_as_written() {
+        // The file keeps no blank lines before the writ, so a form whose writ starts with them
+        // could never match what it wrote, and the save was refused as a layout it could not edit.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vellum.binding.md");
+        std::fs::write(&path, HAND_WRITTEN).unwrap();
+        let mut f = form_of(&load(&path)).unwrap();
+        f.writ = "\n\n\r\nBe brief.\r\nShow your working.\n\n".into();
+        update(&path, &f).unwrap();
+        assert_eq!(load(&path).writ.trim_end(), "Be brief.\nShow your working.");
+
+        let mut g = form();
+        g.writ = "\n\nYou are Night Owl.".into();
+        let made = create(dir.path(), &g).unwrap();
+        assert_eq!(form_of(&made).unwrap(), check(&g).unwrap());
+    }
+
+    #[test]
+    fn a_save_changes_only_what_was_changed_on_the_page() {
+        // The settings page reads the file once. A change made in the file after that — the writ
+        // reworded in an editor — survives a save that changed only the model on the page.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vellum.binding.md");
+        std::fs::write(&path, HAND_WRITTEN).unwrap();
+        let read = form_of(&load(&path)).unwrap();
+        std::fs::write(&path, HAND_WRITTEN.replace("You are Vellum.", "You are Vellum, and terse.")).unwrap();
+        let mut f = read.clone();
+        f.model = Some("opus".into());
+        update_since(&path, &f, &read).unwrap();
+        let back = load(&path);
+        assert_eq!(back.front.as_ref().unwrap().model.as_deref(), Some("opus"));
+        assert_eq!(back.writ.trim_end(), "# Writ\n\nYou are Vellum, and terse.");
+        // And what the page did change wins over the file, field by field.
+        let read = form_of(&back).unwrap();
+        let mut f = read.clone();
+        f.writ = "Be brief.".into();
+        std::fs::write(&path, std::fs::read_to_string(&path).unwrap().replace("model: opus", "model: haiku")).unwrap();
+        update_since(&path, &f, &read).unwrap();
+        let back = load(&path);
+        assert_eq!(back.writ.trim_end(), "Be brief.");
+        assert_eq!(back.front.unwrap().model.as_deref(), Some("haiku"));
+    }
+
+    #[test]
+    fn a_question_id_written_by_hand_is_kept_whole() {
+        // Ids the app makes up from a question are kept short; one a person wrote is theirs, and
+        // a writ's `{{intake.…}}` may name it.
+        let long = "the_piece_we_are_working_on_this_week";
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vellum.binding.md");
+        std::fs::write(&path, HAND_WRITTEN.replace("id: piece", &format!("id: {long}"))).unwrap();
+        let mut f = form_of(&load(&path)).unwrap();
+        f.workspace = "~/elsewhere".into();
+        update(&path, &f).unwrap();
+        assert_eq!(load(&path).front.unwrap().intake[0].id, long);
     }
 
     #[test]

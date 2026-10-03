@@ -108,8 +108,12 @@ export interface Backend {
   // changes; these write it.
   /** The settings page's form for one familiar. Refuses for a binding that does not load. */
   bindingForm(id: string): Promise<BindingForm>;
-  /** A new familiar for `id === null`, otherwise that one changed. Resolves to its id. */
-  bindingSave(id: string | null, form: BindingForm): Promise<string>;
+  /**
+   * A new familiar for `id === null`, otherwise that one changed. Resolves to its id. `read` is
+   * the form as the page was filled: given it, only what changed on the page is written, and an
+   * edit made in the file meanwhile is kept.
+   */
+  bindingSave(id: string | null, form: BindingForm, read?: BindingForm): Promise<string>;
   /** Put a familiar away. Its file is renamed, not deleted; resolves to where it went. */
   bindingRemove(id: string): Promise<string>;
   /** Whether a folder is there, as it is typed. */

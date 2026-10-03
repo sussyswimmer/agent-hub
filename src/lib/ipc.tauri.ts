@@ -66,7 +66,7 @@ export function createTauriBackend(): Backend {
     commissionCreate: (id, prompt, intake) => call("commission_create", S.commission, { id, prompt, intake }),
     commissionDone: (id) => call("commission_done", S.commission.nullable(), { id }),
     bindingForm: (id) => call("binding_form", S.bindingForm, { id }),
-    bindingSave: (id, form) => call("binding_save", z.string(), { id, form }),
+    bindingSave: (id, form, read) => call("binding_save", z.string(), { id, form, read: read ?? null }),
     bindingRemove: (id) => call("binding_remove", z.string(), { id }),
     folderStatus: (path) => call("folder_status", S.folderStatus, { path }),
     async pickFolder(start) {

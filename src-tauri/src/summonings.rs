@@ -103,6 +103,8 @@ struct Live {
     breaker: Arc<Mutex<grimoire_core::breaker::Done>>,
     /// Whether a stall has already been raised, so it is raised once and not every tick.
     stalled: Arc<Mutex<bool>>,
+    /// Messages to type into the engine, one at a time and in order (`typist`).
+    typist: std::sync::mpsc::Sender<Vec<u8>>,
 }
 
 impl Live {
@@ -302,6 +304,7 @@ impl Summonings {
                 paste,
                 breaker: Arc::default(),
                 stalled: Arc::default(),
+                typist: typist(Arc::clone(&session)),
             },
         );
 
@@ -600,15 +603,36 @@ impl Summonings {
 /// turned that on, so a newline inside it is not taken as Enter (summon::handover).
 fn type_in(l: &Live, text: &str) -> Result<(), String> {
     let bracketed = l.paste.lock().is_ok_and(|m| m.on());
-    l.session.write(&keystrokes(text, bracketed)).map_err(|e| e.to_string())?;
-    // Enter a moment later, on its own: in the same read as a paste it can be taken as part
-    // of the paste rather than as the key that submits it.
-    let session = Arc::clone(&l.session);
+    l.typist
+        .send(keystrokes(text, bracketed))
+        .map_err(|_| "The familiar's terminal has closed, so nothing more can be sent to it.".to_string())
+}
+
+/// How long after a message's text its Enter is sent. In the same read as a paste, Enter can be
+/// taken as part of the paste rather than as the key that submits it.
+const ENTER_AFTER: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// One thread per summoning that types messages in the order they were sent, each one's Enter
+/// before the next one's text.
+///
+/// Each message used to send its Enter from a thread of its own, a quarter of a second later, so
+/// two sent closer together than that — a quick message pressed twice — arrived as both texts
+/// and then two Enters: one message run together, and an empty one. Ends when the summoning is
+/// dropped and the queue is empty.
+fn typist(session: Arc<PtySession>) -> std::sync::mpsc::Sender<Vec<u8>> {
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(250));
-        let _ = session.write(b"\r");
+        for keys in rx {
+            if session.write(&keys).is_err() {
+                break;
+            }
+            std::thread::sleep(ENTER_AFTER);
+            if session.write(b"\r").is_err() {
+                break;
+            }
+        }
     });
-    Ok(())
+    tx
 }
 
 /// Read the engine's transcript and write what it says onto the commission (§6.5, §6.9).
@@ -827,6 +851,26 @@ mod tests {
         assert!(out.contains("[200~"), "the engine asked for bracketed paste and did not get it:\n{out:?}");
         assert_eq!(commission::get(&db, &second.id).expect("get").expect("row").status, commission::Status::Running);
         assert_eq!(summonings.commission_of("vellum").as_deref(), Some(second.id.as_str()));
+
+        // Two messages sent faster than a message's Enter follows its text — a quick button
+        // pressed twice — arrive as two messages, in order, not run together as one.
+        summonings.say("vellum", "First of two.").expect("say");
+        summonings.say("vellum", "Second of two.").expect("say");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while String::from_utf8_lossy(&seen.lock().expect("lock")).matches("Second of two.").count() < 2
+            && Instant::now() < deadline
+        {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let out = String::from_utf8_lossy(&seen.lock().expect("lock")).into_owned();
+        assert!(out.matches("Second of two.").count() >= 2, "the second message never arrived:\n{out:?}");
+        // The stand-in prints each line it is given, escapes and all; the terminal's own echo
+        // shows the escapes as `^[`, and can land on the same line, so it is the stand-in's copy
+        // that is read. Run together, it would have printed both pastes on one line.
+        let one = out.find("\u{1b}[200~First of two.\u{1b}[201~\r\n");
+        let two = out.find("\u{1b}[200~Second of two.\u{1b}[201~\r\n");
+        assert!(one.is_some() && two.is_some(), "two messages ran together into one:\n{out:?}");
+        assert!(one < two, "the messages arrived out of order:\n{out:?}");
 
         summonings.banish(&db, "vellum").expect("banish");
         // Banishing ends the commission in hand as banished, and leaves the finished one alone.

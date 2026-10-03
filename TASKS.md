@@ -785,3 +785,23 @@ kept with plain ones beside them. DECISIONS 0028.
       line of its binding and nothing else; banishing left no process behind
 - [ ] On the Mac: the folder picker is the system's own there, and the seeds will all say *needs a
       folder* until each is given one — that is expected, not a fault
+
+---
+
+## 1.0.5, reviewed after it was built
+
+1.0.5 was built by Release run 36981941127 into a draft (four installers, both Macs' apps checked
+signed); publishing it, and correcting the published 1.0.4 notes, are the owner's — this
+session's GitHub access may not create or edit releases. A review of the release's diff then found
+four bugs, and one more turned up writing a test; all five are fixed, DECISIONS 0028 amended.
+
+- [x] Settings saves only what changed on the page; an edit made in the file meanwhile survives.
+      Checked in the binary: writ edited in the file with the tab open, model changed and saved
+      on the page, both in the file afterwards and the page showing the file's writ
+- [x] Hand-written question ids kept whole; made-up ids stick across saves in one tab
+- [x] Two messages sent quickly arrive as two messages, in order. The Rust test reads the
+      stand-in engine's own copy of each line; with the old code in place it fails
+- [x] A writ with leading blank lines or `\r\n` saves
+- [ ] Noticed, not changed: a banished familiar walks out of the door and is not drawn again
+      until it is given work (§8.3 says "then gone"). The rail still lists it, as *banished*.
+      Worth asking the owner whether it should come back to rest at the hearth instead

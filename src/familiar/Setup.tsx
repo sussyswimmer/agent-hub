@@ -155,6 +155,17 @@ export function FamiliarForm({
   const folder = useFolderStatus(form.workspace);
   const ids = useId();
 
+  // Filled again whenever the page is handed the file afresh — after a save, so what the file now
+  // says (an id made up for a new question, say) is what the next save starts from.
+  useEffect(() => {
+    setForm(initial);
+    setBudget({
+      tokens: initial.aether.tokens?.toString() ?? "",
+      turns: initial.aether.turns?.toString() ?? "",
+      minutes: initial.aether.minutes?.toString() ?? "",
+    });
+  }, [initial]);
+
   const set = <K extends keyof BindingForm>(key: K, value: BindingForm[K]) => {
     setSaved(null);
     setForm((f) => {
@@ -206,7 +217,9 @@ export function FamiliarForm({
     }
     setSaving(true);
     try {
-      const saved = await (await backend()).bindingSave(id, toSave);
+      // With the form as it was read, so only what changed here is written and an edit made in
+      // the file since is kept (`binding::write::update_since`).
+      const saved = await (await backend()).bindingSave(id, toSave, id === null ? undefined : initial);
       setSaved(
         id === null
           ? `Created ${toSave.name.trim()}.`
@@ -633,7 +646,14 @@ export function Settings({ familiar, live }: { familiar: FamiliarSummary; live: 
         id={familiar.id}
         initial={form}
         live={live}
-        onSaved={() => void load()}
+        onSaved={() => {
+          // Read back from the file, so the page shows what was written.
+          void load()
+            .then(() => backend())
+            .then((b) => b.bindingForm(familiar.id))
+            .then(setForm)
+            .catch(() => {});
+        }}
       />
       <Rule />
       <div className="measure flex flex-col gap-2 pt-4">
